@@ -9,11 +9,37 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session?.user?.organizationId) {
+    if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const organizationId = session.user.organizationId
+
+    // If user has no organization, return empty stats
+    if (!organizationId) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          stats: {
+            totalWorkers: 0,
+            activeCrews: 0,
+            onDutyToday: 0,
+            pendingRequests: 0,
+            upcomingShutdowns: 0,
+            staffingGaps: 0,
+          },
+          staffingGapDetails: [],
+          recentActivity: [],
+          upcomingTimeOff: [],
+          todayBreakdown: {
+            dayShift: 0,
+            nightShift: 0,
+          },
+          noOrganization: true,
+        },
+      })
+    }
+
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
