@@ -1,7 +1,7 @@
 # Nixpacks configuration for Railway
 
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm"]
+nixPkgs = ["nodejs_20", "openssl"]
 
 [phases.install]
 cmds = ["npm ci"]
