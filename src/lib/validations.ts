@@ -121,17 +121,22 @@ export const createStaffingRuleSchema = z.object({
 export const updateStaffingRuleSchema = createStaffingRuleSchema.partial()
 
 // Shutdown validations
-export const createShutdownSchema = z.object({
+const shutdownBaseSchema = z.object({
   name: z.string().min(1).max(100),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   description: z.string().max(500).optional(),
-}).refine(data => data.endDate >= data.startDate, {
-  message: "End date must be on or after start date",
-  path: ["endDate"],
 })
 
-export const updateShutdownSchema = createShutdownSchema.partial()
+export const createShutdownSchema = shutdownBaseSchema.refine(
+  data => data.endDate >= data.startDate,
+  {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  }
+)
+
+export const updateShutdownSchema = shutdownBaseSchema.partial()
 
 // Holiday validations
 export const createHolidaySchema = z.object({
