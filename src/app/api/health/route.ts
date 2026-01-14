@@ -1,26 +1,31 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 
 export async function GET() {
-  try {
-    // Check database connectivity
-    await prisma.$queryRaw`SELECT 1`
-
-    return NextResponse.json({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      database: "connected",
-    })
-  } catch (error) {
-    console.error("Health check failed:", error)
-    return NextResponse.json(
-      {
-        status: "unhealthy",
-        timestamp: new Date().toISOString(),
-        database: "disconnected",
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 503 }
-    )
+  const response: {
+    status: string
+    timestamp: string
+    database?: string
+    error?: string
+  } = {
+    status: "healthy",
+    timestamp: new Date().toISOString(),
   }
+
+  // Only check database if DATABASE_URL is configured
+  if (process.env.DATABASE_URL) {
+    try {
+      const { prisma } = await import("@/lib/prisma")
+      await prisma.$queryRaw`SELECT 1`
+      response.database = "connected"
+    } catch (error) {
+      console.error("Database check failed:", error)
+      response.database = "disconnected"
+      response.error = error instanceof Error ? error.message : "Unknown error"
+      // Still return 200 - app is running, just database is not ready
+    }
+  } else {
+    response.database = "not_configured"
+  }
+
+  return NextResponse.json(response)
 }
