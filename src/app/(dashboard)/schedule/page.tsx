@@ -64,7 +64,6 @@ export default function SchedulePage() {
   const [crews, setCrews] = useState<Crew[]>([])
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<"week" | "month">("week")
 
   const weekStart = startOfWeek(currentDate)
   const weekDays = useMemo(() => {

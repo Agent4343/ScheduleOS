@@ -22,8 +22,6 @@ import {
   Plus,
   Search,
   Mail,
-  Phone,
-  Calendar,
   Filter,
   MoreVertical,
 } from "lucide-react"
