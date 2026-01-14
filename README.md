@@ -22,13 +22,60 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: NextAuth.js
+- **Hosting**: Railway
 
-## Getting Started
+## Deploy to Railway
+
+### One-Click Deploy
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/shiftsync)
+
+### Manual Deployment
+
+1. **Create a Railway account** at [railway.app](https://railway.app)
+
+2. **Create a new project** and add a PostgreSQL database:
+   - Click "New Project"
+   - Select "Deploy from GitHub repo"
+   - Connect your GitHub repository
+   - Railway will auto-detect Next.js
+
+3. **Add PostgreSQL**:
+   - Click "New" → "Database" → "Add PostgreSQL"
+   - Railway automatically sets `DATABASE_URL`
+
+4. **Set environment variables** in Railway dashboard:
+   ```
+   NEXTAUTH_URL=https://your-app.up.railway.app
+   NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
+   DIRECT_URL=${{Postgres.DATABASE_URL}}
+   ```
+
+5. **Run database migrations** (in Railway shell or locally):
+   ```bash
+   npx prisma db push
+   ```
+
+6. **Seed demo data** (optional):
+   ```bash
+   npm run db:seed
+   ```
+
+### Railway Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABASE_URL` | PostgreSQL connection (auto-set by Railway) | Yes |
+| `DIRECT_URL` | Direct DB connection for migrations | Yes |
+| `NEXTAUTH_URL` | Your Railway app URL | Yes |
+| `NEXTAUTH_SECRET` | Random 32-byte secret | Yes |
+
+## Local Development
 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL database
+- PostgreSQL database (or use Railway's)
 
 ### Installation
 
@@ -46,21 +93,31 @@ npm install
 3. Set up environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your database and authentication settings
+# Edit .env with your settings
 ```
 
-4. Generate Prisma client and run migrations:
+4. Push database schema:
 ```bash
-npx prisma generate
-npx prisma db push
+npm run db:push
 ```
 
-5. Run the development server:
+5. Seed demo data (optional):
+```bash
+npm run db:seed
+```
+
+6. Start development server:
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Demo Credentials
+
+After seeding:
+- **Email**: admin@demo.com
+- **Password**: demo1234
 
 ## Project Structure
 
@@ -83,14 +140,30 @@ src/
 
 ## API Endpoints
 
-- `POST /api/register` - User registration
-- `POST /api/auth/[...nextauth]` - Authentication
-- `GET/POST /api/users` - User management
-- `GET/POST /api/crews` - Crew management
-- `GET/POST /api/schedules` - Schedule operations
-- `GET/POST /api/time-off` - Time off requests
-- `GET/PATCH /api/organization` - Organization settings
-- `GET /api/dashboard` - Dashboard statistics
+| Endpoint | Methods | Description |
+|----------|---------|-------------|
+| `/api/register` | POST | User registration |
+| `/api/auth/[...nextauth]` | * | Authentication |
+| `/api/users` | GET, POST | User management |
+| `/api/crews` | GET, POST | Crew management |
+| `/api/schedules` | GET, POST | Schedule operations |
+| `/api/time-off` | GET, POST, PATCH | Time off requests |
+| `/api/rotation-patterns` | GET, POST | Rotation patterns |
+| `/api/organization` | GET, PATCH | Organization settings |
+| `/api/dashboard` | GET | Dashboard statistics |
+| `/api/health` | GET | Health check |
+
+## Scripts
+
+```bash
+npm run dev          # Start development server
+npm run build        # Build for production
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npm run db:push      # Push schema to database
+npm run db:migrate   # Run migrations
+npm run db:seed      # Seed demo data
+```
 
 ## License
 
