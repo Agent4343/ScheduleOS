@@ -1,0 +1,103 @@
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
+import { createRotationPatternSchema } from "@/lib/validations"
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const patterns = await prisma.rotationPattern.findMany({
+      where: { organizationId: session.user.organizationId },
+      include: {
+        _count: {
+          select: { crews: true },
+        },
+      },
+      orderBy: { name: "asc" },
+    })
+
+    return NextResponse.json({ success: true, data: patterns })
+  } catch (error) {
+    console.error("Error fetching rotation patterns:", error)
+    return NextResponse.json({ error: "Failed to fetch rotation patterns" }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user?.organizationId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const validatedData = createRotationPatternSchema.parse(body)
+
+    // Check for duplicate name
+    const existingPattern = await prisma.rotationPattern.findFirst({
+      where: {
+        organizationId: session.user.organizationId,
+        name: validatedData.name,
+      },
+    })
+
+    if (existingPattern) {
+      return NextResponse.json(
+        { error: "A rotation pattern with this name already exists" },
+        { status: 400 }
+      )
+    }
+
+    // If setting as default, unset other defaults
+    if (validatedData.isDefault) {
+      await prisma.rotationPattern.updateMany({
+        where: {
+          organizationId: session.user.organizationId,
+          isDefault: true,
+        },
+        data: { isDefault: false },
+      })
+    }
+
+    const pattern = await prisma.rotationPattern.create({
+      data: {
+        name: validatedData.name,
+        description: validatedData.description,
+        daysOn: validatedData.daysOn,
+        daysOff: validatedData.daysOff,
+        includesNights: validatedData.includesNights,
+        nightsAtStart: validatedData.nightsAtStart,
+        nightDays: validatedData.nightDays,
+        isDefault: validatedData.isDefault,
+        organizationId: session.user.organizationId,
+      },
+    })
+
+    return NextResponse.json(
+      { success: true, data: pattern, message: "Rotation pattern created successfully" },
+      { status: 201 }
+    )
+  } catch (error) {
+    console.error("Error creating rotation pattern:", error)
+
+    if (error instanceof Error && error.name === "ZodError") {
+      return NextResponse.json(
+        { error: "Invalid input data", details: error },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({ error: "Failed to create rotation pattern" }, { status: 500 })
+  }
+}

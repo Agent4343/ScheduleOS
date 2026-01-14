@@ -1,0 +1,171 @@
+import { z } from "zod"
+import { UserRole, TimeOffType, ShiftType } from "@prisma/client"
+
+// Auth validations
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+})
+
+export const registerSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+    ),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  organizationName: z.string().min(2, "Organization name must be at least 2 characters").optional(),
+})
+
+// Organization validations
+export const createOrganizationSchema = z.object({
+  name: z.string().min(2, "Organization name must be at least 2 characters"),
+  settings: z.object({
+    timezone: z.string().default("America/St_Johns"),
+    weekStartsOn: z.number().min(0).max(6).default(0),
+    minStaffingAlertEnabled: z.boolean().default(true),
+    emailNotificationsEnabled: z.boolean().default(true),
+    smsNotificationsEnabled: z.boolean().default(false),
+  }).optional(),
+})
+
+export const updateOrganizationSchema = createOrganizationSchema.partial()
+
+// User validations
+export const createUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  position: z.string().optional(),
+  phone: z.string().optional(),
+  crewId: z.string().optional(),
+  hireDate: z.coerce.date().optional(),
+  password: z.string().min(8).optional(),
+})
+
+export const updateUserSchema = createUserSchema.partial().omit({ email: true })
+
+// Crew validations
+export const createCrewSchema = z.object({
+  name: z.string().min(1, "Crew name is required").max(50),
+  description: z.string().max(500).optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format"),
+  rotationPatternId: z.string().optional(),
+})
+
+export const updateCrewSchema = createCrewSchema.partial()
+
+// Rotation pattern validations
+export const createRotationPatternSchema = z.object({
+  name: z.string().min(1, "Pattern name is required").max(100),
+  description: z.string().max(500).optional(),
+  daysOn: z.number().int().min(1).max(60),
+  daysOff: z.number().int().min(1).max(60),
+  includesNights: z.boolean().default(false),
+  nightsAtStart: z.boolean().default(true),
+  nightDays: z.number().int().min(0).max(60).default(0),
+  isDefault: z.boolean().default(false),
+})
+
+export const updateRotationPatternSchema = createRotationPatternSchema.partial()
+
+// Schedule validations
+export const createScheduleSchema = z.object({
+  userId: z.string(),
+  date: z.coerce.date(),
+  shiftType: z.nativeEnum(ShiftType),
+  isOverride: z.boolean().default(false),
+  overrideReason: z.string().optional(),
+  notes: z.string().optional(),
+})
+
+export const updateScheduleSchema = createScheduleSchema.partial().omit({ userId: true, date: true })
+
+export const generateScheduleSchema = z.object({
+  userId: z.string().optional(),
+  crewId: z.string().optional(),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  patternId: z.string(),
+  startPhase: z.number().int().min(0).optional(),
+})
+
+// Time off request validations
+export const createTimeOffRequestSchema = z.object({
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  type: z.nativeEnum(TimeOffType),
+  reason: z.string().max(1000).optional(),
+}).refine(data => data.endDate >= data.startDate, {
+  message: "End date must be on or after start date",
+  path: ["endDate"],
+})
+
+export const updateTimeOffRequestSchema = z.object({
+  status: z.enum(["APPROVED", "DENIED"]),
+  adminNotes: z.string().max(1000).optional(),
+})
+
+// Staffing rule validations
+export const createStaffingRuleSchema = z.object({
+  name: z.string().min(1).max(100),
+  shiftType: z.nativeEnum(ShiftType),
+  minWorkers: z.number().int().min(0),
+  maxVacation: z.number().int().min(0).default(1),
+  isActive: z.boolean().default(true),
+})
+
+export const updateStaffingRuleSchema = createStaffingRuleSchema.partial()
+
+// Shutdown validations
+export const createShutdownSchema = z.object({
+  name: z.string().min(1).max(100),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  description: z.string().max(500).optional(),
+}).refine(data => data.endDate >= data.startDate, {
+  message: "End date must be on or after start date",
+  path: ["endDate"],
+})
+
+export const updateShutdownSchema = createShutdownSchema.partial()
+
+// Holiday validations
+export const createHolidaySchema = z.object({
+  name: z.string().min(1).max(100),
+  date: z.coerce.date(),
+  isRecurring: z.boolean().default(true),
+})
+
+// Invitation validations
+export const createInvitationSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+})
+
+// Excel import validations
+export const importUsersSchema = z.array(z.object({
+  email: z.string().email(),
+  name: z.string().min(1),
+  position: z.string().optional(),
+  crewName: z.string().optional(),
+  hireDate: z.coerce.date().optional(),
+}))
+
+// Type exports
+export type LoginInput = z.infer<typeof loginSchema>
+export type RegisterInput = z.infer<typeof registerSchema>
+export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>
+export type CreateUserInput = z.infer<typeof createUserSchema>
+export type CreateCrewInput = z.infer<typeof createCrewSchema>
+export type CreateRotationPatternInput = z.infer<typeof createRotationPatternSchema>
+export type CreateScheduleInput = z.infer<typeof createScheduleSchema>
+export type GenerateScheduleInput = z.infer<typeof generateScheduleSchema>
+export type CreateTimeOffRequestInput = z.infer<typeof createTimeOffRequestSchema>
+export type CreateStaffingRuleInput = z.infer<typeof createStaffingRuleSchema>
+export type CreateShutdownInput = z.infer<typeof createShutdownSchema>
+export type CreateHolidayInput = z.infer<typeof createHolidaySchema>
+export type CreateInvitationInput = z.infer<typeof createInvitationSchema>
