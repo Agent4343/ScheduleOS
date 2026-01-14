@@ -15,7 +15,7 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
     "@hookform/resolvers": "^5.2.2",
-    "@prisma/client": "^7.2.0",
+    "@prisma/client": "^5.22.0",
     "@tanstack/react-query": "^5.90.17",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
@@ -24,7 +24,7 @@
     "lucide-react": "^0.562.0",
     "next": "14.2.35",
     "next-auth": "^4.24.13",
-    "prisma": "^7.2.0",
+    "prisma": "^5.22.0",
     "react": "^18",
     "react-dom": "^18",
     "react-hook-form": "^7.71.1",
