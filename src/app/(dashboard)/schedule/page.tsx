@@ -99,8 +99,8 @@ const POSITION_COLORS: Record<string, string> = {
 }
 
 const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
-  DAY: { bg: "bg-amber-400", text: "text-amber-900", border: "border-amber-500" },
-  NIGHT: { bg: "bg-indigo-500", text: "text-white", border: "border-indigo-600" },
+  DAY: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
+  NIGHT: { bg: "bg-blue-600", text: "text-white", border: "border-blue-700" },
   OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
   VACATION: { bg: "bg-emerald-400", text: "text-emerald-900", border: "border-emerald-500" },
   SICK: { bg: "bg-red-400", text: "text-red-900", border: "border-red-500" },
