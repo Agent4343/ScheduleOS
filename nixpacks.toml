@@ -9,8 +9,9 @@ cmds = ["npm ci"]
 [phases.build]
 cmds = [
   "npm run build",
-  "cp -r .next/static .next/standalone/.next/static",
-  "cp -r public .next/standalone/public"
+  "mkdir -p .next/standalone/.next",
+  "cp -r .next/static .next/standalone/.next/",
+  "cp -r public .next/standalone/"
 ]
 
 [start]
