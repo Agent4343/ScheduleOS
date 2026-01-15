@@ -20,6 +20,8 @@ import {
   Users,
   Pencil,
   Loader2,
+  CalendarPlus,
+  RotateCcw,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -52,6 +54,7 @@ interface Worker {
   position: string | null
   phone?: string | null
   role?: UserRole
+  hireDate?: string | null
   crew: {
     id: string
     name: string
@@ -65,6 +68,16 @@ interface WorkerEditForm {
   phone: string
   crewId: string
   role: UserRole
+  hireDate: string
+}
+
+interface RotationPattern {
+  id: string
+  name: string
+  daysOn: number
+  daysOff: number
+  includesNights: boolean
+  nightDays: number
 }
 
 // Position-based color coding
@@ -157,6 +170,9 @@ export default function SchedulePage() {
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Rotation patterns
+  const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
+
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
@@ -166,9 +182,16 @@ export default function SchedulePage() {
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
+    hireDate: "",
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Schedule generation state
+  const [selectedPatternId, setSelectedPatternId] = useState<string>("")
+  const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
+  const [generating, setGenerating] = useState(false)
+  const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
@@ -209,6 +232,22 @@ export default function SchedulePage() {
       }
     }
     fetchCrews()
+  }, [])
+
+  // Fetch rotation patterns
+  useEffect(() => {
+    async function fetchPatterns() {
+      try {
+        const response = await fetch("/api/rotation-patterns")
+        const result = await response.json()
+        if (result.success) {
+          setRotationPatterns(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch rotation patterns:", error)
+      }
+    }
+    fetchPatterns()
   }, [])
 
   // Fetch workers
@@ -303,13 +342,21 @@ export default function SchedulePage() {
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
+    const hireDateStr = worker.hireDate
+      ? new Date(worker.hireDate).toISOString().split("T")[0]
+      : ""
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
+      hireDate: hireDateStr,
     })
+    // Reset schedule generation fields
+    setSelectedPatternId("")
+    setScheduleStartDate(hireDateStr || new Date().toISOString().split("T")[0])
+    setGenerateSuccess(null)
     setSaveError(null)
     setEditModalOpen(true)
   }
@@ -336,6 +383,7 @@ export default function SchedulePage() {
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
+          hireDate: editForm.hireDate || null,
         }),
       })
 
@@ -355,6 +403,7 @@ export default function SchedulePage() {
                 position: editForm.position || null,
                 phone: editForm.phone || null,
                 role: editForm.role,
+                hireDate: editForm.hireDate || null,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
                   : null,
@@ -368,6 +417,57 @@ export default function SchedulePage() {
       setSaveError(error instanceof Error ? error.message : "Failed to save")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function generateSchedule() {
+    if (!selectedWorker || !selectedPatternId || !scheduleStartDate) return
+
+    setGenerating(true)
+    setSaveError(null)
+    setGenerateSuccess(null)
+
+    try {
+      // Generate for the full year from start date
+      const startDate = new Date(scheduleStartDate)
+      const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
+
+      const response = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedWorker.id,
+          patternId: selectedPatternId,
+          startDate: scheduleStartDate,
+          endDate: endDate.toISOString().split("T")[0],
+          startPhase: 0,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to generate schedule")
+      }
+
+      setGenerateSuccess(
+        `Generated ${result.data?.daysGenerated || 0} schedule days for ${startDate.getFullYear()}`
+      )
+
+      // Refresh schedules
+      const fetchStartDate = `${currentYear}-01-01`
+      const fetchEndDate = `${currentYear}-12-31`
+      const schedulesResponse = await fetch(
+        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
+      )
+      const schedulesResult = await schedulesResponse.json()
+      if (schedulesResult.success) {
+        setSchedules(schedulesResult.data)
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to generate")
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -675,7 +775,17 @@ export default function SchedulePage() {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="space-y-2">
+            <Label htmlFor="hireDate">Hire / Start Date</Label>
+            <Input
+              id="hireDate"
+              type="date"
+              value={editForm.hireDate}
+              onChange={(e) => setEditForm({ ...editForm, hireDate: e.target.value })}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-b pb-4">
             <Button variant="outline" onClick={closeEditModal} disabled={saving}>
               Cancel
             </Button>
@@ -687,6 +797,67 @@ export default function SchedulePage() {
                 </>
               ) : (
                 "Save Changes"
+              )}
+            </Button>
+          </div>
+
+          {/* Schedule Generation Section */}
+          <div className="pt-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <CalendarPlus className="h-4 w-4" />
+              <h3 className="font-semibold">Generate Schedule</h3>
+            </div>
+
+            {generateSuccess && (
+              <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md">
+                {generateSuccess}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="pattern">Rotation Pattern</Label>
+              <Select
+                id="pattern"
+                value={selectedPatternId}
+                onChange={(e) => setSelectedPatternId(e.target.value)}
+                options={[
+                  { value: "", label: "Select a pattern..." },
+                  ...rotationPatterns.map((p) => ({
+                    value: p.id,
+                    label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? `, ${p.nightDays} nights` : ""})`,
+                  })),
+                ]}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="scheduleStart">Schedule Start Date</Label>
+              <Input
+                id="scheduleStart"
+                type="date"
+                value={scheduleStartDate}
+                onChange={(e) => setScheduleStartDate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Schedule will be generated from this date to end of year
+              </p>
+            </div>
+
+            <Button
+              onClick={generateSchedule}
+              disabled={generating || !selectedPatternId || !scheduleStartDate}
+              className="w-full"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Generate Year Schedule
+                </>
               )}
             </Button>
           </div>
