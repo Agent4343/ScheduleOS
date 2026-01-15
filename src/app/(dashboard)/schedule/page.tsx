@@ -334,7 +334,7 @@ export default function SchedulePage() {
       const today = new Date()
       const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
       if (scrollRef.current) {
-        const cellWidth = 40 // approximate width per day (mobile friendly)
+        const cellWidth = 48 // approximate width per day (mobile friendly)
         scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
       }
     }, 100)
@@ -559,32 +559,31 @@ export default function SchedulePage() {
               <div className="flex">
                 {/* Fixed left column for worker info */}
                 <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
-                    <span className="font-semibold text-sm">Worker</span>
+                  {/* Header for worker column - matches month (h-10) + day headers (h-12) */}
+                  <div className="h-[88px] border-b flex items-end p-3 bg-muted/50">
+                    <span className="font-semibold text-base">Worker</span>
                   </div>
                   {/* Worker rows */}
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      className="h-10 border-b flex items-center px-3 min-w-[220px] hover:bg-muted/50 cursor-pointer group"
+                      className="h-12 border-b flex items-center px-3 min-w-[180px] hover:bg-muted/50 cursor-pointer group"
                       onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
-                          "w-3 h-8 rounded-full mr-3 flex-shrink-0",
+                          "w-3 h-10 rounded-full mr-3 flex-shrink-0",
                           getPositionColor(worker.position)
                         )}
                         title={worker.position || "No position"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {worker.position || "No position"}
-                          {worker.crew && ` • ${worker.crew.name}`}
+                        <p className="font-medium text-base truncate">{worker.name || "Unnamed"}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {worker.crew?.name || "No crew"}
                         </p>
                       </div>
-                      <Pencil className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
+                      <Pencil className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
                     </div>
                   ))}
                 </div>
@@ -596,12 +595,12 @@ export default function SchedulePage() {
                 >
                   <div className="inline-block min-w-max">
                     {/* Month headers */}
-                    <div className="flex h-8 border-b bg-muted/30">
+                    <div className="flex h-10 border-b bg-muted/30">
                       {monthGroups.map(({ month, days }) => (
                         <div
                           key={month}
-                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 40}px` }}
+                          className="text-center text-sm font-semibold border-r flex items-center justify-center"
+                          style={{ width: `${days.length * 48}px` }}
                         >
                           {getMonthName(month)}
                         </div>
@@ -609,7 +608,7 @@ export default function SchedulePage() {
                     </div>
 
                     {/* Day headers */}
-                    <div className="flex h-10 border-b">
+                    <div className="flex h-12 border-b">
                       {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -619,7 +618,7 @@ export default function SchedulePage() {
                           <div
                             key={day.toISOString()}
                             className={cn(
-                              "w-10 text-center text-xs flex flex-col items-center justify-center",
+                              "w-12 text-center text-sm flex flex-col items-center justify-center",
                               isWeekend && "bg-muted/50",
                               isToday && "bg-primary/20 font-bold",
                               isFirstOfMonth && "border-l border-gray-300"
@@ -641,9 +640,10 @@ export default function SchedulePage() {
                       const userSchedules = schedulesByUser.get(worker.id)
 
                       return (
-                        <div key={worker.id} className="flex h-10 border-b hover:bg-muted/30">
+                        <div key={worker.id} className="flex h-12 border-b hover:bg-muted/30">
                           {yearDays.map((day) => {
-                            const dateKey = day.toISOString().split("T")[0]
+                            // Use local date format to avoid timezone issues
+                            const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
                             const schedule = userSchedules?.get(dateKey)
                             const isToday = day.getTime() === today.getTime()
                             const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -655,7 +655,7 @@ export default function SchedulePage() {
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-10 h-10 flex items-center justify-center text-sm font-bold border-r border-b",
+                                  "w-12 h-12 flex items-center justify-center text-base font-bold border-r border-b",
                                   isFirstOfMonth && "border-l-2 border-l-gray-400",
                                   isToday && "ring-2 ring-primary ring-inset",
                                   schedule && !isOff
