@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Modal } from "@/components/ui/modal"
 import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
@@ -15,8 +18,10 @@ import {
   Home,
   Filter,
   Users,
+  Pencil,
+  Loader2,
 } from "lucide-react"
-import { ShiftType } from "@/types"
+import { ShiftType, UserRole } from "@/types"
 
 interface Schedule {
   id: string
@@ -43,12 +48,23 @@ interface Crew {
 interface Worker {
   id: string
   name: string | null
+  email?: string
   position: string | null
+  phone?: string | null
+  role?: UserRole
   crew: {
     id: string
     name: string
     color: string
   } | null
+}
+
+interface WorkerEditForm {
+  name: string
+  position: string
+  phone: string
+  crewId: string
+  role: UserRole
 }
 
 // Position-based color coding
@@ -140,6 +156,19 @@ export default function SchedulePage() {
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
+  const [editForm, setEditForm] = useState<WorkerEditForm>({
+    name: "",
+    position: "",
+    phone: "",
+    crewId: "",
+    role: "WORKER" as UserRole,
+  })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
@@ -272,6 +301,76 @@ export default function SchedulePage() {
     }, 100)
   }
 
+  function openEditModal(worker: Worker) {
+    setSelectedWorker(worker)
+    setEditForm({
+      name: worker.name || "",
+      position: worker.position || "",
+      phone: worker.phone || "",
+      crewId: worker.crew?.id || "",
+      role: worker.role || "WORKER",
+    })
+    setSaveError(null)
+    setEditModalOpen(true)
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false)
+    setSelectedWorker(null)
+    setSaveError(null)
+  }
+
+  async function saveWorker() {
+    if (!selectedWorker) return
+
+    setSaving(true)
+    setSaveError(null)
+
+    try {
+      const response = await fetch(`/api/users/${selectedWorker.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name,
+          position: editForm.position || null,
+          phone: editForm.phone || null,
+          crewId: editForm.crewId || null,
+          role: editForm.role,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update worker")
+      }
+
+      // Update local state
+      setWorkers((prev) =>
+        prev.map((w) =>
+          w.id === selectedWorker.id
+            ? {
+                ...w,
+                name: editForm.name,
+                position: editForm.position || null,
+                phone: editForm.phone || null,
+                role: editForm.role,
+                crew: editForm.crewId
+                  ? crews.find((c) => c.id === editForm.crewId) || null
+                  : null,
+              }
+            : w
+        )
+      )
+
+      closeEditModal()
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Failed to save")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -366,7 +465,8 @@ export default function SchedulePage() {
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50"
+                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
+                      onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
@@ -382,6 +482,7 @@ export default function SchedulePage() {
                           {worker.crew && ` • ${worker.crew.name}`}
                         </p>
                       </div>
+                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
                     </div>
                   ))}
                 </div>
@@ -502,6 +603,95 @@ export default function SchedulePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Worker Modal */}
+      <Modal
+        isOpen={editModalOpen}
+        onClose={closeEditModal}
+        title="Edit Worker"
+        description={selectedWorker?.email || "Update worker information"}
+      >
+        <div className="space-y-4">
+          {saveError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {saveError}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              placeholder="Worker name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="position">Position</Label>
+            <Input
+              id="position"
+              value={editForm.position}
+              onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+              placeholder="e.g., Operator, Technician, Supervisor"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              placeholder="Phone number"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="crew">Crew</Label>
+            <Select
+              id="crew"
+              value={editForm.crewId}
+              onChange={(e) => setEditForm({ ...editForm, crewId: e.target.value })}
+              options={[
+                { value: "", label: "No Crew" },
+                ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+              ]}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">Role</Label>
+            <Select
+              id="role"
+              value={editForm.role}
+              onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
+              options={[
+                { value: "WORKER", label: "Worker" },
+                { value: "SUPERVISOR", label: "Supervisor" },
+                { value: "ADMIN", label: "Admin" },
+              ]}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeEditModal} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={saveWorker} disabled={saving || !editForm.name}>
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
