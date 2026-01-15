@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
-import { cn, addDays, startOfWeek, formatDateShort } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,6 +14,7 @@ import {
   Moon,
   Home,
   Filter,
+  Users,
 } from "lucide-react"
 import { ShiftType } from "@/types"
 
@@ -24,6 +25,7 @@ interface Schedule {
   user: {
     id: string
     name: string
+    position: string | null
   }
   crew: {
     id: string
@@ -38,14 +40,53 @@ interface Crew {
   color: string
 }
 
-const SHIFT_COLORS: Record<ShiftType, string> = {
-  DAY: "bg-amber-100 text-amber-800 border-amber-300",
-  NIGHT: "bg-indigo-100 text-indigo-800 border-indigo-300",
-  OFF: "bg-gray-100 text-gray-500 border-gray-200",
-  VACATION: "bg-green-100 text-green-800 border-green-300",
-  SICK: "bg-red-100 text-red-800 border-red-300",
-  TRAINING: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  SHUTDOWN: "bg-slate-200 text-slate-600 border-slate-300",
+interface Worker {
+  id: string
+  name: string | null
+  position: string | null
+  crew: {
+    id: string
+    name: string
+    color: string
+  } | null
+}
+
+// Position-based color coding
+const POSITION_COLORS: Record<string, string> = {
+  "Operator": "bg-blue-500",
+  "Senior Operator": "bg-blue-600",
+  "Lead Operator": "bg-blue-700",
+  "Technician": "bg-green-500",
+  "Senior Technician": "bg-green-600",
+  "Lead Technician": "bg-green-700",
+  "Supervisor": "bg-purple-500",
+  "Manager": "bg-purple-700",
+  "Engineer": "bg-orange-500",
+  "Maintenance": "bg-yellow-500",
+  "Safety": "bg-red-500",
+  "Quality": "bg-pink-500",
+  "Logistics": "bg-cyan-500",
+  "default": "bg-gray-500",
+}
+
+const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
+  DAY: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300" },
+  NIGHT: { bg: "bg-indigo-100", text: "text-indigo-800", border: "border-indigo-300" },
+  OFF: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200" },
+  VACATION: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300" },
+  SICK: { bg: "bg-red-100", text: "text-red-800", border: "border-red-300" },
+  TRAINING: { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300" },
+  SHUTDOWN: { bg: "bg-slate-200", text: "text-slate-600", border: "border-slate-300" },
+}
+
+const SHIFT_ABBREV: Record<ShiftType, string> = {
+  DAY: "D",
+  NIGHT: "N",
+  OFF: "O",
+  VACATION: "V",
+  SICK: "S",
+  TRAINING: "T",
+  SHUTDOWN: "X",
 }
 
 const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
@@ -58,18 +99,74 @@ const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
   SHUTDOWN: null,
 }
 
+// Get all days in a year
+function getDaysInYear(year: number) {
+  const days: Date[] = []
+  const date = new Date(year, 0, 1)
+  while (date.getFullYear() === year) {
+    days.push(new Date(date))
+    date.setDate(date.getDate() + 1)
+  }
+  return days
+}
+
+// Get month name
+function getMonthName(month: number) {
+  return new Date(2024, month, 1).toLocaleDateString("en-US", { month: "short" })
+}
+
+// Get position color
+function getPositionColor(position: string | null): string {
+  if (!position) return POSITION_COLORS.default
+
+  // Check for exact match first
+  if (POSITION_COLORS[position]) return POSITION_COLORS[position]
+
+  // Check for partial match
+  for (const [key, value] of Object.entries(POSITION_COLORS)) {
+    if (position.toLowerCase().includes(key.toLowerCase())) {
+      return value
+    }
+  }
+
+  return POSITION_COLORS.default
+}
+
 export default function SchedulePage() {
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [workers, setWorkers] = useState<Worker[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const weekStart = startOfWeek(currentDate)
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-  }, [weekStart])
+  const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
+  // Group days by month for header
+  const monthGroups = useMemo(() => {
+    const groups: { month: number; days: Date[] }[] = []
+    let currentMonth = -1
+    let currentGroup: Date[] = []
+
+    for (const day of yearDays) {
+      if (day.getMonth() !== currentMonth) {
+        if (currentGroup.length > 0) {
+          groups.push({ month: currentMonth, days: currentGroup })
+        }
+        currentMonth = day.getMonth()
+        currentGroup = []
+      }
+      currentGroup.push(day)
+    }
+    if (currentGroup.length > 0) {
+      groups.push({ month: currentMonth, days: currentGroup })
+    }
+
+    return groups
+  }, [yearDays])
+
+  // Fetch crews
   useEffect(() => {
     async function fetchCrews() {
       try {
@@ -85,12 +182,33 @@ export default function SchedulePage() {
     fetchCrews()
   }, [])
 
+  // Fetch workers
+  useEffect(() => {
+    async function fetchWorkers() {
+      try {
+        let url = "/api/users?status=ACTIVE"
+        if (selectedCrew) {
+          url += `&crewId=${selectedCrew}`
+        }
+        const response = await fetch(url)
+        const result = await response.json()
+        if (result.success) {
+          setWorkers(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch workers:", error)
+      }
+    }
+    fetchWorkers()
+  }, [selectedCrew])
+
+  // Fetch schedules for the year
   useEffect(() => {
     async function fetchSchedules() {
       setLoading(true)
       try {
-        const startDate = weekDays[0].toISOString().split("T")[0]
-        const endDate = weekDays[6].toISOString().split("T")[0]
+        const startDate = `${currentYear}-01-01`
+        const endDate = `${currentYear}-12-31`
 
         let url = `/api/schedules?startDate=${startDate}&endDate=${endDate}`
         if (selectedCrew) {
@@ -109,62 +227,74 @@ export default function SchedulePage() {
       }
     }
     fetchSchedules()
-  }, [weekDays, selectedCrew])
+  }, [currentYear, selectedCrew])
 
   // Group schedules by user
   const schedulesByUser = useMemo(() => {
-    const grouped = new Map<string, { user: Schedule["user"]; crew: Schedule["crew"]; schedules: Map<string, Schedule> }>()
+    const map = new Map<string, Map<string, Schedule>>()
 
     for (const schedule of schedules) {
-      if (!grouped.has(schedule.user.id)) {
-        grouped.set(schedule.user.id, {
-          user: schedule.user,
-          crew: schedule.crew,
-          schedules: new Map(),
-        })
+      if (!map.has(schedule.user.id)) {
+        map.set(schedule.user.id, new Map())
       }
       const dateKey = schedule.date.split("T")[0]
-      grouped.get(schedule.user.id)!.schedules.set(dateKey, schedule)
+      map.get(schedule.user.id)!.set(dateKey, schedule)
     }
 
-    return Array.from(grouped.values()).sort((a, b) => {
-      // Sort by crew name, then user name
-      const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
-      if (crewCompare !== 0) return crewCompare
-      return (a.user.name || "").localeCompare(b.user.name || "")
-    })
+    return map
   }, [schedules])
 
-  function navigateWeek(direction: number) {
-    setCurrentDate(addDays(currentDate, direction * 7))
+  // Sort workers by crew name, then position, then name
+  const sortedWorkers = useMemo(() => {
+    return [...workers].sort((a, b) => {
+      const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
+      if (crewCompare !== 0) return crewCompare
+      const posCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
+      if (posCompare !== 0) return posCompare
+      return (a.name || "").localeCompare(b.name || "")
+    })
+  }, [workers])
+
+  function navigateYear(direction: number) {
+    setCurrentYear(currentYear + direction)
   }
 
-  function goToToday() {
-    setCurrentDate(new Date())
+  function goToCurrentYear() {
+    setCurrentYear(new Date().getFullYear())
+    // Scroll to today
+    setTimeout(() => {
+      const today = new Date()
+      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
+      if (scrollRef.current) {
+        const cellWidth = 28 // approximate width per day
+        scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
+      }
+    }, 100)
   }
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Schedule</h1>
+          <h1 className="text-2xl font-bold">Yearly Schedule</h1>
           <p className="text-muted-foreground">
-            Week of {weekDays[0].toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            {currentYear} Annual View - {sortedWorkers.length} Workers
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToToday}>
+          <Button variant="outline" size="sm" onClick={goToCurrentYear}>
             Today
           </Button>
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(-1)}>
+          <Button variant="outline" size="icon" onClick={() => navigateYear(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => navigateWeek(1)}>
+          <span className="font-semibold px-2">{currentYear}</span>
+          <Button variant="outline" size="icon" onClick={() => navigateYear(1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -189,8 +319,8 @@ export default function SchedulePage() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_COLORS).map(([type, colorClass]) => (
-          <Badge key={type} className={cn(colorClass, "border")}>
+        {Object.entries(SHIFT_COLORS).map(([type, colors]) => (
+          <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
             {SHIFT_ICONS[type as ShiftType]}
             <span className="ml-1">{type}</span>
           </Badge>
@@ -202,104 +332,174 @@ export default function SchedulePage() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Weekly Schedule
+            {currentYear} Schedule
+            <Badge variant="secondary" className="ml-2">
+              <Users className="h-3 w-3 mr-1" />
+              {sortedWorkers.length} workers
+            </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loading ? (
-            <div className="animate-pulse space-y-2">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-12 bg-muted rounded" />
+            <div className="animate-pulse space-y-2 p-4">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="h-8 bg-muted rounded" />
               ))}
             </div>
-          ) : schedulesByUser.length === 0 ? (
+          ) : sortedWorkers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No schedules found for this week</p>
-              <p className="text-sm">Generate schedules for your crews to get started</p>
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No workers found</p>
+              <p className="text-sm">Add workers to see their schedules</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[800px]">
-                <thead>
-                  <tr>
-                    <th className="text-left p-2 border-b w-48">Worker</th>
-                    {weekDays.map((day) => {
-                      const isToday = day.getTime() === today.getTime()
-                      return (
-                        <th
-                          key={day.toISOString()}
-                          className={cn(
-                            "text-center p-2 border-b min-w-[100px]",
-                            isToday && "bg-primary/10"
-                          )}
+            <div className="relative">
+              {/* Sticky worker info column */}
+              <div className="flex">
+                {/* Fixed left column for worker info */}
+                <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
+                  {/* Header for worker column */}
+                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
+                    <span className="font-semibold text-sm">Worker</span>
+                  </div>
+                  {/* Worker rows */}
+                  {sortedWorkers.map((worker) => (
+                    <div
+                      key={worker.id}
+                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50"
+                    >
+                      <div
+                        className={cn(
+                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
+                          getPositionColor(worker.position)
+                        )}
+                        title={worker.position || "No position"}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {worker.position || "No position"}
+                          {worker.crew && ` • ${worker.crew.name}`}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Scrollable calendar grid */}
+                <div
+                  ref={scrollRef}
+                  className="overflow-x-auto flex-1"
+                >
+                  <div className="inline-block min-w-max">
+                    {/* Month headers */}
+                    <div className="flex h-8 border-b bg-muted/30">
+                      {monthGroups.map(({ month, days }) => (
+                        <div
+                          key={month}
+                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
+                          style={{ width: `${days.length * 28}px` }}
                         >
-                          <div className="text-xs text-muted-foreground">
-                            {day.toLocaleDateString("en-US", { weekday: "short" })}
-                          </div>
-                          <div className={cn("text-sm", isToday && "font-bold text-primary")}>
-                            {formatDateShort(day)}
-                          </div>
-                        </th>
-                      )
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {schedulesByUser.map(({ user, crew, schedules: userSchedules }) => (
-                    <tr key={user.id} className="hover:bg-muted/50">
-                      <td className="p-2 border-b">
-                        <div className="flex items-center gap-2">
-                          {crew && (
-                            <div
-                              className="w-2 h-8 rounded-full"
-                              style={{ backgroundColor: crew.color }}
-                              title={crew.name}
-                            />
-                          )}
-                          <div>
-                            <p className="font-medium text-sm">{user.name}</p>
-                            {crew && (
-                              <p className="text-xs text-muted-foreground">{crew.name}</p>
-                            )}
-                          </div>
+                          {getMonthName(month)}
                         </div>
-                      </td>
-                      {weekDays.map((day) => {
-                        const dateKey = day.toISOString().split("T")[0]
-                        const schedule = userSchedules.get(dateKey)
+                      ))}
+                    </div>
+
+                    {/* Day headers */}
+                    <div className="flex h-8 border-b">
+                      {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
+                        const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                        const isFirstOfMonth = day.getDate() === 1
 
                         return (
-                          <td
-                            key={dateKey}
+                          <div
+                            key={day.toISOString()}
                             className={cn(
-                              "p-1 border-b text-center",
-                              isToday && "bg-primary/5"
+                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
+                              isWeekend && "bg-muted/50",
+                              isToday && "bg-primary/20 font-bold",
+                              isFirstOfMonth && "border-l border-gray-300"
                             )}
                           >
-                            {schedule ? (
-                              <Badge
-                                className={cn(
-                                  SHIFT_COLORS[schedule.shiftType],
-                                  "border cursor-pointer hover:opacity-80"
-                                )}
-                              >
-                                {SHIFT_ICONS[schedule.shiftType]}
-                                <span className="ml-1 text-xs">{schedule.shiftType}</span>
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">-</span>
-                            )}
-                          </td>
+                            <span className="text-muted-foreground">
+                              {day.toLocaleDateString("en-US", { weekday: "narrow" })}
+                            </span>
+                            <span className={cn(isToday && "text-primary")}>
+                              {day.getDate()}
+                            </span>
+                          </div>
                         )
                       })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </div>
+
+                    {/* Schedule rows */}
+                    {sortedWorkers.map((worker) => {
+                      const userSchedules = schedulesByUser.get(worker.id)
+
+                      return (
+                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
+                          {yearDays.map((day) => {
+                            const dateKey = day.toISOString().split("T")[0]
+                            const schedule = userSchedules?.get(dateKey)
+                            const isToday = day.getTime() === today.getTime()
+                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                            const isFirstOfMonth = day.getDate() === 1
+
+                            return (
+                              <div
+                                key={dateKey}
+                                className={cn(
+                                  "w-7 h-8 flex items-center justify-center text-[10px] font-medium",
+                                  isWeekend && "bg-muted/30",
+                                  isToday && "bg-primary/10",
+                                  isFirstOfMonth && "border-l border-gray-300"
+                                )}
+                              >
+                                {schedule ? (
+                                  <span
+                                    className={cn(
+                                      "w-5 h-5 rounded flex items-center justify-center",
+                                      SHIFT_COLORS[schedule.shiftType].bg,
+                                      SHIFT_COLORS[schedule.shiftType].text
+                                    )}
+                                    title={`${schedule.shiftType} - ${worker.name}`}
+                                  >
+                                    {SHIFT_ABBREV[schedule.shiftType]}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/30">-</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Position Color Legend */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Position Colors</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(POSITION_COLORS)
+              .filter(([key]) => key !== "default")
+              .map(([position, color]) => (
+                <div key={position} className="flex items-center gap-1">
+                  <div className={cn("w-3 h-3 rounded-full", color)} />
+                  <span className="text-xs text-muted-foreground">{position}</span>
+                </div>
+              ))}
+          </div>
         </CardContent>
       </Card>
     </div>
