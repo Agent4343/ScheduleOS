@@ -8,6 +8,18 @@ import { PlanType, SubscriptionStatus } from "@prisma/client"
 // Disable body parsing, we need raw body for webhook verification
 export const dynamic = "force-dynamic"
 
+// Helper type for subscription data we need
+interface SubscriptionData {
+  id: string
+  status: string
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer
+  items: { data: Array<{ price: { id: string } }> }
+  current_period_start: number
+  current_period_end: number
+  cancel_at_period_end: boolean
+  metadata?: Record<string, string>
+}
+
 // Map Stripe status to our enum
 function mapStripeStatus(status: string): SubscriptionStatus {
   const statusMap: Record<string, SubscriptionStatus> = {
@@ -65,9 +77,10 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session
 
         if (session.mode === "subscription" && session.subscription) {
-          const subscription: Stripe.Subscription = await stripe.subscriptions.retrieve(
+          const subResponse = await stripe.subscriptions.retrieve(
             session.subscription as string
           )
+          const subscription = subResponse as unknown as SubscriptionData
 
           const organizationId = session.metadata?.organizationId
           const plan = session.metadata?.plan || "PRO"
@@ -83,10 +96,10 @@ export async function POST(request: NextRequest) {
                 stripeCustomerId: subscription.customer as string,
                 status: mapStripeStatus(subscription.status),
                 currentPeriodStart: new Date(
-                  subscription.currentPeriodStart * 1000
+                  subscription.current_period_start * 1000
                 ),
                 currentPeriodEnd: new Date(
-                  subscription.currentPeriodEnd * 1000
+                  subscription.current_period_end * 1000
                 ),
               },
               update: {
@@ -94,10 +107,10 @@ export async function POST(request: NextRequest) {
                 stripePriceId: subscription.items.data[0].price.id,
                 status: mapStripeStatus(subscription.status),
                 currentPeriodStart: new Date(
-                  subscription.currentPeriodStart * 1000
+                  subscription.current_period_start * 1000
                 ),
                 currentPeriodEnd: new Date(
-                  subscription.currentPeriodEnd * 1000
+                  subscription.current_period_end * 1000
                 ),
               },
             })
@@ -110,7 +123,7 @@ export async function POST(request: NextRequest) {
                 stripeSubscriptionId: subscription.id,
                 stripePriceId: subscription.items.data[0].price.id,
                 planPeriodEnd: new Date(
-                  subscription.currentPeriodEnd * 1000
+                  subscription.current_period_end * 1000
                 ),
               },
             })
@@ -120,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
 
       case "customer.subscription.updated": {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object as unknown as SubscriptionData
         const organizationId = subscription.metadata?.organizationId
 
         if (organizationId) {
@@ -130,12 +143,12 @@ export async function POST(request: NextRequest) {
               status: mapStripeStatus(subscription.status),
               stripePriceId: subscription.items.data[0].price.id,
               currentPeriodStart: new Date(
-                subscription.currentPeriodStart * 1000
+                subscription.current_period_start * 1000
               ),
               currentPeriodEnd: new Date(
-                subscription.currentPeriodEnd * 1000
+                subscription.current_period_end * 1000
               ),
-              cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+              cancelAtPeriodEnd: subscription.cancel_at_period_end,
             },
           })
 
@@ -143,7 +156,7 @@ export async function POST(request: NextRequest) {
             where: { id: organizationId },
             data: {
               planPeriodEnd: new Date(
-                subscription.currentPeriodEnd * 1000
+                subscription.current_period_end * 1000
               ),
             },
           })
@@ -152,7 +165,7 @@ export async function POST(request: NextRequest) {
       }
 
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription
+        const subscription = event.data.object as unknown as SubscriptionData
         const organizationId = subscription.metadata?.organizationId
 
         if (organizationId) {
