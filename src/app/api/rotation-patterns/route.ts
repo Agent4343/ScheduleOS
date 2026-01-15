@@ -27,6 +27,59 @@ export const GET = withAuth(async (session) => {
   }
 })
 
+// PATCH - Add missing default patterns to organization
+export async function PATCH() {
+  return withAuth(
+    async (session) => {
+      try {
+        const organizationId = session.user.organizationId
+
+        // Define all default patterns
+        const defaultPatterns = [
+          {
+            name: "14 on / 14 off (with nights)",
+            description: "Offshore rotation with alternating day/night rotations",
+            daysOn: 14,
+            daysOff: 14,
+            includesNights: true,
+            nightsAtStart: false,
+            nightDays: 14,
+          },
+          {
+            name: "21 on / 21 off (with nights)",
+            description: "Extended offshore rotation with alternating day/night rotations",
+            daysOn: 21,
+            daysOff: 21,
+            includesNights: true,
+            nightsAtStart: false,
+            nightDays: 21,
+          },
+        ]
+
+        const added: string[] = []
+
+        for (const pattern of defaultPatterns) {
+          const existing = await prisma.rotationPattern.findFirst({
+            where: { organizationId, name: pattern.name },
+          })
+
+          if (!existing) {
+            await prisma.rotationPattern.create({
+              data: { ...pattern, organizationId },
+            })
+            added.push(pattern.name)
+          }
+        }
+
+        return successResponse({ added, message: `Added ${added.length} new patterns` })
+      } catch (error) {
+        return handleApiError(error, "add missing patterns")
+      }
+    },
+    { requiredRoles: ["ADMIN"] }
+  )()
+}
+
 export async function POST(request: NextRequest) {
   return withAuth(
     async (session) => {
