@@ -12,11 +12,13 @@ import {
   Settings,
   CalendarOff,
   BarChart3,
+  LayoutGrid,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Schedule", href: "/schedule", icon: Calendar },
+  { name: "Positions", href: "/positions", icon: LayoutGrid },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },

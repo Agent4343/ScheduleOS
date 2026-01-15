@@ -252,7 +252,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick links */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <a
           href="/schedule"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
@@ -260,6 +260,15 @@ export default function DashboardPage() {
           <Calendar className="h-8 w-8 text-primary mb-2" />
           <h3 className="font-semibold group-hover:text-primary">View Schedule</h3>
           <p className="text-sm text-muted-foreground">See the full schedule calendar</p>
+        </a>
+
+        <a
+          href="/positions"
+          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
+        >
+          <Users2 className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Position Coverage</h3>
+          <p className="text-sm text-muted-foreground">See who fills each position</p>
         </a>
 
         <a
