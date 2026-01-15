@@ -203,7 +203,8 @@ async function generateSchedules(
     },
     new Date(validatedData.startDate),
     new Date(validatedData.endDate),
-    validatedData.startPhase ?? 0
+    validatedData.startPhase ?? 0,
+    validatedData.startOnNights ?? false
   )
 
   // Create schedules for all users

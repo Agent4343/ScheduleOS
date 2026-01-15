@@ -91,6 +91,7 @@ export const generateScheduleSchema = z.object({
   endDate: z.coerce.date(),
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
+  startOnNights: z.boolean().optional(),
 })
 
 // Time off request validations

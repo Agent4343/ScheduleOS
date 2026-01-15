@@ -21,35 +21,34 @@ export interface GeneratedSchedule {
  * @param startDate - The start date for schedule generation
  * @param endDate - The end date for schedule generation
  * @param startPhase - The starting phase offset (0 = beginning of rotation)
+ * @param startOnNights - If true, first rotation is nights, then alternates
  * @returns Array of generated schedules
  */
 export function generateRotationSchedule(
   pattern: RotationPattern,
   startDate: Date,
   endDate: Date,
-  startPhase: number = 0
+  startPhase: number = 0,
+  startOnNights: boolean = false
 ): GeneratedSchedule[] {
   const schedules: GeneratedSchedule[] = []
   const totalCycleDays = pattern.daysOn + pattern.daysOff
 
   let currentDate = new Date(startDate)
   let dayInCycle = startPhase % totalCycleDays
+  let rotationCount = 0 // Track which rotation we're in
 
   while (currentDate <= endDate) {
     let shiftType: ShiftType
 
     if (dayInCycle < pattern.daysOn) {
-      // Working days
+      // Working days - determine if this rotation is days or nights
       if (pattern.includesNights) {
-        if (pattern.nightsAtStart) {
-          // Night shifts first, then day shifts
-          shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
-        } else {
-          // Day shifts first, then night shifts
-          const dayShifts = pattern.daysOn - pattern.nightDays
-          shiftType = dayInCycle < dayShifts ? ShiftType.DAY : ShiftType.NIGHT
-        }
+        // Alternating full rotations: entire rotation is days OR nights
+        const isNightRotation = startOnNights ? (rotationCount % 2 === 0) : (rotationCount % 2 === 1)
+        shiftType = isNightRotation ? ShiftType.NIGHT : ShiftType.DAY
       } else {
+        // No nights in pattern, just use DAY
         shiftType = ShiftType.DAY
       }
     } else {
@@ -63,7 +62,13 @@ export function generateRotationSchedule(
     })
 
     currentDate = addDays(currentDate, 1)
+    const prevDayInCycle = dayInCycle
     dayInCycle = (dayInCycle + 1) % totalCycleDays
+
+    // Track when we complete a full cycle (rotation)
+    if (dayInCycle === 0 || (prevDayInCycle >= pattern.daysOn && dayInCycle < pattern.daysOn)) {
+      rotationCount++
+    }
   }
 
   return schedules

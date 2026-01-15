@@ -190,6 +190,7 @@ export default function SchedulePage() {
   // Schedule generation state
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
+  const [startOnNights, setStartOnNights] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
@@ -356,6 +357,7 @@ export default function SchedulePage() {
     // Reset schedule generation fields
     setSelectedPatternId("")
     setScheduleStartDate(hireDateStr || new Date().toISOString().split("T")[0])
+    setStartOnNights(false)
     setGenerateSuccess(null)
     setSaveError(null)
     setEditModalOpen(true)
@@ -441,6 +443,7 @@ export default function SchedulePage() {
           startDate: scheduleStartDate,
           endDate: endDate.toISOString().split("T")[0],
           startPhase: 0,
+          startOnNights,
         }),
       })
 
@@ -842,6 +845,24 @@ export default function SchedulePage() {
               <p className="text-xs text-muted-foreground">
                 Schedule will be generated from this date to end of year
               </p>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+              <input
+                type="checkbox"
+                id="startOnNights"
+                checked={startOnNights}
+                onChange={(e) => setStartOnNights(e.target.checked)}
+                className="h-5 w-5 rounded border-gray-300"
+              />
+              <div>
+                <Label htmlFor="startOnNights" className="font-medium cursor-pointer">
+                  Start on Night Shifts
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  First rotation will be nights, then alternate to days
+                </p>
+              </div>
             </div>
 
             <Button
