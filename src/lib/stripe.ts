@@ -1,9 +1,17 @@
 import Stripe from "stripe"
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
-  typescript: true,
-})
+// Lazy initialization to avoid build-time errors
+let stripeInstance: Stripe | null = null
+
+export function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-12-15.clover",
+      typescript: true,
+    })
+  }
+  return stripeInstance
+}
 
 // Pricing plans configuration
 export const PLANS = {

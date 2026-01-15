@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
 import Stripe from "stripe"
-import { stripe } from "@/lib/stripe"
+import { getStripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
 import { PlanType, SubscriptionStatus } from "@prisma/client"
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event
 
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       body,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET!
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session
 
         if (session.mode === "subscription" && session.subscription) {
-          const subResponse = await stripe.subscriptions.retrieve(
+          const subResponse = await getStripe().subscriptions.retrieve(
             session.subscription as string
           )
           const subscription = subResponse as unknown as SubscriptionData
