@@ -101,7 +101,7 @@ const POSITION_COLORS: Record<string, string> = {
 const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
   DAY: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
   NIGHT: { bg: "bg-blue-600", text: "text-white", border: "border-blue-700" },
-  OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
+  OFF: { bg: "", text: "text-transparent", border: "" }, // Blank for OFF days
   VACATION: { bg: "bg-emerald-400", text: "text-emerald-900", border: "border-emerald-500" },
   SICK: { bg: "bg-red-400", text: "text-red-900", border: "border-red-500" },
   TRAINING: { bg: "bg-yellow-300", text: "text-yellow-900", border: "border-yellow-400" },
@@ -334,7 +334,7 @@ export default function SchedulePage() {
       const today = new Date()
       const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
       if (scrollRef.current) {
-        const cellWidth = 28 // approximate width per day
+        const cellWidth = 40 // approximate width per day (mobile friendly)
         scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
       }
     }, 100)
@@ -565,24 +565,24 @@ export default function SchedulePage() {
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
+                      className="h-10 border-b flex items-center px-3 min-w-[220px] hover:bg-muted/50 cursor-pointer group"
                       onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
-                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
+                          "w-3 h-8 rounded-full mr-3 flex-shrink-0",
                           getPositionColor(worker.position)
                         )}
                         title={worker.position || "No position"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">
+                        <p className="font-medium text-sm truncate">{worker.name || "Unnamed"}</p>
+                        <p className="text-xs text-muted-foreground truncate">
                           {worker.position || "No position"}
                           {worker.crew && ` • ${worker.crew.name}`}
                         </p>
                       </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                      <Pencil className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
                     </div>
                   ))}
                 </div>
@@ -599,7 +599,7 @@ export default function SchedulePage() {
                         <div
                           key={month}
                           className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 28}px` }}
+                          style={{ width: `${days.length * 40}px` }}
                         >
                           {getMonthName(month)}
                         </div>
@@ -607,7 +607,7 @@ export default function SchedulePage() {
                     </div>
 
                     {/* Day headers */}
-                    <div className="flex h-8 border-b">
+                    <div className="flex h-10 border-b">
                       {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -617,7 +617,7 @@ export default function SchedulePage() {
                           <div
                             key={day.toISOString()}
                             className={cn(
-                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
+                              "w-10 text-center text-xs flex flex-col items-center justify-center",
                               isWeekend && "bg-muted/50",
                               isToday && "bg-primary/20 font-bold",
                               isFirstOfMonth && "border-l border-gray-300"
@@ -639,35 +639,37 @@ export default function SchedulePage() {
                       const userSchedules = schedulesByUser.get(worker.id)
 
                       return (
-                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
+                        <div key={worker.id} className="flex h-10 border-b hover:bg-muted/30">
                           {yearDays.map((day) => {
                             const dateKey = day.toISOString().split("T")[0]
                             const schedule = userSchedules?.get(dateKey)
                             const isToday = day.getTime() === today.getTime()
                             const isWeekend = day.getDay() === 0 || day.getDay() === 6
                             const isFirstOfMonth = day.getDate() === 1
+                            const isOff = schedule?.shiftType === "OFF"
+                            const isWorking = schedule && (schedule.shiftType === "DAY" || schedule.shiftType === "NIGHT")
 
                             return (
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
+                                  "w-10 h-10 flex items-center justify-center text-sm font-bold border-r border-b",
                                   isFirstOfMonth && "border-l-2 border-l-gray-400",
                                   isToday && "ring-2 ring-primary ring-inset",
-                                  schedule
+                                  schedule && !isOff
                                     ? cn(
                                         SHIFT_COLORS[schedule.shiftType].bg,
                                         SHIFT_COLORS[schedule.shiftType].text,
-                                        "border-white/20"
+                                        isWorking && "border-white/20"
                                       )
                                     : cn(
-                                        isWeekend ? "bg-gray-100" : "bg-white",
-                                        "text-muted-foreground/30"
+                                        isWeekend ? "bg-gray-50" : "bg-white",
+                                        "text-transparent"
                                       )
                                 )}
-                                title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
+                                title={schedule && !isOff ? `${schedule.shiftType} - ${worker.name}` : "Off"}
                               >
-                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
+                                {schedule && !isOff ? SHIFT_ABBREV[schedule.shiftType] : ""}
                               </div>
                             )
                           })}
