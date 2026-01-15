@@ -3,7 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
-import { UserRole } from "@prisma/client"
+import { UserRole, PlanType } from "@prisma/client"
 
 declare module "next-auth" {
   interface Session {
@@ -13,6 +13,7 @@ declare module "next-auth" {
       name: string | null
       role: UserRole
       organizationId: string | null
+      plan: PlanType
       image?: string | null
     }
   }
@@ -23,6 +24,7 @@ declare module "next-auth" {
     name: string | null
     role: UserRole
     organizationId: string | null
+    plan: PlanType
   }
 }
 
@@ -31,6 +33,7 @@ declare module "next-auth/jwt" {
     id: string
     role: UserRole
     organizationId: string | null
+    plan: PlanType
   }
 }
 
@@ -65,6 +68,11 @@ export const authOptions: NextAuthOptions = {
             role: true,
             organizationId: true,
             status: true,
+            organization: {
+              select: {
+                plan: true,
+              },
+            },
           },
         })
 
@@ -91,6 +99,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           role: user.role,
           organizationId: user.organizationId,
+          plan: user.organization?.plan || "FREE",
         }
       },
     }),
@@ -101,6 +110,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.role = user.role
         token.organizationId = user.organizationId
+        token.plan = user.plan
       }
       return token
     },
@@ -109,6 +119,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id
         session.user.role = token.role
         session.user.organizationId = token.organizationId
+        session.user.plan = token.plan
       }
       return session
     },

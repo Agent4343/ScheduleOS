@@ -62,6 +62,13 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Stripe billing
+  stripeCustomerId     String?   @unique
+  stripePriceId        String?
+  stripeSubscriptionId String?   @unique
+  plan                 PlanType  @default(FREE)
+  planPeriodEnd        DateTime?
+
   // Relations
   users            User[]
   crews            Crew[]
@@ -71,6 +78,13 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   positions        Position[]
+  subscription     Subscription?
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
 }
 
 model User {
@@ -441,4 +455,36 @@ model Invitation {
   createdBy   User   @relation("InvitationCreator", fields: [createdById], references: [id])
 
   @@unique([organizationId, email])
+}
+
+// =====================
+// Billing & Subscriptions
+// =====================
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  stripeSubscriptionId String             @unique
+  stripePriceId        String
+  stripeCustomerId     String
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  // Organization
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAST_DUE
+  TRIALING
+  UNPAID
 }

@@ -13,6 +13,7 @@ import {
   CalendarOff,
   BarChart3,
   LayoutGrid,
+  CreditCard,
 } from "lucide-react"
 
 const navigation = [
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 

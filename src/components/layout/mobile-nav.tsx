@@ -12,14 +12,20 @@ import {
   Settings,
   CalendarOff,
   X,
+  BarChart3,
+  LayoutGrid,
+  CreditCard,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Schedule", href: "/schedule", icon: Calendar },
+  { name: "Positions", href: "/positions", icon: LayoutGrid },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
+  { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Billing", href: "/billing", icon: CreditCard },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
