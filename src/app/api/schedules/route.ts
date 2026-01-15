@@ -218,6 +218,7 @@ async function generateSchedules(
     for (const schedule of generatedSchedules) {
       scheduleData.push({
         userId,
+        organizationId,
         date: schedule.date,
         shiftType: schedule.shiftType,
         crewId: user?.crewId,
