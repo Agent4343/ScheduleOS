@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { ZodError } from "zod"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateUserSchema } from "@/lib/validations"
@@ -133,9 +134,9 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating user:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data", details: error.errors },
         { status: 400 }
       )
     }

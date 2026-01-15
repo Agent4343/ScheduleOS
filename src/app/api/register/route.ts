@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { ZodError } from "zod"
 import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/auth"
 import { registerSchema } from "@/lib/validations"
@@ -180,9 +181,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Registration error:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data", details: error.errors },
         { status: 400 }
       )
     }

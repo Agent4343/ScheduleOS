@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { ZodError } from "zod"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     // Check if this is a generate request or single schedule create
     if (body.patternId) {
-      return generateSchedules(request, session.user.organizationId, body)
+      return generateSchedules(session.user.organizationId, body)
     }
 
     const validatedData = createScheduleSchema.parse(body)
@@ -136,9 +137,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating schedule:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data", details: error.errors },
         { status: 400 }
       )
     }
@@ -148,7 +149,6 @@ export async function POST(request: NextRequest) {
 }
 
 async function generateSchedules(
-  request: NextRequest,
   organizationId: string,
   body: unknown
 ) {
