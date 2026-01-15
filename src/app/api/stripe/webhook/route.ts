@@ -83,10 +83,10 @@ export async function POST(request: NextRequest) {
                 stripeCustomerId: subscription.customer as string,
                 status: mapStripeStatus(subscription.status),
                 currentPeriodStart: new Date(
-                  subscription.current_period_start * 1000
+                  subscription.currentPeriodStart * 1000
                 ),
                 currentPeriodEnd: new Date(
-                  subscription.current_period_end * 1000
+                  subscription.currentPeriodEnd * 1000
                 ),
               },
               update: {
@@ -94,10 +94,10 @@ export async function POST(request: NextRequest) {
                 stripePriceId: subscription.items.data[0].price.id,
                 status: mapStripeStatus(subscription.status),
                 currentPeriodStart: new Date(
-                  subscription.current_period_start * 1000
+                  subscription.currentPeriodStart * 1000
                 ),
                 currentPeriodEnd: new Date(
-                  subscription.current_period_end * 1000
+                  subscription.currentPeriodEnd * 1000
                 ),
               },
             })
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
                 stripeSubscriptionId: subscription.id,
                 stripePriceId: subscription.items.data[0].price.id,
                 planPeriodEnd: new Date(
-                  subscription.current_period_end * 1000
+                  subscription.currentPeriodEnd * 1000
                 ),
               },
             })
@@ -130,12 +130,12 @@ export async function POST(request: NextRequest) {
               status: mapStripeStatus(subscription.status),
               stripePriceId: subscription.items.data[0].price.id,
               currentPeriodStart: new Date(
-                subscription.current_period_start * 1000
+                subscription.currentPeriodStart * 1000
               ),
               currentPeriodEnd: new Date(
-                subscription.current_period_end * 1000
+                subscription.currentPeriodEnd * 1000
               ),
-              cancelAtPeriodEnd: subscription.cancel_at_period_end,
+              cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
             },
           })
 
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
             where: { id: organizationId },
             data: {
               planPeriodEnd: new Date(
-                subscription.current_period_end * 1000
+                subscription.currentPeriodEnd * 1000
               ),
             },
           })
