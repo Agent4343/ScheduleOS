@@ -168,3 +168,4 @@ npm run db:seed      # Seed demo data
 ## License
 
 Proprietary - All rights reserved
+
