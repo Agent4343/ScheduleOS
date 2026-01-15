@@ -1,12 +1,11 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "buildCommand": "npm run build && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/"
+    "builder": "NIXPACKS"
   },
   "deploy": {
     "numReplicas": 1,
-    "startCommand": "HOSTNAME=0.0.0.0 PORT=${PORT:-8080} node .next/standalone/server.js",
+    "startCommand": "npx prisma db push --skip-generate && HOSTNAME=0.0.0.0 PORT=${PORT:-8080} node .next/standalone/server.js",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
