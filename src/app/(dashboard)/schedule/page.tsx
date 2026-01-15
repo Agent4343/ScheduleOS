@@ -495,7 +495,8 @@ export default function SchedulePage() {
     try {
       // Generate for the full year from start date
       const startDate = new Date(scheduleStartDate)
-      const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
+      const generatedYear = startDate.getFullYear()
+      const endDate = new Date(generatedYear, 11, 31) // End of year
 
       console.log("Generating schedule:", {
         userId: selectedWorker.id,
@@ -531,9 +532,18 @@ export default function SchedulePage() {
         `Generated ${result.data?.daysGenerated || 0} days: ${counts.DAY || 0} day shifts, ${counts.NIGHT || 0} night shifts, ${counts.OFF || 0} off days. Pattern: ${pattern.name || 'unknown'} (includesNights: ${pattern.includesNights ? 'YES' : 'NO'})`
       )
 
-      // Refresh schedules
-      const fetchStartDate = `${currentYear}-01-01`
-      const fetchEndDate = `${currentYear}-12-31`
+      // Switch to the generated year if different from current view
+      if (generatedYear !== currentYear) {
+        setCurrentYear(generatedYear)
+      }
+
+      // Refresh schedules for the generated year
+      const fetchStartDate = `${generatedYear}-01-01`
+      const fetchEndDate = `${generatedYear}-12-31`
+
+      // Clear crew filter to ensure we see the worker's schedule
+      setSelectedCrew("")
+
       const schedulesResponse = await fetch(
         `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
       )
@@ -541,6 +551,7 @@ export default function SchedulePage() {
       console.log("Refreshed schedules:", {
         success: schedulesResult.success,
         count: schedulesResult.data?.length || 0,
+        forWorker: schedulesResult.data?.filter((s: Schedule) => s.user.id === selectedWorker.id).length || 0,
       })
       if (schedulesResult.success) {
         setSchedules(schedulesResult.data)
