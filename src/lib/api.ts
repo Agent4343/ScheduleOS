@@ -12,10 +12,11 @@ export function successResponse<T>(data: T, message?: string, status = 200) {
 }
 
 export function errorResponse(error: string, status = 400, details?: unknown) {
-  return NextResponse.json(
-    { error, ...(details && { details }) },
-    { status }
-  )
+  const body: { error: string; details?: unknown } = { error }
+  if (details) {
+    body.details = details
+  }
+  return NextResponse.json(body, { status })
 }
 
 export function createdResponse<T>(data: T, message?: string) {
