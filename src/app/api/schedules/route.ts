@@ -59,7 +59,13 @@ export async function GET(request: NextRequest) {
       orderBy: [{ date: "asc" }, { user: { name: "asc" } }],
     })
 
-    return NextResponse.json({ success: true, data: schedules })
+    // Format dates as YYYY-MM-DD strings to avoid timezone issues
+    const formattedSchedules = schedules.map(schedule => ({
+      ...schedule,
+      date: schedule.date.toISOString().split('T')[0],
+    }))
+
+    return NextResponse.json({ success: true, data: formattedSchedules })
   } catch (error) {
     console.error("Error fetching schedules:", error)
     return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 })

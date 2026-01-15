@@ -253,9 +253,10 @@ async function main() {
 
       schedules.push({
         userId: worker.id,
-        organizationId: organization.id,
+        crewId: worker.crewId,
         date: new Date(currentDate),
         shiftType,
+        isOverride: false,
       })
 
       currentDate.setDate(currentDate.getDate() + 1)

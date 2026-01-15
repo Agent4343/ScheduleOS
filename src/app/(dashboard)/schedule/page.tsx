@@ -306,7 +306,10 @@ export default function SchedulePage() {
       if (!map.has(schedule.user.id)) {
         map.set(schedule.user.id, new Map())
       }
-      const dateKey = schedule.date.split("T")[0]
+      // Date is already YYYY-MM-DD from API, but handle both formats
+      const dateKey = schedule.date.includes("T")
+        ? schedule.date.split("T")[0]
+        : schedule.date
       map.get(schedule.user.id)!.set(dateKey, schedule)
     }
 
