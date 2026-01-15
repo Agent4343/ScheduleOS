@@ -99,13 +99,13 @@ const POSITION_COLORS: Record<string, string> = {
 }
 
 const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
-  DAY: { bg: "bg-amber-100", text: "text-amber-800", border: "border-amber-300" },
-  NIGHT: { bg: "bg-indigo-100", text: "text-indigo-800", border: "border-indigo-300" },
-  OFF: { bg: "bg-gray-100", text: "text-gray-500", border: "border-gray-200" },
-  VACATION: { bg: "bg-green-100", text: "text-green-800", border: "border-green-300" },
-  SICK: { bg: "bg-red-100", text: "text-red-800", border: "border-red-300" },
-  TRAINING: { bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300" },
-  SHUTDOWN: { bg: "bg-slate-200", text: "text-slate-600", border: "border-slate-300" },
+  DAY: { bg: "bg-amber-400", text: "text-amber-900", border: "border-amber-500" },
+  NIGHT: { bg: "bg-indigo-500", text: "text-white", border: "border-indigo-600" },
+  OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
+  VACATION: { bg: "bg-emerald-400", text: "text-emerald-900", border: "border-emerald-500" },
+  SICK: { bg: "bg-red-400", text: "text-red-900", border: "border-red-500" },
+  TRAINING: { bg: "bg-yellow-300", text: "text-yellow-900", border: "border-yellow-400" },
+  SHUTDOWN: { bg: "bg-slate-500", text: "text-white", border: "border-slate-600" },
 }
 
 const SHIFT_ABBREV: Record<ShiftType, string> = {
@@ -651,26 +651,23 @@ export default function SchedulePage() {
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-medium",
-                                  isWeekend && "bg-muted/30",
-                                  isToday && "bg-primary/10",
-                                  isFirstOfMonth && "border-l border-gray-300"
+                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
+                                  isFirstOfMonth && "border-l-2 border-l-gray-400",
+                                  isToday && "ring-2 ring-primary ring-inset",
+                                  schedule
+                                    ? cn(
+                                        SHIFT_COLORS[schedule.shiftType].bg,
+                                        SHIFT_COLORS[schedule.shiftType].text,
+                                        "border-white/20"
+                                      )
+                                    : cn(
+                                        isWeekend ? "bg-gray-100" : "bg-white",
+                                        "text-muted-foreground/30"
+                                      )
                                 )}
+                                title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
                               >
-                                {schedule ? (
-                                  <span
-                                    className={cn(
-                                      "w-5 h-5 rounded flex items-center justify-center",
-                                      SHIFT_COLORS[schedule.shiftType].bg,
-                                      SHIFT_COLORS[schedule.shiftType].text
-                                    )}
-                                    title={`${schedule.shiftType} - ${worker.name}`}
-                                  >
-                                    {SHIFT_ABBREV[schedule.shiftType]}
-                                  </span>
-                                ) : (
-                                  <span className="text-muted-foreground/30">-</span>
-                                )}
+                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
                               </div>
                             )
                           })}
