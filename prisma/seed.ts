@@ -192,6 +192,68 @@ async function main() {
 
   console.log("Created demo workers")
 
+  // Generate schedules for all workers
+  console.log("Generating schedules...")
+
+  const allWorkers = await prisma.user.findMany({
+    where: { organizationId: organization.id, role: "WORKER" },
+    include: { crew: true },
+  })
+
+  const startDate = new Date()
+  startDate.setMonth(0, 1) // January 1st of current year
+  const endDate = new Date()
+  endDate.setMonth(11, 31) // December 31st of current year
+
+  for (const worker of allWorkers) {
+    if (!defaultPattern) continue
+
+    // Get crew phase offset for synchronized rotations
+    const crewIndex = ["Crew A", "Crew B", "Crew C", "Crew D"].indexOf(worker.crew?.name || "")
+    const phaseOffset = crewIndex >= 0 ? Math.floor((crewIndex * (defaultPattern.daysOn + defaultPattern.daysOff)) / 2) : 0
+
+    const totalCycleDays = defaultPattern.daysOn + defaultPattern.daysOff
+    let currentDate = new Date(startDate)
+    let dayInCycle = phaseOffset % totalCycleDays
+
+    // Delete existing schedules for this worker
+    await prisma.schedule.deleteMany({
+      where: {
+        userId: worker.id,
+        date: { gte: startDate, lte: endDate },
+      },
+    })
+
+    // Generate schedules
+    const schedules = []
+    while (currentDate <= endDate) {
+      let shiftType: "DAY" | "NIGHT" | "OFF"
+
+      if (dayInCycle < defaultPattern.daysOn) {
+        if (defaultPattern.includesNights && defaultPattern.nightsAtStart) {
+          shiftType = dayInCycle < defaultPattern.nightDays ? "NIGHT" : "DAY"
+        } else {
+          shiftType = "DAY"
+        }
+      } else {
+        shiftType = "OFF"
+      }
+
+      schedules.push({
+        userId: worker.id,
+        organizationId: organization.id,
+        date: new Date(currentDate),
+        shiftType,
+      })
+
+      currentDate.setDate(currentDate.getDate() + 1)
+      dayInCycle = (dayInCycle + 1) % totalCycleDays
+    }
+
+    await prisma.schedule.createMany({ data: schedules })
+    console.log(`Generated ${schedules.length} schedule days for ${worker.name}`)
+  }
+
   console.log("Seeding completed!")
 }
 
