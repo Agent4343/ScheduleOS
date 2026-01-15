@@ -1,18 +1,16 @@
-import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { ZodError } from "zod"
+import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
 import { createRotationPatternSchema } from "@/lib/validations"
+import {
+  successResponse,
+  createdResponse,
+  errorResponse,
+  handleApiError,
+  withAuth,
+} from "@/lib/api"
 
-export async function GET(_request: NextRequest) {
+export const GET = withAuth(async (session) => {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const patterns = await prisma.rotationPattern.findMany({
       where: { organizationId: session.user.organizationId },
       include: {
@@ -23,82 +21,61 @@ export async function GET(_request: NextRequest) {
       orderBy: { name: "asc" },
     })
 
-    return NextResponse.json({ success: true, data: patterns })
+    return successResponse(patterns)
   } catch (error) {
-    console.error("Error fetching rotation patterns:", error)
-    return NextResponse.json({ error: "Failed to fetch rotation patterns" }, { status: 500 })
+    return handleApiError(error, "fetch rotation patterns")
   }
-}
+})
 
 export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions)
+  return withAuth(
+    async (session) => {
+      try {
+        const body = await request.json()
+        const validatedData = createRotationPatternSchema.parse(body)
 
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+        // Check for duplicate name
+        const existingPattern = await prisma.rotationPattern.findFirst({
+          where: {
+            organizationId: session.user.organizationId,
+            name: validatedData.name,
+          },
+        })
 
-    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+        if (existingPattern) {
+          return errorResponse("A rotation pattern with this name already exists")
+        }
 
-    const body = await request.json()
-    const validatedData = createRotationPatternSchema.parse(body)
+        // If setting as default, unset other defaults
+        if (validatedData.isDefault) {
+          await prisma.rotationPattern.updateMany({
+            where: {
+              organizationId: session.user.organizationId,
+              isDefault: true,
+            },
+            data: { isDefault: false },
+          })
+        }
 
-    // Check for duplicate name
-    const existingPattern = await prisma.rotationPattern.findFirst({
-      where: {
-        organizationId: session.user.organizationId,
-        name: validatedData.name,
-      },
-    })
+        const pattern = await prisma.rotationPattern.create({
+          data: {
+            name: validatedData.name,
+            description: validatedData.description,
+            daysOn: validatedData.daysOn,
+            daysOff: validatedData.daysOff,
+            includesNights: validatedData.includesNights,
+            nightsAtStart: validatedData.nightsAtStart,
+            nightDays: validatedData.nightDays,
+            isDefault: validatedData.isDefault,
+            organizationId: session.user.organizationId,
+          },
+        })
 
-    if (existingPattern) {
-      return NextResponse.json(
-        { error: "A rotation pattern with this name already exists" },
-        { status: 400 }
-      )
-    }
-
-    // If setting as default, unset other defaults
-    if (validatedData.isDefault) {
-      await prisma.rotationPattern.updateMany({
-        where: {
-          organizationId: session.user.organizationId,
-          isDefault: true,
-        },
-        data: { isDefault: false },
-      })
-    }
-
-    const pattern = await prisma.rotationPattern.create({
-      data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        daysOn: validatedData.daysOn,
-        daysOff: validatedData.daysOff,
-        includesNights: validatedData.includesNights,
-        nightsAtStart: validatedData.nightsAtStart,
-        nightDays: validatedData.nightDays,
-        isDefault: validatedData.isDefault,
-        organizationId: session.user.organizationId,
-      },
-    })
-
-    return NextResponse.json(
-      { success: true, data: pattern, message: "Rotation pattern created successfully" },
-      { status: 201 }
-    )
-  } catch (error) {
-    console.error("Error creating rotation pattern:", error)
-
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: "Invalid input data", details: error.errors },
-        { status: 400 }
-      )
-    }
-
-    return NextResponse.json({ error: "Failed to create rotation pattern" }, { status: 500 })
-  }
+        return createdResponse(pattern, "Rotation pattern created successfully")
+      } catch (error) {
+        return handleApiError(error, "create rotation pattern")
+      }
+    },
+    { requiredRoles: ["ADMIN", "SUPERVISOR"] }
+  )()
 }
