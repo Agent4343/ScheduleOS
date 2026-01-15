@@ -59,11 +59,20 @@ export default function CrewsPage() {
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingCrew, setEditingCrew] = useState<Crew | null>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     color: "#3B82F6",
     rotationPatternId: "",
+  })
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
+    color: "#3B82F6",
+    rotationPatternId: "",
+    currentPhase: 0,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -120,6 +129,56 @@ export default function CrewsPage() {
     } catch (error) {
       console.error("Failed to create crew:", error)
       alert("Failed to create crew")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function openEditModal(crew: Crew) {
+    setEditingCrew(crew)
+    setEditFormData({
+      name: crew.name,
+      description: crew.description || "",
+      color: crew.color,
+      rotationPatternId: crew.rotationPattern?.id || "",
+      currentPhase: crew.currentPhase,
+    })
+    setIsEditModalOpen(true)
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingCrew) return
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/crews/${editingCrew.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name,
+          description: editFormData.description || null,
+          color: editFormData.color,
+          rotationPatternId: editFormData.rotationPatternId || null,
+          currentPhase: editFormData.currentPhase,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh crews list
+        const crewsRes = await fetch("/api/crews")
+        const crewsData = await crewsRes.json()
+        if (crewsData.success) setCrews(crewsData.data)
+        setIsEditModalOpen(false)
+        setEditingCrew(null)
+      } else {
+        alert(data.error || "Failed to update crew")
+      }
+    } catch (error) {
+      console.error("Failed to update crew:", error)
+      alert("Failed to update crew")
     } finally {
       setSubmitting(false)
     }
@@ -275,7 +334,12 @@ export default function CrewsPage() {
                     <RefreshCw className="h-3 w-3 mr-1" />
                     Generate
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => openEditModal(crew)}
+                  >
                     <Settings className="h-3 w-3 mr-1" />
                     Configure
                   </Button>
@@ -356,6 +420,108 @@ export default function CrewsPage() {
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Creating..." : "Create Crew"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Crew Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setEditingCrew(null)
+        }}
+        title="Configure Crew"
+        description={`Edit settings for ${editingCrew?.name || "crew"}`}
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">Crew Name *</Label>
+            <Input
+              id="edit-name"
+              value={editFormData.name}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="e.g., Crew A"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-description">Description</Label>
+            <Input
+              id="edit-description"
+              value={editFormData.description}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Optional description"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Crew Color</Label>
+            <div className="flex gap-2 flex-wrap">
+              {COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  onClick={() => setEditFormData((prev) => ({ ...prev, color: color.value }))}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    editFormData.color === color.value
+                      ? "border-foreground scale-110"
+                      : "border-transparent hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.label}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-pattern">Rotation Pattern</Label>
+            <Select
+              value={editFormData.rotationPatternId}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, rotationPatternId: e.target.value }))}
+              options={[
+                { value: "", label: "No pattern" },
+                ...patterns.map((p) => ({
+                  value: p.id,
+                  label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? " - alternates days/nights" : ""})`,
+                })),
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              Choose the 21/21 pattern for 3 weeks on / 3 weeks off rotation
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-phase">Current Phase (Day in Rotation)</Label>
+            <Input
+              id="edit-phase"
+              type="number"
+              min="0"
+              value={editFormData.currentPhase}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, currentPhase: parseInt(e.target.value) || 0 }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Day 0 = first day of work cycle
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsEditModalOpen(false)
+                setEditingCrew(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </form>
