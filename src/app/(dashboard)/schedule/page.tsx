@@ -453,8 +453,10 @@ export default function SchedulePage() {
         throw new Error(result.error || "Failed to generate schedule")
       }
 
+      const counts = result.data?.shiftCounts || {}
+      const pattern = result.data?.patternUsed || {}
       setGenerateSuccess(
-        `Generated ${result.data?.daysGenerated || 0} schedule days for ${startDate.getFullYear()}`
+        `Generated ${result.data?.daysGenerated || 0} days: ${counts.DAY || 0} day shifts, ${counts.NIGHT || 0} night shifts, ${counts.OFF || 0} off days. Pattern: ${pattern.name || 'unknown'} (includesNights: ${pattern.includesNights ? 'YES' : 'NO'})`
       )
 
       // Refresh schedules

@@ -193,6 +193,13 @@ async function generateSchedules(
   }
 
   // Generate schedules for each user
+  console.log("Generating schedules with pattern:", {
+    daysOn: pattern.daysOn,
+    daysOff: pattern.daysOff,
+    includesNights: pattern.includesNights,
+    startOnNights: validatedData.startOnNights,
+  })
+
   const generatedSchedules = generateRotationSchedule(
     {
       daysOn: pattern.daysOn,
@@ -206,6 +213,23 @@ async function generateSchedules(
     validatedData.startPhase ?? 0,
     validatedData.startOnNights ?? false
   )
+
+  // Log sample of generated schedules
+  console.log("Generated schedules sample:", {
+    total: generatedSchedules.length,
+    first5: generatedSchedules.slice(0, 5).map(s => ({
+      date: s.date.toISOString().split('T')[0],
+      shiftType: s.shiftType
+    })),
+    days21to25: generatedSchedules.slice(20, 25).map(s => ({
+      date: s.date.toISOString().split('T')[0],
+      shiftType: s.shiftType
+    })),
+    days42to46: generatedSchedules.slice(41, 46).map(s => ({
+      date: s.date.toISOString().split('T')[0],
+      shiftType: s.shiftType
+    })),
+  })
 
   // Create schedules for all users
   const scheduleData = []
@@ -245,6 +269,12 @@ async function generateSchedules(
     skipDuplicates: true,
   })
 
+  // Count shift types
+  const shiftCounts = generatedSchedules.reduce((acc, s) => {
+    acc[s.shiftType] = (acc[s.shiftType] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
+
   return NextResponse.json({
     success: true,
     message: `Generated ${generatedSchedules.length} schedule days for ${userIds.length} user(s)`,
@@ -252,6 +282,13 @@ async function generateSchedules(
       usersProcessed: userIds.length,
       daysGenerated: generatedSchedules.length,
       totalRecords: scheduleData.length,
+      shiftCounts,
+      patternUsed: {
+        name: pattern.name,
+        daysOn: pattern.daysOn,
+        daysOff: pattern.daysOff,
+        includesNights: pattern.includesNights,
+      },
     },
   })
 }
