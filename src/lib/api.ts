@@ -68,7 +68,7 @@ export function handleApiError(error: unknown, context?: string): NextResponse {
   console.error(context ? `${context}:` : "API Error:", error)
 
   if (error instanceof ZodError) {
-    return errorResponse("Invalid input data", 400, error.errors)
+    return errorResponse("Invalid input data", 400, error.issues)
   }
 
   return errorResponse(context ? `Failed to ${context}` : "Internal server error", 500)
