@@ -33,7 +33,7 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/50 transition-opacity"
@@ -44,8 +44,9 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
       {/* Modal content */}
       <div
         className={cn(
-          "relative z-50 w-full max-w-lg rounded-lg bg-background p-6 shadow-lg",
-          "animate-in fade-in-0 zoom-in-95",
+          "relative z-50 w-full max-w-lg rounded-t-lg sm:rounded-lg bg-background p-4 sm:p-6 shadow-lg",
+          "max-h-[90vh] sm:max-h-[85vh] overflow-y-auto",
+          "animate-in fade-in-0 slide-in-from-bottom-4 sm:zoom-in-95",
           className
         )}
         role="dialog"

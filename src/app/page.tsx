@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Star,
   ChevronRight,
+  Menu,
 } from "lucide-react"
 
 const features = [
@@ -186,19 +187,35 @@ export default async function HomePage() {
                 How It Works
               </a>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Link
                 href="/login"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                className="hidden sm:inline-flex text-sm font-medium text-muted-foreground hover:text-foreground"
               >
                 Sign In
               </Link>
               <Link
                 href="/register"
-                className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-3 sm:px-4 py-2 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90"
               >
-                Get Started
+                <span className="hidden sm:inline">Get Started</span>
+                <span className="sm:hidden">Start</span>
               </Link>
+              {/* Mobile menu */}
+              <div className="md:hidden relative group">
+                <button className="p-2 hover:bg-accent rounded-md">
+                  <Menu className="h-5 w-5" />
+                </button>
+                <div className="absolute right-0 top-full mt-2 w-48 bg-background border rounded-lg shadow-lg opacity-0 invisible group-focus-within:opacity-100 group-focus-within:visible transition-all">
+                  <div className="p-2 space-y-1">
+                    <a href="#features" className="block px-3 py-2 text-sm rounded-md hover:bg-accent">Features</a>
+                    <a href="#pricing" className="block px-3 py-2 text-sm rounded-md hover:bg-accent">Pricing</a>
+                    <a href="#how-it-works" className="block px-3 py-2 text-sm rounded-md hover:bg-accent">How It Works</a>
+                    <hr className="my-2" />
+                    <Link href="/login" className="block px-3 py-2 text-sm rounded-md hover:bg-accent sm:hidden">Sign In</Link>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -338,8 +355,8 @@ export default async function HomePage() {
             {pricing.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative rounded-2xl border bg-card p-8 ${
-                  plan.popular ? "border-primary shadow-lg scale-105" : ""
+                className={`relative rounded-2xl border bg-card p-6 sm:p-8 ${
+                  plan.popular ? "border-primary shadow-lg md:scale-105" : ""
                 }`}
               >
                 {plan.popular && (
@@ -457,7 +474,7 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t py-12">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 md:grid-cols-4">
+          <div className="grid gap-8 grid-cols-2 md:grid-cols-4">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Clock className="h-6 w-6 text-primary" />
