@@ -1,5 +1,5 @@
 // ShiftSync Database Schema
-// AI-Powered Workforce Scheduling Platform
+// AI-Powered Workforce Scheduling Platform for Offshore Operations
 
 generator client {
   provider = "prisma-client-js"
@@ -70,39 +70,50 @@ model Organization {
   shutdowns        Shutdown[]
   holidays         Holiday[]
   invitations      Invitation[]
+  positions        Position[]
 }
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
+  id             String     @id @default(cuid())
+  email          String     @unique
   emailVerified  DateTime?
   name           String?
   passwordHash   String?
   image          String?
-  role           UserRole  @default(WORKER)
+  role           UserRole   @default(WORKER)
   position       String?
   phone          String?
   hireDate       DateTime?
   status         UserStatus @default(ACTIVE)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Offshore specific fields
+  rotationGroup    String?   // 151, 351, 352, 451, OCR
+  primaryPosition  String?   // OIM, Production Supervisor, Production Lead, OCR Operator, Ops Tech
+
+  // Qualifications (stored as JSON array for flexibility)
+  qualifications   Json      @default("[]") // ["CCR", "PS_CAPABLE", "PL_CAPABLE"]
+  isCCRQualified   Boolean   @default(false) // CCR trained (marked with * in spec)
+  isPSCapable      Boolean   @default(false) // Can backfill Production Supervisor
+  isPLCapable      Boolean   @default(false) // Can backfill Production Lead
 
   // Organization
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
-  // Crew assignment
+  // Crew/Rotation Group assignment
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
 
   // Relations
-  accounts        Account[]
-  sessions        Session[]
-  schedules       Schedule[]
-  timeOffRequests TimeOffRequest[]
-  approvedRequests TimeOffRequest[] @relation("ApprovedBy")
-  holidayTracking HolidayTracking[]
-  notifications   Notification[]
+  accounts           Account[]
+  sessions           Session[]
+  schedules          Schedule[]
+  timeOffRequests    TimeOffRequest[]
+  approvedRequests   TimeOffRequest[] @relation("ApprovedBy")
+  holidayTracking    HolidayTracking[]
+  notifications      Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
 }
 
@@ -119,14 +130,20 @@ enum UserStatus {
   TERMINATED
 }
 
+// Crew model now represents Rotation Groups (151, 351, 352, 451, OCR)
 model Crew {
   id           String   @id @default(cuid())
   name         String
+  code         String?  // Rotation group code: 151, 351, 352, 451, OCR
   description  String?
   color        String   @default("#3B82F6")
   currentPhase Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  // Rotation behavior
+  alternatesDayNight Boolean @default(false) // 351/352/451 groups alternate full hitches
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Organization
   organizationId String
@@ -141,6 +158,7 @@ model Crew {
   schedules Schedule[]
 
   @@unique([organizationId, name])
+  @@unique([organizationId, code])
 }
 
 model RotationPattern {
@@ -154,8 +172,12 @@ model RotationPattern {
   nightDays         Int      @default(0)
   patternDefinition Json     @default("[]")
   isDefault         Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+
+  // New: Alternating behavior for offshore rotations
+  alternatesDayNight Boolean @default(false) // Full hitch alternates D/N
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Organization
   organizationId String
@@ -168,18 +190,47 @@ model RotationPattern {
 }
 
 // =====================
+// Positions (for staffing requirements)
+// =====================
+
+model Position {
+  id                    String   @id @default(cuid())
+  name                  String   // OIM, Production Supervisor, Production Lead Days, OCR-D Slot 1, etc.
+  code                  String?  // Short code
+  category              String?  // Field Ops, Control Room, Leadership
+  shiftType             String   // day, night, 24hr
+  minStaffing           Int      @default(1)
+  maxStaffing           Int      @default(1)
+  requiredQualifications Json    @default("[]") // ["CCR"] for CCR positions
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+}
+
+// =====================
 // Scheduling
 // =====================
 
 model Schedule {
-  id             String      @id @default(cuid())
-  date           DateTime    @db.Date
+  id             String    @id @default(cuid())
+  date           DateTime  @db.Date
   shiftType      ShiftType
-  isOverride     Boolean     @default(false)
+  isOverride     Boolean   @default(false)
   overrideReason String?
   notes          String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+
+  // Backfill tracking
+  isBackfill     Boolean   @default(false)
+  backfillRole   String?   // PS, PL-D, PL-N when acting up
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // User
   userId String
@@ -192,29 +243,51 @@ model Schedule {
   @@unique([userId, date])
   @@index([date])
   @@index([crewId, date])
+  @@index([shiftType, date])
 }
 
+// Expanded shift types for offshore operations
 enum ShiftType {
-  DAY
-  NIGHT
-  OFF
-  VACATION
-  SICK
-  TRAINING
-  SHUTDOWN
+  // Field Operations
+  DAY       // D - Day shift outside operations
+  NIGHT     // N - Night shift outside operations
+
+  // Control Room
+  OCR_DAY   // OCR-D - Operations Control Room Day
+  OCR_NIGHT // OCR-N - Operations Control Room Night
+  CCR_DAY   // CCR-D - Central Control Room Day
+  CCR_NIGHT // CCR-N - Central Control Room Night
+
+  // Backfill/Acting Roles (tracked via isBackfill + backfillRole)
+  PS        // Production Supervisor (acting/backfill)
+  PL_DAY    // PL-D - Production Lead Day (acting/backfill)
+  PL_NIGHT  // PL-N - Production Lead Night (acting/backfill)
+
+  // Non-operational
+  TRAINING  // TR - Training
+  OSCC      // Offshore Safety & Competence Course
+
+  // Absence
+  OFF       // Off rotation / home (blank in original)
+  LEAVE     // L - Scheduled leave
+  SICK      // SL - Sick Leave / Special Leave
+  VACATION  // Vacation
+
+  // Other
+  SHUTDOWN  // Facility shutdown
 }
 
 model TimeOffRequest {
-  id          String            @id @default(cuid())
-  startDate   DateTime          @db.Date
-  endDate     DateTime          @db.Date
+  id          String        @id @default(cuid())
+  startDate   DateTime      @db.Date
+  endDate     DateTime      @db.Date
   type        TimeOffType
-  status      RequestStatus     @default(PENDING)
+  status      RequestStatus @default(PENDING)
   reason      String?
   notes       String?
   adminNotes  String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   // Requester
   userId String
@@ -352,12 +425,12 @@ enum NotificationType {
 // =====================
 
 model Invitation {
-  id        String           @id @default(cuid())
+  id        String   @id @default(cuid())
   email     String
-  role      UserRole         @default(WORKER)
-  token     String           @unique
+  role      UserRole @default(WORKER)
+  token     String   @unique
   expiresAt DateTime
-  createdAt DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   // Organization
   organizationId String
