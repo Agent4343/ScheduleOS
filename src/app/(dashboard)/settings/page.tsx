@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Modal } from "@/components/ui/modal"
+import { Select } from "@/components/ui/select"
 import {
   Building2,
   Calendar,
@@ -15,6 +17,10 @@ import {
   Shield,
   Clock,
   Save,
+  LayoutGrid,
+  Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 
 interface Organization {
@@ -47,6 +53,17 @@ interface RotationPattern {
   }
 }
 
+interface Position {
+  id: string
+  name: string
+  code: string | null
+  category: string | null
+  shiftType: string
+  minStaffing: number
+  maxStaffing: number
+  sortOrder: number
+}
+
 interface NewPatternForm {
   name: string
   daysOn: number
@@ -54,10 +71,43 @@ interface NewPatternForm {
   includesNights: boolean
 }
 
+interface PositionForm {
+  name: string
+  code: string
+  category: string
+  shiftType: string
+  minStaffing: number
+  maxStaffing: number
+  sortOrder: number
+}
+
+const CATEGORY_OPTIONS = [
+  { value: "Leadership", label: "Leadership" },
+  { value: "Control Room", label: "Control Room" },
+  { value: "Field Ops", label: "Field Ops" },
+]
+
+const SHIFT_TYPE_OPTIONS = [
+  { value: "day", label: "Day Shift" },
+  { value: "night", label: "Night Shift" },
+  { value: "24hr", label: "24-Hour (On-Call)" },
+]
+
+const initialPositionForm: PositionForm = {
+  name: "",
+  code: "",
+  category: "Field Ops",
+  shiftType: "day",
+  minStaffing: 1,
+  maxStaffing: 1,
+  sortOrder: 0,
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession()
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
+  const [positions, setPositions] = useState<Position[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
@@ -70,21 +120,30 @@ export default function SettingsPage() {
   })
   const [creatingPattern, setCreatingPattern] = useState(false)
 
+  // Position modal state
+  const [positionModalOpen, setPositionModalOpen] = useState(false)
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null)
+  const [positionForm, setPositionForm] = useState<PositionForm>(initialPositionForm)
+  const [savingPosition, setSavingPosition] = useState(false)
+
   const isAdmin = session?.user?.role === "ADMIN"
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [orgRes, patternsRes] = await Promise.all([
+        const [orgRes, patternsRes, positionsRes] = await Promise.all([
           fetch("/api/organization"),
           fetch("/api/rotation-patterns"),
+          fetch("/api/positions"),
         ])
 
         const orgData = await orgRes.json()
         const patternsData = await patternsRes.json()
+        const positionsData = await positionsRes.json()
 
         if (orgData.success) setOrganization(orgData.data)
         if (patternsData.success) setPatterns(patternsData.data)
+        if (positionsData.success) setPositions(positionsData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -113,7 +172,7 @@ export default function SettingsPage() {
           daysOff: newPattern.daysOff,
           includesNights: newPattern.includesNights,
           nightsAtStart: true,
-          nightDays: newPattern.daysOn, // Full rotation is nights when it's night rotation
+          nightDays: newPattern.daysOn,
         }),
       })
 
@@ -133,6 +192,99 @@ export default function SettingsPage() {
       setMessage("Failed to create pattern")
     } finally {
       setCreatingPattern(false)
+    }
+  }
+
+  function openAddPosition() {
+    setEditingPosition(null)
+    setPositionForm(initialPositionForm)
+    setPositionModalOpen(true)
+  }
+
+  function openEditPosition(position: Position) {
+    setEditingPosition(position)
+    setPositionForm({
+      name: position.name,
+      code: position.code || "",
+      category: position.category || "Field Ops",
+      shiftType: position.shiftType,
+      minStaffing: position.minStaffing,
+      maxStaffing: position.maxStaffing,
+      sortOrder: position.sortOrder,
+    })
+    setPositionModalOpen(true)
+  }
+
+  async function savePosition() {
+    if (!positionForm.name) {
+      setMessage("Position name is required")
+      return
+    }
+
+    setSavingPosition(true)
+    setMessage("")
+
+    try {
+      const url = editingPosition
+        ? `/api/positions/${editingPosition.id}`
+        : "/api/positions"
+      const method = editingPosition ? "PATCH" : "POST"
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: positionForm.name,
+          code: positionForm.code || null,
+          category: positionForm.category,
+          shiftType: positionForm.shiftType,
+          minStaffing: positionForm.minStaffing,
+          maxStaffing: positionForm.maxStaffing,
+          sortOrder: positionForm.sortOrder,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Refresh positions
+        const positionsRes = await fetch("/api/positions")
+        const positionsData = await positionsRes.json()
+        if (positionsData.success) setPositions(positionsData.data)
+
+        setMessage(editingPosition ? "Position updated!" : "Position created!")
+        setPositionModalOpen(false)
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to save position")
+      }
+    } catch (error) {
+      console.error("Failed to save position:", error)
+      setMessage("Failed to save position")
+    } finally {
+      setSavingPosition(false)
+    }
+  }
+
+  async function deletePosition(position: Position) {
+    if (!confirm(`Delete position "${position.name}"?`)) return
+
+    try {
+      const response = await fetch(`/api/positions/${position.id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setPositions(positions.filter((p) => p.id !== position.id))
+        setMessage("Position deleted!")
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        const data = await response.json()
+        setMessage(data.error || "Failed to delete position")
+      }
+    } catch (error) {
+      console.error("Failed to delete position:", error)
+      setMessage("Failed to delete position")
     }
   }
 
@@ -188,6 +340,14 @@ export default function SettingsPage() {
     )
   }
 
+  // Group positions by category
+  const positionsByCategory = positions.reduce((acc, pos) => {
+    const cat = pos.category || "Other"
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(pos)
+    return acc
+  }, {} as Record<string, Position[]>)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -199,7 +359,7 @@ export default function SettingsPage() {
       </div>
 
       {message && (
-        <Alert variant={message.includes("success") ? "success" : "destructive"}>
+        <Alert variant={message.includes("success") || message.includes("created") || message.includes("updated") || message.includes("deleted") ? "success" : "destructive"}>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
@@ -329,7 +489,7 @@ export default function SettingsPage() {
         </Card>
 
         {/* Rotation Patterns */}
-        <Card className="md:col-span-2">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -368,7 +528,7 @@ export default function SettingsPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="daysOn">Days On (working)</Label>
+                    <Label htmlFor="daysOn">Days On</Label>
                     <Input
                       id="daysOn"
                       type="number"
@@ -376,9 +536,6 @@ export default function SettingsPage() {
                       value={newPattern.daysOn}
                       onChange={(e) => setNewPattern({ ...newPattern, daysOn: parseInt(e.target.value) || 0 })}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      {newPattern.daysOn} days = {Math.round(newPattern.daysOn / 7 * 10) / 10} weeks
-                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="daysOff">Days Off</Label>
@@ -389,9 +546,6 @@ export default function SettingsPage() {
                       value={newPattern.daysOff}
                       onChange={(e) => setNewPattern({ ...newPattern, daysOff: parseInt(e.target.value) || 0 })}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      {newPattern.daysOff} days = {Math.round(newPattern.daysOff / 7 * 10) / 10} weeks
-                    </p>
                   </div>
                 </div>
 
@@ -403,14 +557,9 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPattern({ ...newPattern, includesNights: e.target.checked })}
                     className="h-5 w-5 rounded"
                   />
-                  <div>
-                    <Label htmlFor="includesNights" className="font-medium cursor-pointer">
-                      Alternates Days/Nights
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      First rotation days, next rotation nights, then repeats
-                    </p>
-                  </div>
+                  <Label htmlFor="includesNights" className="cursor-pointer">
+                    Alternates Days/Nights
+                  </Label>
                 </div>
 
                 <Button onClick={createPattern} disabled={creatingPattern} className="w-full">
@@ -423,7 +572,7 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {patterns.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No patterns yet. Create one to get started!
+                  No patterns yet
                 </p>
               ) : (
                 patterns.map((pattern) => (
@@ -434,18 +583,96 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-medium">{pattern.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {pattern.daysOn} days on / {pattern.daysOff} days off
-                        {pattern.includesNights && " • Alternates Days/Nights"}
+                        {pattern.daysOn} on / {pattern.daysOff} off
+                        {pattern.includesNights && " • Day/Night"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
-                      {pattern.includesNights && <Badge className="bg-blue-600">Day/Night</Badge>}
                     </div>
                   </div>
                 ))
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Positions Management */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <LayoutGrid className="h-5 w-5" />
+                  Positions
+                </CardTitle>
+                <CardDescription>Configure staffing positions and requirements</CardDescription>
+              </div>
+              {isAdmin && (
+                <Button size="sm" onClick={openAddPosition}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Position
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {positions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No positions configured yet. Add positions to track staffing requirements.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(positionsByCategory).map(([category, categoryPositions]) => (
+                  <div key={category}>
+                    <h4 className="font-semibold text-sm text-muted-foreground mb-2">{category}</h4>
+                    <div className="space-y-2">
+                      {categoryPositions
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                        .map((position) => (
+                          <div
+                            key={position.id}
+                            className="flex items-center justify-between p-3 rounded border hover:bg-muted/50"
+                          >
+                            <div>
+                              <p className="font-medium">
+                                {position.name}
+                                {position.code && (
+                                  <span className="text-muted-foreground ml-2">({position.code})</span>
+                                )}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {position.shiftType === "24hr" ? "24-Hour" : position.shiftType === "day" ? "Day Shift" : "Night Shift"}
+                                {" • "}
+                                Min: {position.minStaffing} / Max: {position.maxStaffing}
+                              </p>
+                            </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditPosition(position)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => deletePosition(position)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -486,6 +713,96 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Position Modal */}
+      <Modal
+        isOpen={positionModalOpen}
+        onClose={() => setPositionModalOpen(false)}
+        title={editingPosition ? "Edit Position" : "Add Position"}
+        description="Configure position details and staffing requirements"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="posName">Position Name *</Label>
+            <Input
+              id="posName"
+              value={positionForm.name}
+              onChange={(e) => setPositionForm({ ...positionForm, name: e.target.value })}
+              placeholder="e.g., Production Lead - Days"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="posCode">Code (Optional)</Label>
+              <Input
+                id="posCode"
+                value={positionForm.code}
+                onChange={(e) => setPositionForm({ ...positionForm, code: e.target.value })}
+                placeholder="e.g., PL-D"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="posCategory">Category</Label>
+              <Select
+                value={positionForm.category}
+                onChange={(e) => setPositionForm({ ...positionForm, category: e.target.value })}
+                options={CATEGORY_OPTIONS}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="posShiftType">Shift Type</Label>
+            <Select
+              value={positionForm.shiftType}
+              onChange={(e) => setPositionForm({ ...positionForm, shiftType: e.target.value })}
+              options={SHIFT_TYPE_OPTIONS}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="posMin">Min Staffing</Label>
+              <Input
+                id="posMin"
+                type="number"
+                min={0}
+                value={positionForm.minStaffing}
+                onChange={(e) => setPositionForm({ ...positionForm, minStaffing: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="posMax">Max Staffing</Label>
+              <Input
+                id="posMax"
+                type="number"
+                min={1}
+                value={positionForm.maxStaffing}
+                onChange={(e) => setPositionForm({ ...positionForm, maxStaffing: parseInt(e.target.value) || 1 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="posSortOrder">Sort Order</Label>
+              <Input
+                id="posSortOrder"
+                type="number"
+                value={positionForm.sortOrder}
+                onChange={(e) => setPositionForm({ ...positionForm, sortOrder: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setPositionModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={savePosition} disabled={savingPosition}>
+              {savingPosition ? "Saving..." : editingPosition ? "Update Position" : "Create Position"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
