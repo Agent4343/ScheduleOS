@@ -516,14 +516,16 @@ export default function SchedulePage() {
         />
       </div>
 
-      {/* Legend */}
+      {/* Legend - exclude OFF since it's blank */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_COLORS).map(([type, colors]) => (
-          <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
-            {SHIFT_ICONS[type as ShiftType]}
-            <span className="ml-1">{type}</span>
-          </Badge>
-        ))}
+        {Object.entries(SHIFT_COLORS)
+          .filter(([type]) => type !== "OFF")
+          .map(([type, colors]) => (
+            <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
+              {SHIFT_ICONS[type as ShiftType]}
+              <span className="ml-1">{type}</span>
+            </Badge>
+          ))}
       </div>
 
       {/* Schedule grid */}
