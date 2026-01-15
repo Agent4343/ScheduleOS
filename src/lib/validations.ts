@@ -39,10 +39,10 @@ export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(2, "Name must be at least 2 characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
-  position: z.string().optional(),
-  phone: z.string().optional(),
-  crewId: z.string().optional(),
-  hireDate: z.coerce.date().optional(),
+  position: z.string().nullish(),
+  phone: z.string().nullish(),
+  crewId: z.string().nullish(),
+  hireDate: z.coerce.date().nullish(),
   password: z.string().min(8).optional(),
 })
 
