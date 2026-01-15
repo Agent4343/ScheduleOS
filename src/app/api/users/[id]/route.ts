@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { ZodError } from "zod"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { updateUserSchema } from "@/lib/validations"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -16,9 +14,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { id } = await params
+
     const user = await prisma.user.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
       select: {
@@ -31,11 +31,18 @@ export async function GET(
         status: true,
         hireDate: true,
         createdAt: true,
+        rotationGroup: true,
+        primaryPosition: true,
+        isCCRQualified: true,
+        isPSCapable: true,
+        isPLCapable: true,
+        qualifications: true,
         crew: {
           select: {
             id: true,
             name: true,
             color: true,
+            code: true,
           },
         },
       },
@@ -54,7 +61,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -68,10 +75,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
+    const { id } = await params
+
     // Verify user belongs to organization
     const existingUser = await prisma.user.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
     })
@@ -81,13 +90,12 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const validatedData = updateUserSchema.parse(body)
 
     // Verify crew belongs to organization if provided
-    if (validatedData.crewId) {
+    if (body.crewId) {
       const crew = await prisma.crew.findFirst({
         where: {
-          id: validatedData.crewId,
+          id: body.crewId,
           organizationId: session.user.organizationId,
         },
       })
@@ -97,16 +105,30 @@ export async function PATCH(
       }
     }
 
+    // Build update data - only include fields that were provided
+    const updateData: Record<string, unknown> = {}
+
+    if (body.name !== undefined) updateData.name = body.name
+    if (body.role !== undefined) updateData.role = body.role
+    if (body.position !== undefined) updateData.position = body.position
+    if (body.phone !== undefined) updateData.phone = body.phone
+    if (body.crewId !== undefined) updateData.crewId = body.crewId || null
+    if (body.hireDate !== undefined) {
+      updateData.hireDate = body.hireDate ? new Date(body.hireDate) : null
+    }
+    if (body.status !== undefined) updateData.status = body.status
+
+    // Offshore specific fields
+    if (body.rotationGroup !== undefined) updateData.rotationGroup = body.rotationGroup || null
+    if (body.primaryPosition !== undefined) updateData.primaryPosition = body.primaryPosition || null
+    if (body.isCCRQualified !== undefined) updateData.isCCRQualified = body.isCCRQualified
+    if (body.isPSCapable !== undefined) updateData.isPSCapable = body.isPSCapable
+    if (body.isPLCapable !== undefined) updateData.isPLCapable = body.isPLCapable
+    if (body.qualifications !== undefined) updateData.qualifications = body.qualifications
+
     const user = await prisma.user.update({
-      where: { id: params.id },
-      data: {
-        name: validatedData.name,
-        role: validatedData.role,
-        position: validatedData.position,
-        phone: validatedData.phone,
-        crewId: validatedData.crewId,
-        hireDate: validatedData.hireDate,
-      },
+      where: { id },
+      data: updateData,
       select: {
         id: true,
         email: true,
@@ -116,11 +138,18 @@ export async function PATCH(
         phone: true,
         status: true,
         hireDate: true,
+        rotationGroup: true,
+        primaryPosition: true,
+        isCCRQualified: true,
+        isPSCapable: true,
+        isPLCapable: true,
+        qualifications: true,
         crew: {
           select: {
             id: true,
             name: true,
             color: true,
+            code: true,
           },
         },
       },
@@ -133,21 +162,13 @@ export async function PATCH(
     })
   } catch (error) {
     console.error("Error updating user:", error)
-
-    if (error instanceof ZodError) {
-      return NextResponse.json(
-        { error: "Invalid input data", details: error.issues },
-        { status: 400 }
-      )
-    }
-
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
   }
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -161,15 +182,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 })
     }
 
+    const { id } = await params
+
     // Prevent self-deletion
-    if (params.id === session.user.id) {
+    if (id === session.user.id) {
       return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 })
     }
 
     // Verify user belongs to organization
     const existingUser = await prisma.user.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
     })
@@ -179,7 +202,7 @@ export async function DELETE(
     }
 
     await prisma.user.delete({
-      where: { id: params.id },
+      where: { id },
     })
 
     return NextResponse.json({

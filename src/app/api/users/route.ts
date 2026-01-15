@@ -35,11 +35,19 @@ export async function GET(request: NextRequest) {
         status: true,
         hireDate: true,
         createdAt: true,
+        // Offshore specific fields
+        rotationGroup: true,
+        primaryPosition: true,
+        isCCRQualified: true,
+        isPSCapable: true,
+        isPLCapable: true,
+        qualifications: true,
         crew: {
           select: {
             id: true,
             name: true,
             color: true,
+            code: true,
           },
         },
       },
@@ -67,11 +75,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const validatedData = createUserSchema.parse(body)
+
+    // Basic validation
+    if (!body.email || !body.name) {
+      return NextResponse.json({ error: "Email and name are required" }, { status: 400 })
+    }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email.toLowerCase() },
+      where: { email: body.email.toLowerCase() },
     })
 
     if (existingUser) {
@@ -82,10 +94,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify crew belongs to organization
-    if (validatedData.crewId) {
+    if (body.crewId) {
       const crew = await prisma.crew.findFirst({
         where: {
-          id: validatedData.crewId,
+          id: body.crewId,
           organizationId: session.user.organizationId,
         },
       })
@@ -96,22 +108,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password if provided
-    const passwordHash = validatedData.password
-      ? await hashPassword(validatedData.password)
+    const passwordHash = body.password
+      ? await hashPassword(body.password)
       : null
 
     const user = await prisma.user.create({
       data: {
-        email: validatedData.email.toLowerCase(),
-        name: validatedData.name,
-        role: validatedData.role,
-        position: validatedData.position,
-        phone: validatedData.phone,
-        hireDate: validatedData.hireDate,
-        crewId: validatedData.crewId,
+        email: body.email.toLowerCase(),
+        name: body.name,
+        role: body.role || "WORKER",
+        position: body.position || null,
+        phone: body.phone || null,
+        hireDate: body.hireDate ? new Date(body.hireDate) : null,
+        crewId: body.crewId || null,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
+        // Offshore specific fields
+        rotationGroup: body.rotationGroup || null,
+        primaryPosition: body.primaryPosition || null,
+        isCCRQualified: body.isCCRQualified || false,
+        isPSCapable: body.isPSCapable || false,
+        isPLCapable: body.isPLCapable || false,
+        qualifications: body.qualifications || [],
       },
       select: {
         id: true,
@@ -120,11 +139,17 @@ export async function POST(request: NextRequest) {
         role: true,
         position: true,
         status: true,
+        rotationGroup: true,
+        primaryPosition: true,
+        isCCRQualified: true,
+        isPSCapable: true,
+        isPLCapable: true,
         crew: {
           select: {
             id: true,
             name: true,
             color: true,
+            code: true,
           },
         },
       },
