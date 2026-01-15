@@ -848,22 +848,36 @@ export default function SchedulePage() {
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-              <input
-                type="checkbox"
-                id="startOnNights"
-                checked={startOnNights}
-                onChange={(e) => setStartOnNights(e.target.checked)}
-                className="h-5 w-5 rounded border-gray-300"
-              />
-              <div>
-                <Label htmlFor="startOnNights" className="font-medium cursor-pointer">
-                  Start on Night Shifts
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  First rotation will be nights, then alternate to days
-                </p>
+              <div className="flex gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => setStartOnNights(false)}
+                  className={cn(
+                    "flex-1 py-3 px-4 rounded-lg font-medium text-base transition-colors",
+                    !startOnNights
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                  )}
+                >
+                  ☀️ Start on Days
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStartOnNights(true)}
+                  className={cn(
+                    "flex-1 py-3 px-4 rounded-lg font-medium text-base transition-colors",
+                    startOnNights
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                  )}
+                >
+                  🌙 Start on Nights
+                </button>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground text-center">
+              First rotation will be {startOnNights ? "nights" : "days"}, then alternate each cycle
+            </p>
 
             <Button
               onClick={generateSchedule}
