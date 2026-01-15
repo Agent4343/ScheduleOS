@@ -47,6 +47,13 @@ interface RotationPattern {
   }
 }
 
+interface NewPatternForm {
+  name: string
+  daysOn: number
+  daysOff: number
+  includesNights: boolean
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession()
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -54,6 +61,14 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
+  const [showNewPattern, setShowNewPattern] = useState(false)
+  const [newPattern, setNewPattern] = useState<NewPatternForm>({
+    name: "",
+    daysOn: 21,
+    daysOff: 21,
+    includesNights: true,
+  })
+  const [creatingPattern, setCreatingPattern] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
 
@@ -78,6 +93,48 @@ export default function SettingsPage() {
     }
     fetchData()
   }, [])
+
+  async function createPattern() {
+    if (!newPattern.name || newPattern.daysOn <= 0 || newPattern.daysOff <= 0) {
+      setMessage("Please fill in all pattern fields")
+      return
+    }
+
+    setCreatingPattern(true)
+    setMessage("")
+
+    try {
+      const response = await fetch("/api/rotation-patterns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newPattern.name,
+          daysOn: newPattern.daysOn,
+          daysOff: newPattern.daysOff,
+          includesNights: newPattern.includesNights,
+          nightsAtStart: true,
+          nightDays: newPattern.daysOn, // Full rotation is nights when it's night rotation
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMessage("Pattern created successfully!")
+        setPatterns([...patterns, data.data])
+        setShowNewPattern(false)
+        setNewPattern({ name: "", daysOn: 21, daysOff: 21, includesNights: true })
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to create pattern")
+      }
+    } catch (error) {
+      console.error("Failed to create pattern:", error)
+      setMessage("Failed to create pattern")
+    } finally {
+      setCreatingPattern(false)
+    }
+  }
 
   async function handleSave() {
     if (!organization) return
@@ -272,34 +329,122 @@ export default function SettingsPage() {
         </Card>
 
         {/* Rotation Patterns */}
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Rotation Patterns
-            </CardTitle>
-            <CardDescription>Configure shift rotation patterns</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {patterns.map((pattern) => (
-                <div
-                  key={pattern.id}
-                  className="flex items-center justify-between p-2 rounded border"
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Rotation Patterns
+                </CardTitle>
+                <CardDescription>Configure shift rotation patterns</CardDescription>
+              </div>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNewPattern(!showNewPattern)}
                 >
-                  <div>
-                    <p className="font-medium text-sm">{pattern.name}</p>
+                  {showNewPattern ? "Cancel" : "+ Add Pattern"}
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* New Pattern Form */}
+            {showNewPattern && (
+              <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+                <h4 className="font-semibold">Create New Rotation Pattern</h4>
+
+                <div className="space-y-2">
+                  <Label htmlFor="patternName">Pattern Name</Label>
+                  <Input
+                    id="patternName"
+                    placeholder="e.g., 3 weeks on / 3 weeks off"
+                    value={newPattern.name}
+                    onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="daysOn">Days On (working)</Label>
+                    <Input
+                      id="daysOn"
+                      type="number"
+                      min={1}
+                      value={newPattern.daysOn}
+                      onChange={(e) => setNewPattern({ ...newPattern, daysOn: parseInt(e.target.value) || 0 })}
+                    />
                     <p className="text-xs text-muted-foreground">
-                      {pattern.daysOn} on / {pattern.daysOff} off
-                      {pattern.includesNights && " • Includes nights"}
+                      {newPattern.daysOn} days = {Math.round(newPattern.daysOn / 7 * 10) / 10} weeks
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
-                    <Badge variant="outline">{pattern._count.crews} crews</Badge>
+                  <div className="space-y-2">
+                    <Label htmlFor="daysOff">Days Off</Label>
+                    <Input
+                      id="daysOff"
+                      type="number"
+                      min={1}
+                      value={newPattern.daysOff}
+                      onChange={(e) => setNewPattern({ ...newPattern, daysOff: parseInt(e.target.value) || 0 })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {newPattern.daysOff} days = {Math.round(newPattern.daysOff / 7 * 10) / 10} weeks
+                    </p>
                   </div>
                 </div>
-              ))}
+
+                <div className="flex items-center gap-3 p-3 bg-background rounded-lg border">
+                  <input
+                    type="checkbox"
+                    id="includesNights"
+                    checked={newPattern.includesNights}
+                    onChange={(e) => setNewPattern({ ...newPattern, includesNights: e.target.checked })}
+                    className="h-5 w-5 rounded"
+                  />
+                  <div>
+                    <Label htmlFor="includesNights" className="font-medium cursor-pointer">
+                      Alternates Days/Nights
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      First rotation days, next rotation nights, then repeats
+                    </p>
+                  </div>
+                </div>
+
+                <Button onClick={createPattern} disabled={creatingPattern} className="w-full">
+                  {creatingPattern ? "Creating..." : "Create Pattern"}
+                </Button>
+              </div>
+            )}
+
+            {/* Existing Patterns */}
+            <div className="space-y-2">
+              {patterns.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No patterns yet. Create one to get started!
+                </p>
+              ) : (
+                patterns.map((pattern) => (
+                  <div
+                    key={pattern.id}
+                    className="flex items-center justify-between p-3 rounded border"
+                  >
+                    <div>
+                      <p className="font-medium">{pattern.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {pattern.daysOn} days on / {pattern.daysOff} days off
+                        {pattern.includesNights && " • Alternates Days/Nights"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
+                      {pattern.includesNights && <Badge className="bg-blue-600">Day/Night</Badge>}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
