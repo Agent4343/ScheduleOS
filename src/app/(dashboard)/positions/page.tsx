@@ -4,14 +4,11 @@ import { useEffect, useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
-  AlertTriangle,
-  CheckCircle,
   Users,
 } from "lucide-react"
 
@@ -42,14 +39,6 @@ interface Position {
 
 // Position categories for grouping
 const POSITION_CATEGORIES = ["Leadership", "Control Room", "Field Ops"]
-
-// Shift type to position mapping
-const SHIFT_TO_POSITIONS: Record<string, string[]> = {
-  DAY: ["Outside Ops - Day"],
-  NIGHT: ["Outside Ops - Night"],
-  OCR_DAY: ["OCR Operator - Day Slot 1", "OCR Operator - Day Slot 2"],
-  OCR_NIGHT: ["OCR Operator - Night Slot 1", "OCR Operator - Night Slot 2"],
-}
 
 // Helper to get week dates
 function getWeekDates(startDate: Date): Date[] {
@@ -224,10 +213,6 @@ export default function PositionsPage() {
     return groups
   }, [positions])
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-  }
-
   const formatWeekRange = () => {
     const endDate = new Date(weekStart)
     endDate.setDate(endDate.getDate() + 6)
@@ -353,7 +338,7 @@ export default function PositionsPage() {
                                     <span className="text-xs text-muted-foreground">-</span>
                                   ) : (
                                     <div className="space-y-1">
-                                      {workers.slice(0, position.maxStaffing).map((worker, idx) => (
+                                      {workers.slice(0, position.maxStaffing).map((worker) => (
                                         <div
                                           key={worker.id}
                                           className="text-xs truncate"

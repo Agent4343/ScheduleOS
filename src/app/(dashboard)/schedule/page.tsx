@@ -15,7 +15,6 @@ import {
   Calendar,
   Sun,
   Moon,
-  Home,
   Filter,
   Users,
   Pencil,

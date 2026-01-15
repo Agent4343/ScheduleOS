@@ -26,10 +26,8 @@ import {
   Pencil,
   Trash2,
   Award,
-  CheckCircle,
 } from "lucide-react"
-import { UserRole, UserStatus, ROTATION_GROUPS, PRIMARY_POSITIONS } from "@/types"
-import { cn } from "@/lib/utils"
+import { UserRole, UserStatus } from "@/types"
 
 interface User {
   id: string
@@ -65,12 +63,6 @@ const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "de
   INACTIVE: { variant: "secondary", label: "Inactive" },
   ON_LEAVE: { variant: "outline", label: "On Leave" },
   TERMINATED: { variant: "destructive", label: "Terminated" },
-}
-
-const ROLE_LABELS: Record<UserRole, string> = {
-  ADMIN: "Administrator",
-  SUPERVISOR: "Supervisor",
-  WORKER: "Worker",
 }
 
 const PRIMARY_POSITION_OPTIONS = [
