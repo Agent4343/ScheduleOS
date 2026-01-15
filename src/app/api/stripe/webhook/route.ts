@@ -20,6 +20,11 @@ interface SubscriptionData {
   metadata?: Record<string, string>
 }
 
+// Helper type for invoice data
+interface InvoiceData {
+  subscription?: string | null
+}
+
 // Map Stripe status to our enum
 function mapStripeStatus(status: string): SubscriptionStatus {
   const statusMap: Record<string, SubscriptionStatus> = {
@@ -193,8 +198,8 @@ export async function POST(request: NextRequest) {
       }
 
       case "invoice.payment_failed": {
-        const invoice = event.data.object as Stripe.Invoice
-        const subscriptionId = invoice.subscription as string
+        const invoice = event.data.object as unknown as InvoiceData
+        const subscriptionId = invoice.subscription
 
         if (subscriptionId) {
           const subscription = await prisma.subscription.findUnique({
