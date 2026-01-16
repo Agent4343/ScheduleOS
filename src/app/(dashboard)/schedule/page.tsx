@@ -338,12 +338,6 @@ export default function SchedulePage() {
 
         const response = await fetch(url)
         const result = await response.json()
-        console.log("Schedules API response:", {
-          success: result.success,
-          count: result.data?.length || 0,
-          sample: result.data?.slice(0, 3),
-          error: result.error
-        })
         if (result.success) {
           setSchedules(result.data)
         } else {
@@ -498,14 +492,6 @@ export default function SchedulePage() {
       const generatedYear = startDate.getFullYear()
       const endDate = new Date(generatedYear, 11, 31) // End of year
 
-      console.log("Generating schedule:", {
-        userId: selectedWorker.id,
-        patternId: selectedPatternId,
-        startDate: scheduleStartDate,
-        endDate: endDate.toISOString().split("T")[0],
-        startOnNights,
-      })
-
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -520,7 +506,6 @@ export default function SchedulePage() {
       })
 
       const result = await response.json()
-      console.log("Generate schedule response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to generate schedule")
@@ -548,11 +533,6 @@ export default function SchedulePage() {
         `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
       )
       const schedulesResult = await schedulesResponse.json()
-      console.log("Refreshed schedules:", {
-        success: schedulesResult.success,
-        count: schedulesResult.data?.length || 0,
-        forWorker: schedulesResult.data?.filter((s: Schedule) => s.user.id === selectedWorker.id).length || 0,
-      })
       if (schedulesResult.success) {
         setSchedules(schedulesResult.data)
       }

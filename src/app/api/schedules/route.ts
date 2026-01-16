@@ -199,13 +199,6 @@ async function generateSchedules(
   }
 
   // Generate schedules for each user
-  console.log("Generating schedules with pattern:", {
-    daysOn: pattern.daysOn,
-    daysOff: pattern.daysOff,
-    includesNights: pattern.includesNights,
-    startOnNights: validatedData.startOnNights,
-  })
-
   const generatedSchedules = generateRotationSchedule(
     {
       daysOn: pattern.daysOn,
@@ -219,23 +212,6 @@ async function generateSchedules(
     validatedData.startPhase ?? 0,
     validatedData.startOnNights ?? false
   )
-
-  // Log sample of generated schedules
-  console.log("Generated schedules sample:", {
-    total: generatedSchedules.length,
-    first5: generatedSchedules.slice(0, 5).map(s => ({
-      date: s.date.toISOString().split('T')[0],
-      shiftType: s.shiftType
-    })),
-    days21to25: generatedSchedules.slice(20, 25).map(s => ({
-      date: s.date.toISOString().split('T')[0],
-      shiftType: s.shiftType
-    })),
-    days42to46: generatedSchedules.slice(41, 46).map(s => ({
-      date: s.date.toISOString().split('T')[0],
-      shiftType: s.shiftType
-    })),
-  })
 
   // Create schedules for all users
   const scheduleData = []
