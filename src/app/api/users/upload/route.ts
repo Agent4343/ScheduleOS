@@ -128,12 +128,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Parse qualifications into JSON
-        const qualifications = {
-          ccrTrained: parseBoolean(row["CCR Trained"]),
-          psCapable: parseBoolean(row["PS Capable"]),
-          plCapable: parseBoolean(row["PL Capable"]),
-        }
+        // Parse qualifications
+        const isCCRQualified = parseBoolean(row["CCR Trained"])
+        const isPSCapable = parseBoolean(row["PS Capable"])
+        const isPLCapable = parseBoolean(row["PL Capable"])
 
         // Check if user exists
         const existingUser = await prisma.user.findFirst({
@@ -154,7 +152,9 @@ export async function POST(request: NextRequest) {
               role: role as "ADMIN" | "SUPERVISOR" | "WORKER",
               phone: row["Phone"]?.toString() || null,
               hireDate: parseDate(row["Hire Date"]),
-              metadata: qualifications,
+              isCCRQualified,
+              isPSCapable,
+              isPLCapable,
             },
           })
           results.updated++
@@ -171,7 +171,9 @@ export async function POST(request: NextRequest) {
               phone: row["Phone"]?.toString() || null,
               hireDate: parseDate(row["Hire Date"]),
               status: "ACTIVE",
-              metadata: qualifications,
+              isCCRQualified,
+              isPSCapable,
+              isPLCapable,
             },
           })
           results.created++
