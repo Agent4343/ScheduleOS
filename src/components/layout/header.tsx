@@ -5,6 +5,7 @@ import { Bell, LogOut, Menu, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { useState } from "react"
+import { SyncStatus } from "@/components/desktop/sync-status"
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -34,6 +35,9 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Sync status for desktop app */}
+        <SyncStatus />
+
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />

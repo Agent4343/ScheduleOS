@@ -35,3 +35,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Tauri
+/src-tauri/target/
+/src-tauri/Cargo.lock
+
+# SQLite database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
