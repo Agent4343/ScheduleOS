@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Format dates as YYYY-MM-DD strings to avoid timezone issues
-    const formattedSchedules = schedules.map(schedule => ({
+    const formattedSchedules = schedules.map((schedule: { date: Date; [key: string]: unknown }) => ({
       ...schedule,
       date: schedule.date.toISOString().split('T')[0],
     }))
@@ -190,7 +190,7 @@ async function generateSchedules(
       where: { crewId: validatedData.crewId, organizationId, status: "ACTIVE" },
       select: { id: true, crewId: true },
     })
-    userIds = crewUsers.map(u => u.id)
+    userIds = crewUsers.map((u: { id: string }) => u.id)
   } else {
     return NextResponse.json(
       { error: "Either userId or crewId is required" },

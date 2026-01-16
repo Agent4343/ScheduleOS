@@ -247,6 +247,10 @@ export default function SchedulePage() {
   // Collapsible legend state
   const [showShiftLegend, setShowShiftLegend] = useState(false)
 
+  // Cell editing state
+  const [selectedCell, setSelectedCell] = useState<{ workerId: string; date: string; x: number; y: number } | null>(null)
+  const [cellSaving, setCellSaving] = useState(false)
+
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
   // Group days by month for header
@@ -545,6 +549,89 @@ export default function SchedulePage() {
     }
   }
 
+  // Save cell shift type
+  async function saveCellShift(workerId: string, date: string, shiftType: ShiftType | null) {
+    setCellSaving(true)
+    try {
+      if (shiftType === null || shiftType === "OFF") {
+        // Delete the schedule entry
+        const existingSchedule = schedulesByUser.get(workerId)?.get(date)
+        if (existingSchedule) {
+          await fetch(`/api/schedules/${existingSchedule.id}`, {
+            method: "DELETE",
+          })
+          // Remove from local state
+          setSchedules((prev) => prev.filter((s) => s.id !== existingSchedule.id))
+        }
+      } else {
+        // Create or update schedule entry
+        const existingSchedule = schedulesByUser.get(workerId)?.get(date)
+
+        if (existingSchedule) {
+          // Update existing
+          const response = await fetch(`/api/schedules/${existingSchedule.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ shiftType }),
+          })
+          await response.json()
+          if (response.ok) {
+            setSchedules((prev) =>
+              prev.map((s) =>
+                s.id === existingSchedule.id ? { ...s, shiftType } : s
+              )
+            )
+          }
+        } else {
+          // Create new
+          const response = await fetch("/api/schedules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: workerId,
+              date,
+              shiftType,
+            }),
+          })
+          const result = await response.json()
+          if (response.ok && result.data) {
+            const worker = workers.find((w) => w.id === workerId)
+            setSchedules((prev) => [
+              ...prev,
+              {
+                id: result.data.id,
+                date: result.data.date?.split?.('T')?.[0] || date,
+                shiftType,
+                user: {
+                  id: workerId,
+                  name: worker?.name || "",
+                  position: worker?.position || null,
+                },
+                crew: worker?.crew || null,
+              },
+            ])
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save cell:", error)
+    } finally {
+      setCellSaving(false)
+      setSelectedCell(null)
+    }
+  }
+
+  function handleCellClick(e: React.MouseEvent, workerId: string, date: string) {
+    e.stopPropagation()
+    const rect = (e.target as HTMLElement).getBoundingClientRect()
+    setSelectedCell({
+      workerId,
+      date,
+      x: rect.left,
+      y: rect.bottom,
+    })
+  }
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -747,13 +834,17 @@ export default function SchedulePage() {
                             const isFirstOfMonth = day.getDate() === 1
                             const isOff = schedule?.shiftType === "OFF"
 
+                            const isSelected = selectedCell?.workerId === worker.id && selectedCell?.date === dateKey
+
                             return (
                               <div
                                 key={dateKey}
+                                onClick={(e) => handleCellClick(e, worker.id, dateKey)}
                                 className={cn(
-                                  "w-8 h-10 flex items-center justify-center text-xs font-bold border-r",
+                                  "w-8 h-10 flex items-center justify-center text-xs font-bold border-r cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all",
                                   isFirstOfMonth && "border-l border-l-gray-400",
                                   isToday && "ring-1 ring-primary ring-inset",
+                                  isSelected && "ring-2 ring-primary",
                                   schedule && !isOff
                                     ? cn(
                                         SHIFT_COLORS[schedule.shiftType].bg,
@@ -763,7 +854,7 @@ export default function SchedulePage() {
                                         isWeekend ? "bg-gray-50" : "bg-white"
                                       )
                                 )}
-                                title={schedule && !isOff ? `${schedule.shiftType} - ${worker.name}` : "Off"}
+                                title={schedule && !isOff ? `${schedule.shiftType} - ${worker.name}` : "Click to add shift"}
                               >
                                 {schedule && !isOff ? SHIFT_ABBREV[schedule.shiftType] : ""}
                               </div>
@@ -777,6 +868,102 @@ export default function SchedulePage() {
               </div>
           )}
       </div>
+
+      {/* Shift Type Selection Popover */}
+      {selectedCell && (
+        <div
+          className="fixed z-50 bg-background border rounded-lg shadow-lg p-2 min-w-[140px]"
+          style={{
+            left: Math.min(selectedCell.x, window.innerWidth - 160),
+            top: Math.min(selectedCell.y + 4, window.innerHeight - 300),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
+            {workers.find((w) => w.id === selectedCell.workerId)?.name} - {selectedCell.date}
+          </div>
+          <div className="grid gap-1">
+            {/* Working shifts */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-1">Working</div>
+            {(["DAY", "NIGHT", "OCR_DAY", "OCR_NIGHT", "CCR_DAY", "CCR_NIGHT", "PS", "PL_DAY", "PL_NIGHT"] as ShiftType[]).map((type) => (
+              <button
+                key={type}
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  SHIFT_COLORS[type].bg,
+                  SHIFT_COLORS[type].text
+                )}
+              >
+                {SHIFT_ICONS[type]}
+                <span>{type.replace(/_/g, " ")}</span>
+                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+              </button>
+            ))}
+
+            {/* Non-operational */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Other</div>
+            {(["TRAINING", "OSCC"] as ShiftType[]).map((type) => (
+              <button
+                key={type}
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  SHIFT_COLORS[type].bg,
+                  SHIFT_COLORS[type].text
+                )}
+              >
+                <span>{type}</span>
+                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+              </button>
+            ))}
+
+            {/* Absence */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Absence</div>
+            {(["VACATION", "SICK", "LEAVE"] as ShiftType[]).map((type) => (
+              <button
+                key={type}
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  SHIFT_COLORS[type].bg,
+                  SHIFT_COLORS[type].text
+                )}
+              >
+                <span>{type}</span>
+                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+              </button>
+            ))}
+
+            {/* Clear */}
+            <div className="border-t mt-2 pt-2">
+              <button
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, null)}
+                className="flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-red-100 transition-colors w-full text-left text-red-600"
+              >
+                <span>Clear / Off</span>
+              </button>
+            </div>
+          </div>
+          {cellSaving && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center rounded-lg">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Click outside to close popover */}
+      {selectedCell && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setSelectedCell(null)}
+        />
+      )}
 
       {/* Edit Worker Modal */}
       <Modal
