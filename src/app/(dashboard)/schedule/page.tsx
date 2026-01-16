@@ -20,6 +20,11 @@ import {
   CalendarPlus,
   RotateCcw,
   Check,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  X,
+  AlertCircle,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -259,6 +264,19 @@ export default function SchedulePage() {
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [bulkSuccess, setBulkSuccess] = useState<string | null>(null)
 
+  // Excel import/export state
+  const [excelImportOpen, setExcelImportOpen] = useState(false)
+  const [excelFile, setExcelFile] = useState<File | null>(null)
+  const [importPreview, setImportPreview] = useState<{
+    changes: { userId: string; userName: string; date: string; oldShift: string | null; newShift: string | null }[];
+    errors: string[];
+    summary: { totalChanges: number; additions: number; modifications: number; deletions: number };
+  } | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
   // Group days by month for header
@@ -409,6 +427,115 @@ export default function SchedulePage() {
         scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 20) * cellWidth)
       }
     }, 100)
+  }
+
+  // Excel Export
+  async function handleExcelExport() {
+    setExporting(true)
+    try {
+      const response = await fetch(`/api/schedule/export?weeks=8&startDate=${new Date().toISOString().split('T')[0]}`)
+      if (!response.ok) {
+        throw new Error('Failed to export schedule')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `schedule_export_${new Date().toISOString().split('T')[0]}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Failed to export schedule')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Excel Import - Preview
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setExcelFile(file)
+    setImportError(null)
+    setImportPreview(null)
+    setImporting(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/schedule/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to parse file')
+      }
+
+      setImportPreview(result)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Failed to parse file')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  // Excel Import - Apply
+  async function handleApplyImport() {
+    if (!excelFile) return
+
+    setImporting(true)
+    setImportError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', excelFile)
+      formData.append('apply', 'true')
+
+      const response = await fetch('/api/schedule/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to apply changes')
+      }
+
+      // Refresh schedules
+      const schedulesResponse = await fetch(`/api/schedules?year=${currentYear}`)
+      const schedulesResult = await schedulesResponse.json()
+      if (schedulesResult.success) {
+        setSchedules(schedulesResult.data)
+      }
+
+      // Close modal
+      setExcelImportOpen(false)
+      setExcelFile(null)
+      setImportPreview(null)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Failed to apply changes')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  function closeImportModal() {
+    setExcelImportOpen(false)
+    setExcelFile(null)
+    setImportPreview(null)
+    setImportError(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   function openEditModal(worker: Worker) {
@@ -747,6 +874,32 @@ export default function SchedulePage() {
           >
             Legend
           </Button>
+
+          {/* Excel Export/Import */}
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExcelExport}
+              disabled={exporting}
+              className="h-8 text-xs gap-1"
+              title="Download schedule as Excel"
+            >
+              {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              <span className="hidden sm:inline">Export</span>
+            </Button>
+            <div className="w-px h-4 bg-border" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setExcelImportOpen(true)}
+              className="h-8 text-xs gap-1"
+              title="Upload schedule from Excel"
+            >
+              <Upload className="h-3 w-3" />
+              <span className="hidden sm:inline">Import</span>
+            </Button>
+          </div>
 
           {/* Year navigation */}
           <div className="flex items-center border rounded-md">
@@ -1347,6 +1500,172 @@ export default function SchedulePage() {
               These updates are saved as overrides and won&apos;t be cleared when regenerating the schedule.
             </p>
           </div>
+        </div>
+      </Modal>
+
+      {/* Excel Import Modal */}
+      <Modal isOpen={excelImportOpen} onClose={closeImportModal} title="Import Schedule from Excel">
+        <div className="space-y-4">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* Upload area */}
+          {!importPreview && !importing && (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors"
+            >
+              <FileSpreadsheet className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+              <p className="font-medium">Click to select Excel file</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload a previously exported schedule file (.xlsx)
+              </p>
+            </div>
+          )}
+
+          {/* Loading state */}
+          {importing && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-3">Processing file...</span>
+            </div>
+          )}
+
+          {/* Error */}
+          {importError && (
+            <div className="bg-destructive/10 text-destructive rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Import Error</p>
+                <p className="text-sm">{importError}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          {importPreview && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-4 gap-2">
+                <div className="bg-muted rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold">{importPreview.summary.totalChanges}</p>
+                  <p className="text-xs text-muted-foreground">Total Changes</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{importPreview.summary.additions}</p>
+                  <p className="text-xs text-muted-foreground">Additions</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{importPreview.summary.modifications}</p>
+                  <p className="text-xs text-muted-foreground">Modified</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{importPreview.summary.deletions}</p>
+                  <p className="text-xs text-muted-foreground">Deletions</p>
+                </div>
+              </div>
+
+              {/* Errors */}
+              {importPreview.errors.length > 0 && (
+                <div className="bg-yellow-50 rounded-lg p-3">
+                  <p className="font-medium text-yellow-800 mb-2">Warnings ({importPreview.errors.length})</p>
+                  <div className="max-h-32 overflow-y-auto text-sm text-yellow-700 space-y-1">
+                    {importPreview.errors.slice(0, 10).map((error, i) => (
+                      <p key={i}>{error}</p>
+                    ))}
+                    {importPreview.errors.length > 10 && (
+                      <p className="italic">...and {importPreview.errors.length - 10} more</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Changes list */}
+              {importPreview.changes.length > 0 && (
+                <div className="border rounded-lg">
+                  <div className="bg-muted px-3 py-2 border-b font-medium text-sm">
+                    Changes Preview
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Worker</th>
+                          <th className="px-3 py-2 text-left">Date</th>
+                          <th className="px-3 py-2 text-left">Old</th>
+                          <th className="px-3 py-2 text-left">New</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {importPreview.changes.slice(0, 50).map((change, i) => (
+                          <tr key={i} className="hover:bg-muted/30">
+                            <td className="px-3 py-2">{change.userName}</td>
+                            <td className="px-3 py-2">{change.date}</td>
+                            <td className="px-3 py-2">
+                              {change.oldShift ? (
+                                <Badge variant="secondary">{change.oldShift}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {change.newShift ? (
+                                <Badge variant="default">{change.newShift}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {importPreview.changes.length > 50 && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground bg-muted/30">
+                        ...and {importPreview.changes.length - 50} more changes
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {importPreview.changes.length === 0 && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p>No changes detected in the uploaded file.</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={closeImportModal} className="flex-1">
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleApplyImport}
+                  disabled={importing || importPreview.changes.length === 0}
+                  className="flex-1"
+                >
+                  {importing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      Apply {importPreview.changes.length} Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>
