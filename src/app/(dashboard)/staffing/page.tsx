@@ -1,10 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -112,11 +111,7 @@ export default function StaffingPage() {
   const [viewMode, setViewMode] = useState<"summary" | "daily" | "gaps">("summary")
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchStaffingData()
-  }, [startDate, endDate])
-
-  async function fetchStaffingData() {
+  const fetchStaffingData = useCallback(async () => {
     setLoading(true)
     setError("")
 
@@ -137,7 +132,11 @@ export default function StaffingPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    fetchStaffingData()
+  }, [fetchStaffingData])
 
   function navigateWeek(direction: "prev" | "next") {
     const start = new Date(startDate)

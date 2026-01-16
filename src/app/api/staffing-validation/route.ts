@@ -90,23 +90,6 @@ export async function GET(request: NextRequest) {
       orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
     })
 
-    // Fetch all users with their qualifications
-    const users = await prisma.user.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        status: "ACTIVE",
-      },
-      select: {
-        id: true,
-        name: true,
-        primaryPosition: true,
-        isCCRQualified: true,
-        isPSCapable: true,
-        isPLCapable: true,
-        qualifications: true,
-      },
-    })
-
     // Fetch all schedules for the date range
     const schedules = await prisma.schedule.findMany({
       where: {
@@ -178,7 +161,7 @@ export async function GET(request: NextRequest) {
           return matchesShift && hasNoSpecificPosition && !workersForPosition.includes(s)
         })
 
-        const allWorkersForPosition = [...workersForPosition]
+        const allWorkersForPosition = [...workersForPosition, ...genericWorkers]
 
         // Find available backfills (workers who are working but could fill this role)
         const backfillsAvailable: DailyStaffing["positions"][0]["backfillsAvailable"] = []
@@ -325,7 +308,7 @@ function checkBackfillQualification(
     code: string | null
     requiredQualifications: unknown
   },
-  currentShiftType: string
+  _currentShiftType: string
 ): { qualified: boolean; reason: string } {
   const posName = position.name.toLowerCase()
   const posCode = position.code?.toLowerCase() || ""
