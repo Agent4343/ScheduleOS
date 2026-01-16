@@ -4,24 +4,34 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import * as XLSX from "xlsx"
 
-interface WorkerRow {
-  "Full Name": string
-  "Email": string
-  "Primary Position"?: string
-  "Rotation Group"?: string
-  "System Role"?: string
-  "Phone"?: string
-  "Hire Date"?: string | number
-  "CCR Trained"?: string | boolean
-  "PS Capable"?: string | boolean
-  "PL Capable"?: string | boolean
+// Normalize column names to handle variations
+function normalizeKey(key: string): string {
+  return key.toLowerCase().trim().replace(/[^a-z0-9]/g, "")
 }
 
-function parseBoolean(value: string | boolean | undefined): boolean {
+// Get value from row with flexible key matching
+function getValue(row: Record<string, unknown>, ...possibleKeys: string[]): unknown {
+  const normalizedRow: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(row)) {
+    normalizedRow[normalizeKey(key)] = value
+  }
+
+  for (const key of possibleKeys) {
+    const normalizedKey = normalizeKey(key)
+    if (normalizedRow[normalizedKey] !== undefined) {
+      return normalizedRow[normalizedKey]
+    }
+  }
+  return undefined
+}
+
+function parseBoolean(value: unknown): boolean {
   if (typeof value === "boolean") return value
   if (typeof value === "string") {
-    return value.toLowerCase() === "yes" || value.toLowerCase() === "true" || value === "1"
+    const lower = value.toLowerCase().trim()
+    return lower === "yes" || lower === "true" || lower === "1" || lower === "y"
   }
+  if (typeof value === "number") return value === 1
   return false
 }
 
@@ -67,11 +77,14 @@ export async function POST(request: NextRequest) {
     const worksheet = workbook.Sheets[sheetName]
 
     // Convert to JSON
-    const data = XLSX.utils.sheet_to_json<WorkerRow>(worksheet)
+    const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet)
 
     if (data.length === 0) {
       return NextResponse.json({ error: "No data found in file" }, { status: 400 })
     }
+
+    // Log first row keys for debugging
+    console.log("Excel columns found:", Object.keys(data[0] || {}))
 
     // Get existing crews for matching
     const crews = await prisma.crew.findMany({
@@ -90,23 +103,28 @@ export async function POST(request: NextRequest) {
       const rowNum = i + 2 // Excel row (1-indexed + header)
 
       try {
+        // Get values with flexible key matching
+        const fullName = getValue(row, "Full Name", "Name", "FullName", "Worker Name", "Employee Name")
+        const emailValue = getValue(row, "Email", "Email Address", "E-mail", "EmailAddress")
+
         // Validate required fields
-        if (!row["Full Name"] || !row["Email"]) {
+        if (!fullName || !emailValue) {
           results.errors.push({
             row: rowNum,
-            email: row["Email"] || "unknown",
-            error: "Full Name and Email are required",
+            email: String(emailValue || "unknown"),
+            error: `Full Name and Email are required. Found columns: ${Object.keys(row).join(", ")}`,
           })
           continue
         }
 
-        const email = row["Email"].toString().toLowerCase().trim()
-        const name = row["Full Name"].toString().trim()
+        const email = String(emailValue).toLowerCase().trim()
+        const name = String(fullName).trim()
 
         // Find matching crew
         let crewId: string | null = null
-        if (row["Rotation Group"]) {
-          const crewName = row["Rotation Group"].toString().trim()
+        const rotationGroup = getValue(row, "Rotation Group", "Crew", "Group", "RotationGroup")
+        if (rotationGroup) {
+          const crewName = String(rotationGroup).trim()
           const crew = crews.find(
             (c: { id: string; name: string }) => c.name.toLowerCase() === crewName.toLowerCase()
           )
@@ -115,23 +133,29 @@ export async function POST(request: NextRequest) {
 
         // Find matching position
         let position: string | null = null
-        if (row["Primary Position"]) {
-          position = row["Primary Position"].toString().trim()
+        const positionValue = getValue(row, "Primary Position", "Position", "PrimaryPosition", "Job Title")
+        if (positionValue) {
+          position = String(positionValue).trim()
         }
 
         // Parse role
         let role = "WORKER"
-        if (row["System Role"]) {
-          const roleStr = row["System Role"].toString().toUpperCase().trim()
+        const roleValue = getValue(row, "System Role", "Role", "SystemRole", "User Role")
+        if (roleValue) {
+          const roleStr = String(roleValue).toUpperCase().trim()
           if (["ADMIN", "SUPERVISOR", "WORKER"].includes(roleStr)) {
             role = roleStr
           }
         }
 
         // Parse qualifications
-        const isCCRQualified = parseBoolean(row["CCR Trained"])
-        const isPSCapable = parseBoolean(row["PS Capable"])
-        const isPLCapable = parseBoolean(row["PL Capable"])
+        const isCCRQualified = parseBoolean(getValue(row, "CCR Trained", "CCR", "CCRTrained", "CCR Qualified"))
+        const isPSCapable = parseBoolean(getValue(row, "PS Capable", "PS", "PSCapable"))
+        const isPLCapable = parseBoolean(getValue(row, "PL Capable", "PL", "PLCapable"))
+
+        // Parse phone and hire date
+        const phoneValue = getValue(row, "Phone", "Phone Number", "PhoneNumber", "Mobile")
+        const hireDateValue = getValue(row, "Hire Date", "HireDate", "Start Date", "StartDate")
 
         // Check if user exists
         const existingUser = await prisma.user.findFirst({
@@ -150,8 +174,8 @@ export async function POST(request: NextRequest) {
               position,
               crewId,
               role: role as "ADMIN" | "SUPERVISOR" | "WORKER",
-              phone: row["Phone"]?.toString() || null,
-              hireDate: parseDate(row["Hire Date"]),
+              phone: phoneValue ? String(phoneValue) : null,
+              hireDate: parseDate(hireDateValue as string | number | undefined),
               isCCRQualified,
               isPSCapable,
               isPLCapable,
@@ -168,8 +192,8 @@ export async function POST(request: NextRequest) {
               crewId,
               organizationId: session.user.organizationId,
               role: role as "ADMIN" | "SUPERVISOR" | "WORKER",
-              phone: row["Phone"]?.toString() || null,
-              hireDate: parseDate(row["Hire Date"]),
+              phone: phoneValue ? String(phoneValue) : null,
+              hireDate: parseDate(hireDateValue as string | number | undefined),
               status: "ACTIVE",
               isCCRQualified,
               isPSCapable,
@@ -181,7 +205,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         results.errors.push({
           row: rowNum,
-          email: row["Email"]?.toString() || "unknown",
+          email: String(getValue(row, "Email", "Email Address") || "unknown"),
           error: error instanceof Error ? error.message : "Unknown error",
         })
       }
