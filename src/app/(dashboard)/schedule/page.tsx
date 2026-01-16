@@ -810,9 +810,9 @@ export default function SchedulePage() {
           ) : (
             <div className="flex min-h-full">
               {/* Fixed left column for worker info */}
-              <div className="sticky left-0 z-20 bg-background border-r shadow-md shrink-0">
-                {/* Header for worker column */}
-                <div className="h-[66px] border-b flex items-end p-2 bg-muted/50 sticky top-0 z-10">
+              <div className="sticky left-0 z-30 bg-background border-r shadow-md shrink-0">
+                {/* Header for worker column - sticky top AND left */}
+                <div className="h-[66px] border-b flex items-end p-2 bg-muted/50 sticky top-0 z-40">
                   <span className="font-semibold text-sm">Worker</span>
                 </div>
                 {/* Worker rows */}
@@ -846,8 +846,8 @@ export default function SchedulePage() {
                 className="flex-1 overflow-x-auto"
               >
                   <div className="inline-block min-w-max">
-                    {/* Sticky header container */}
-                    <div className="sticky top-0 z-10 bg-background">
+                    {/* Sticky header container - stays at top when scrolling */}
+                    <div className="sticky top-0 z-20 bg-background shadow-sm">
                       {/* Month headers */}
                       <div className="flex h-6 border-b bg-muted/50">
                         {monthGroups.map(({ month, days }) => (
