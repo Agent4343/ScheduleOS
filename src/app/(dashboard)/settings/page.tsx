@@ -25,6 +25,7 @@ import {
   Eye,
   EyeOff,
   Star,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -38,6 +39,11 @@ interface Organization {
     minStaffingAlertEnabled?: boolean
     emailNotificationsEnabled?: boolean
     smsNotificationsEnabled?: boolean
+    roleColors?: {
+      ADMIN: string
+      SUPERVISOR: string
+      WORKER: string
+    }
   }
   _count: {
     users: number
@@ -154,6 +160,18 @@ const initialShiftTypeForm: ShiftTypeForm = {
   sortOrder: 50,
 }
 
+const DEFAULT_ROLE_COLORS = {
+  ADMIN: "bg-red-500",
+  SUPERVISOR: "bg-blue-500",
+  WORKER: "bg-gray-500",
+}
+
+const ROLE_LABELS = {
+  ADMIN: "Admin",
+  SUPERVISOR: "Supervisor",
+  WORKER: "Worker",
+}
+
 const initialPositionForm: PositionForm = {
   name: "",
   code: "",
@@ -194,6 +212,10 @@ export default function SettingsPage() {
   const [shiftTypeForm, setShiftTypeForm] = useState<ShiftTypeForm>(initialShiftTypeForm)
   const [savingShiftType, setSavingShiftType] = useState(false)
 
+  // Role colors state
+  const [roleColors, setRoleColors] = useState<Record<string, string>>(DEFAULT_ROLE_COLORS)
+  const [editingRole, setEditingRole] = useState<string | null>(null)
+
   const isAdmin = session?.user?.role === "ADMIN"
 
   useEffect(() => {
@@ -211,7 +233,13 @@ export default function SettingsPage() {
         const positionsData = await positionsRes.json()
         const shiftTypesData = await shiftTypesRes.json()
 
-        if (orgData.success) setOrganization(orgData.data)
+        if (orgData.success) {
+          setOrganization(orgData.data)
+          // Initialize role colors from organization settings
+          if (orgData.data?.settings?.roleColors) {
+            setRoleColors({ ...DEFAULT_ROLE_COLORS, ...orgData.data.settings.roleColors })
+          }
+        }
         if (patternsData.success) setPatterns(patternsData.data)
         if (positionsData.success) setPositions(positionsData.data)
         if (shiftTypesData.success) setShiftTypes(shiftTypesData.data)
@@ -529,7 +557,10 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: organization.name,
-          settings: organization.settings,
+          settings: {
+            ...organization.settings,
+            roleColors,
+          },
         }),
       })
 
@@ -1033,6 +1064,90 @@ export default function SettingsPage() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Role Colors */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Role Colors
+            </CardTitle>
+            <CardDescription>Customize colors for worker roles</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {(["ADMIN", "SUPERVISOR", "WORKER"] as const).map((role) => (
+                <div key={role} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold",
+                        roleColors[role]
+                      )}
+                    >
+                      {role.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium">{ROLE_LABELS[role]}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {role === "ADMIN" && "Full system access"}
+                        {role === "SUPERVISOR" && "Team management access"}
+                        {role === "WORKER" && "Basic access"}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      {editingRole === role ? (
+                        <div className="flex items-center gap-2">
+                          <div className="grid grid-cols-7 gap-1">
+                            {COLOR_OPTIONS.map((color) => (
+                              <button
+                                key={color.value}
+                                type="button"
+                                onClick={() => {
+                                  setRoleColors({ ...roleColors, [role]: color.value })
+                                  setEditingRole(null)
+                                }}
+                                className={cn(
+                                  "w-6 h-6 rounded border transition-all",
+                                  color.preview,
+                                  roleColors[role] === color.value
+                                    ? "border-foreground scale-110"
+                                    : "border-transparent hover:scale-105"
+                                )}
+                                title={color.label}
+                              />
+                            ))}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingRole(null)}
+                          >
+                            Done
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingRole(role)}
+                        >
+                          <Pencil className="h-3 w-3 mr-1" />
+                          Change Color
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Click &quot;Save Settings&quot; to apply color changes.
+            </p>
           </CardContent>
         </Card>
       </div>
