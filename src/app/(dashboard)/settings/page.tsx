@@ -687,6 +687,26 @@ export default function SettingsPage() {
     )
   }
 
+  // Block non-admins from accessing Settings
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your organization settings and preferences
+          </p>
+        </div>
+        <Alert variant="destructive">
+          <Shield className="h-4 w-4" />
+          <AlertDescription>
+            Access Denied. Only administrators can access the Settings page.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   // Group positions by category
   const positionsByCategory = positions.reduce((acc, pos) => {
     const cat = pos.category || "Other"

@@ -91,6 +91,16 @@ export async function PATCH(
 
     const body = await request.json()
 
+    // Only admins can assign or change to ADMIN role
+    if (body.role === "ADMIN" && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only admins can assign the ADMIN role" }, { status: 403 })
+    }
+
+    // Prevent non-admins from demoting admins
+    if (existingUser.role === "ADMIN" && body.role && body.role !== "ADMIN" && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only admins can change an admin's role" }, { status: 403 })
+    }
+
     // Verify crew belongs to organization if provided
     if (body.crewId) {
       const crew = await prisma.crew.findFirst({

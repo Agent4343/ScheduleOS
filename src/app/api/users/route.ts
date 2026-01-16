@@ -74,6 +74,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    // Only admins can assign the ADMIN role
+    if (body.role === "ADMIN" && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only admins can assign the ADMIN role" }, { status: 403 })
+    }
+
     // Basic validation
     if (!body.email || !body.name) {
       return NextResponse.json({ error: "Email and name are required" }, { status: 400 })
