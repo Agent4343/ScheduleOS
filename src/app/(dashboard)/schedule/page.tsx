@@ -500,10 +500,10 @@ export default function SchedulePage() {
     setGenerateSuccess(null)
 
     try {
-      // Generate for the full year from start date
+      // Generate for 2 years (current + next) to keep schedule continuous
       const startDate = new Date(scheduleStartDate)
       const generatedYear = startDate.getUTCFullYear()
-      const endDate = new Date(Date.UTC(generatedYear, 11, 31)) // End of year (UTC)
+      const endDate = new Date(Date.UTC(generatedYear + 1, 11, 31)) // End of NEXT year (UTC)
 
       const response = await fetch("/api/schedules", {
         method: "POST",
@@ -1171,7 +1171,7 @@ export default function SchedulePage() {
                 onChange={(e) => setScheduleStartDate(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Schedule will be generated from this date to end of year
+                Schedule will be generated for 2 years (continuous rotation)
               </p>
             </div>
 
@@ -1220,7 +1220,7 @@ export default function SchedulePage() {
               ) : (
                 <>
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Generate Year Schedule
+                  Generate 2-Year Schedule
                 </>
               )}
             </Button>
