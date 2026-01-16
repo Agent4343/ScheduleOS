@@ -15,11 +15,13 @@ import {
   BarChart3,
   LayoutGrid,
   CreditCard,
+  AlertTriangle,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Schedule", href: "/schedule", icon: Calendar },
+  { name: "Staffing", href: "/staffing", icon: AlertTriangle },
   { name: "Positions", href: "/positions", icon: LayoutGrid },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
