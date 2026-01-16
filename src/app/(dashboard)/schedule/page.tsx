@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Calendar,
   Sun,
   Moon,
@@ -246,6 +248,10 @@ export default function SchedulePage() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
+  // Collapsible legend states
+  const [showShiftLegend, setShowShiftLegend] = useState(false)
+  const [showPositionLegend, setShowPositionLegend] = useState(false)
+
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
   // Group days by month for header
@@ -392,7 +398,7 @@ export default function SchedulePage() {
       const today = new Date()
       const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
       if (scrollRef.current) {
-        const cellWidth = 48 // approximate width per day (mobile friendly)
+        const cellWidth = 56 // width per day cell (w-14 = 56px)
         scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
       }
     }, 100)
@@ -589,16 +595,31 @@ export default function SchedulePage() {
         />
       </div>
 
-      {/* Legend - exclude OFF since it's blank */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_COLORS)
-          .filter(([type]) => type !== "OFF")
-          .map(([type, colors]) => (
-            <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
-              {SHIFT_ICONS[type as ShiftType]}
-              <span className="ml-1">{type}</span>
-            </Badge>
-          ))}
+      {/* Collapsible Shift Type Legend */}
+      <div className="border rounded-lg">
+        <button
+          onClick={() => setShowShiftLegend(!showShiftLegend)}
+          className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="text-sm font-medium">Shift Type Legend</span>
+          {showShiftLegend ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+        {showShiftLegend && (
+          <div className="px-3 pb-3 flex flex-wrap gap-2 border-t pt-3">
+            {Object.entries(SHIFT_COLORS)
+              .filter(([type]) => type !== "OFF")
+              .map(([type, colors]) => (
+                <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
+                  {SHIFT_ICONS[type as ShiftType]}
+                  <span className="ml-1">{type}</span>
+                </Badge>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* Schedule grid */}
@@ -632,20 +653,20 @@ export default function SchedulePage() {
               <div className="flex">
                 {/* Fixed left column for worker info */}
                 <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column - matches month (h-10) + day headers (h-12) */}
-                  <div className="h-[88px] border-b flex items-end p-3 bg-muted/50">
-                    <span className="font-semibold text-base">Worker</span>
+                  {/* Header for worker column - matches month (h-12) + day headers (h-14) */}
+                  <div className="h-[104px] border-b flex items-end p-3 bg-muted/50">
+                    <span className="font-semibold text-lg">Worker</span>
                   </div>
                   {/* Worker rows */}
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      className="h-12 border-b flex items-center px-3 min-w-[180px] hover:bg-muted/50 cursor-pointer group"
+                      className="h-14 border-b flex items-center px-4 min-w-[220px] hover:bg-muted/50 cursor-pointer group"
                       onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
-                          "w-3 h-10 rounded-full mr-3 flex-shrink-0",
+                          "w-3 h-12 rounded-full mr-3 flex-shrink-0",
                           getPositionColor(worker.position)
                         )}
                         title={worker.position || "No position"}
@@ -668,12 +689,12 @@ export default function SchedulePage() {
                 >
                   <div className="inline-block min-w-max">
                     {/* Month headers */}
-                    <div className="flex h-10 border-b bg-muted/30">
+                    <div className="flex h-12 border-b bg-muted/30">
                       {monthGroups.map(({ month, days }) => (
                         <div
                           key={month}
-                          className="text-center text-sm font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 48}px` }}
+                          className="text-center text-base font-semibold border-r flex items-center justify-center"
+                          style={{ width: `${days.length * 56}px` }}
                         >
                           {getMonthName(month)}
                         </div>
@@ -681,7 +702,7 @@ export default function SchedulePage() {
                     </div>
 
                     {/* Day headers */}
-                    <div className="flex h-12 border-b">
+                    <div className="flex h-14 border-b">
                       {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -691,16 +712,16 @@ export default function SchedulePage() {
                           <div
                             key={day.toISOString()}
                             className={cn(
-                              "w-12 text-center text-sm flex flex-col items-center justify-center",
+                              "w-14 text-center text-base flex flex-col items-center justify-center",
                               isWeekend && "bg-muted/50",
                               isToday && "bg-primary/20 font-bold",
                               isFirstOfMonth && "border-l border-gray-300"
                             )}
                           >
-                            <span className="text-muted-foreground">
+                            <span className="text-muted-foreground text-sm">
                               {day.toLocaleDateString("en-US", { weekday: "narrow" })}
                             </span>
-                            <span className={cn(isToday && "text-primary")}>
+                            <span className={cn("text-base", isToday && "text-primary")}>
                               {day.getDate()}
                             </span>
                           </div>
@@ -713,7 +734,7 @@ export default function SchedulePage() {
                       const userSchedules = schedulesByUser.get(worker.id)
 
                       return (
-                        <div key={worker.id} className="flex h-12 border-b hover:bg-muted/30">
+                        <div key={worker.id} className="flex h-14 border-b hover:bg-muted/30">
                           {yearDays.map((day) => {
                             // Use local date format to avoid timezone issues
                             const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
@@ -728,7 +749,7 @@ export default function SchedulePage() {
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-12 h-12 flex items-center justify-center text-base font-bold border-r border-b",
+                                  "w-14 h-14 flex items-center justify-center text-lg font-bold border-r border-b",
                                   isFirstOfMonth && "border-l-2 border-l-gray-400",
                                   isToday && "ring-2 ring-primary ring-inset",
                                   schedule && !isOff
@@ -759,13 +780,21 @@ export default function SchedulePage() {
         </CardContent>
       </Card>
 
-      {/* Position Color Legend */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Position Colors</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
+      {/* Collapsible Position Color Legend */}
+      <div className="border rounded-lg">
+        <button
+          onClick={() => setShowPositionLegend(!showPositionLegend)}
+          className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+        >
+          <span className="text-sm font-medium">Position Colors</span>
+          {showPositionLegend ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+        {showPositionLegend && (
+          <div className="px-3 pb-3 flex flex-wrap gap-2 border-t pt-3">
             {Object.entries(POSITION_COLORS)
               .filter(([key]) => key !== "default")
               .map(([position, color]) => (
@@ -775,8 +804,8 @@ export default function SchedulePage() {
                 </div>
               ))}
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* Edit Worker Modal */}
       <Modal
