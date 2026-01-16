@@ -351,137 +351,117 @@ export default function SettingsPage() {
     }
   }
 
-  // Helper function to analyze worker's existing schedule and determine their current rotation phase
+  // Helper function to analyze worker's existing schedule and find where to continue from
   async function analyzeWorkerSchedule(
     workerId: string,
     pattern: { daysOn: number; daysOff: number; includesNights: boolean }
-  ): Promise<{ startPhase: number; startOnNights: boolean }> {
-    try {
-      // Fetch recent schedules (last 60 days) to analyze the pattern
-      const today = new Date()
-      const sixtyDaysAgo = new Date(today)
-      sixtyDaysAgo.setUTCDate(sixtyDaysAgo.getUTCDate() - 60)
+  ): Promise<{ startDate: string; startPhase: number; startOnNights: boolean }> {
+    const totalCycleDays = pattern.daysOn + pattern.daysOff
+    const currentYear = new Date().getUTCFullYear()
 
+    try {
+      // Fetch the worker's existing schedules for current and next year
       const schedulesRes = await fetch(
-        `/api/schedules?userId=${workerId}&startDate=${sixtyDaysAgo.toISOString().split("T")[0]}&endDate=${today.toISOString().split("T")[0]}`
+        `/api/schedules?userId=${workerId}&startDate=${currentYear}-01-01&endDate=${currentYear + 1}-12-31`
       )
       const schedulesData = await schedulesRes.json()
 
       if (!schedulesData.success || !schedulesData.data?.length) {
-        // No existing schedules, start fresh
-        return { startPhase: 0, startOnNights: false }
-      }
-
-      // Sort schedules by date (most recent first)
-      const schedules = schedulesData.data.sort(
-        (a: { date: string }, b: { date: string }) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
-
-      // Analyze the pattern from most recent schedules
-      const totalCycleDays = pattern.daysOn + pattern.daysOff
-      const recentSchedules = schedules.slice(0, totalCycleDays + 7) // Get a bit more than one full cycle
-
-      if (recentSchedules.length === 0) {
-        return { startPhase: 0, startOnNights: false }
-      }
-
-      // Find the most recent schedule entry to determine current state
-      const mostRecent = recentSchedules[0]
-      const mostRecentDate = new Date(mostRecent.date)
-
-      // Determine if they're on nights by looking at recent working days
-      let isOnNights = false
-      let lastWorkingShift = ""
-      for (const sched of recentSchedules) {
-        if (sched.shiftType === "DAY") {
-          lastWorkingShift = "DAY"
-          isOnNights = false
-          break
-        } else if (sched.shiftType === "NIGHT") {
-          lastWorkingShift = "NIGHT"
-          isOnNights = true
-          break
+        // No existing schedules, start fresh from Jan 1 of current year
+        return {
+          startDate: `${currentYear}-01-01`,
+          startPhase: 0,
+          startOnNights: false
         }
       }
 
-      // Count backwards to find the start of the current phase
-      // Find the transition point (where shift type changed or cycle started)
-      let consecutiveCount = 0
-      let currentType = mostRecent.shiftType
+      // Sort schedules by date (oldest to newest)
+      const schedules = schedulesData.data.sort(
+        (a: { date: string }, b: { date: string }) =>
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+
+      // Find the last scheduled date
+      const lastSchedule = schedules[schedules.length - 1]
+      const lastDate = new Date(lastSchedule.date)
+
+      // Start generating from the day after the last scheduled date
+      const nextDate = new Date(lastDate)
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+      const startDateStr = nextDate.toISOString().split("T")[0]
+
+      // Look at the last full cycle to determine the pattern
+      // Get the last (daysOn + daysOff + a few extra) schedules
+      const recentSchedules = schedules.slice(-Math.min(totalCycleDays + 7, schedules.length))
+
+      // Sort recent schedules newest first for easier analysis
+      recentSchedules.reverse()
+
+      // Count consecutive days of the current shift type from the end
+      let consecutiveDays = 0
+      const lastShiftType = recentSchedules[0].shiftType
 
       for (const sched of recentSchedules) {
-        if (sched.shiftType === currentType ||
-            (currentType === "OFF" && (sched.shiftType === "DAY" || sched.shiftType === "NIGHT"))) {
-          if (sched.shiftType === currentType) {
-            consecutiveCount++
-          } else {
-            break
-          }
+        if (sched.shiftType === lastShiftType) {
+          consecutiveDays++
         } else {
           break
         }
       }
 
-      // Calculate what phase they'll be at on Jan 1 of next year
-      const nextYear = new Date().getUTCFullYear() + 1
-      const jan1NextYear = new Date(Date.UTC(nextYear, 0, 1))
-      const daysSinceLastSchedule = Math.floor(
-        (jan1NextYear.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24)
-      )
-
-      // Calculate the phase on Jan 1 of the year we're generating for
-      // Start from current phase and add days difference
-      let currentPhase = 0
-      const isWorking = mostRecent.shiftType === "DAY" || mostRecent.shiftType === "NIGHT"
-
-      if (isWorking) {
-        // They're in the working part of the cycle
-        // Count how many consecutive working days backwards
-        let workingDays = 0
-        for (const sched of recentSchedules) {
-          if (sched.shiftType === "DAY" || sched.shiftType === "NIGHT") {
-            workingDays++
-          } else {
-            break
-          }
+      // Determine if they were on nights by finding the most recent working shift
+      let isOnNights = false
+      for (const sched of recentSchedules) {
+        if (sched.shiftType === "DAY") {
+          isOnNights = false
+          break
+        } else if (sched.shiftType === "NIGHT") {
+          isOnNights = true
+          break
         }
-        currentPhase = workingDays - 1 // 0-indexed
-      } else if (mostRecent.shiftType === "OFF") {
-        // They're in the off part of the cycle
-        let offDays = 0
-        for (const sched of recentSchedules) {
-          if (sched.shiftType === "OFF") {
-            offDays++
-          } else {
-            break
-          }
-        }
-        currentPhase = pattern.daysOn + offDays - 1 // 0-indexed, after working days
       }
 
-      // Project forward to Jan 1 of current year for generation start
-      const currentYear = new Date().getUTCFullYear()
-      const jan1CurrentYear = new Date(Date.UTC(currentYear, 0, 1))
-      const daysToJan1 = Math.floor(
-        (jan1CurrentYear.getTime() - mostRecentDate.getTime()) / (1000 * 60 * 60 * 24)
-      )
+      // Calculate the phase for the next day
+      // Phase 0 to (daysOn-1) = working, Phase daysOn to (totalCycleDays-1) = off
+      let nextPhase: number
 
-      // If we're generating from this year, calculate the phase for Jan 1
-      const projectedPhase = ((currentPhase + daysToJan1) % totalCycleDays + totalCycleDays) % totalCycleDays
+      if (lastShiftType === "DAY" || lastShiftType === "NIGHT") {
+        // They were working, next phase is consecutiveDays into working period
+        // If they've completed daysOn, next day should be first day off
+        if (consecutiveDays >= pattern.daysOn) {
+          nextPhase = pattern.daysOn // First day of off period
+        } else {
+          nextPhase = consecutiveDays // Continue working
+        }
+      } else if (lastShiftType === "OFF") {
+        // They were off, next phase is daysOn + consecutiveDays into off period
+        // If they've completed daysOff, next day should be first day working
+        if (consecutiveDays >= pattern.daysOff) {
+          nextPhase = 0 // First day of working period
+          // When coming back from off, they switch day/night
+          if (pattern.includesNights) {
+            isOnNights = !isOnNights
+          }
+        } else {
+          nextPhase = pattern.daysOn + consecutiveDays // Continue off
+        }
+      } else {
+        // Unknown shift type, start fresh
+        nextPhase = 0
+      }
 
-      // Determine if this rotation should be nights
-      // If they were on nights, check if after the days difference they'd still be on the same cycle
-      // For alternating day/night patterns, we need to count complete cycles
-      const cyclesPassed = Math.floor((currentPhase + daysToJan1) / totalCycleDays)
-      const startOnNights = pattern.includesNights ? (
-        isOnNights ? (cyclesPassed % 2 === 0) : (cyclesPassed % 2 === 1)
-      ) : false
-
-      return { startPhase: projectedPhase, startOnNights }
+      return {
+        startDate: startDateStr,
+        startPhase: nextPhase,
+        startOnNights: isOnNights
+      }
     } catch (error) {
       console.error("Error analyzing worker schedule:", error)
-      return { startPhase: 0, startOnNights: false }
+      return {
+        startDate: `${currentYear}-01-01`,
+        startPhase: 0,
+        startOnNights: false
+      }
     }
   }
 
@@ -520,10 +500,9 @@ export default function SettingsPage() {
         return
       }
 
-      // Generate for 2 years starting from Jan 1 of current year
+      // End date is always Dec 31 of next year
       const currentYear = new Date().getUTCFullYear()
-      const startDate = `${currentYear}-01-01`
-      const endDate = new Date(Date.UTC(currentYear + 1, 11, 31))
+      const endDate = `${currentYear + 1}-12-31`
 
       let successCount = 0
       let errorCount = 0
@@ -531,8 +510,8 @@ export default function SettingsPage() {
       // Generate schedule for each worker - analyze their current rotation first
       for (const worker of workers) {
         try {
-          // Analyze worker's existing schedule to find their current phase
-          const { startPhase, startOnNights } = await analyzeWorkerSchedule(
+          // Analyze worker's existing schedule to find where to continue from
+          const { startDate, startPhase, startOnNights } = await analyzeWorkerSchedule(
             worker.id,
             {
               daysOn: defaultPattern.daysOn,
@@ -547,8 +526,8 @@ export default function SettingsPage() {
             body: JSON.stringify({
               userId: worker.id,
               patternId: defaultPattern.id,
-              startDate: startDate,
-              endDate: endDate.toISOString().split("T")[0],
+              startDate,
+              endDate,
               startPhase,
               startOnNights,
             }),
@@ -564,7 +543,7 @@ export default function SettingsPage() {
         }
       }
 
-      setBulkMessage(`Generated ${currentYear}-${currentYear + 1} schedules for ${successCount} workers (continuing from their current rotation)${errorCount > 0 ? `, ${errorCount} failed` : ""}`)
+      setBulkMessage(`Extended schedules through ${currentYear + 1} for ${successCount} workers${errorCount > 0 ? `, ${errorCount} failed` : ""}`)
     } catch (error) {
       console.error("Bulk schedule generation error:", error)
       setBulkMessage("Failed to generate schedules")
@@ -966,7 +945,7 @@ export default function SettingsPage() {
                   <h4 className="font-semibold">Bulk Schedule Generation</h4>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Continue schedules from each worker&apos;s current rotation into the next 2 years
+                  Extend each worker&apos;s schedule from where it ends, continuing their rotation
                 </p>
 
                 {bulkMessage && (
@@ -994,11 +973,11 @@ export default function SettingsPage() {
                   className="w-full"
                 >
                   {bulkGenerating ? (
-                    "Generating..."
+                    "Extending..."
                   ) : (
                     <>
                       <Clock className="h-4 w-4 mr-2" />
-                      Continue Schedules for {bulkCrewId === "all" ? "All Workers" : "Selected Crew"}
+                      Extend Schedules for {bulkCrewId === "all" ? "All Workers" : "Selected Crew"}
                     </>
                   )}
                 </Button>
