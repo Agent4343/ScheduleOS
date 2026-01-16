@@ -78,6 +78,7 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   positions        Position[]
+  shiftTypes       ShiftTypeConfig[]
   subscription     Subscription?
 }
 
@@ -201,6 +202,31 @@ model RotationPattern {
   crews Crew[]
 
   @@unique([organizationId, name])
+}
+
+// =====================
+// Shift Type Configuration
+// =====================
+
+model ShiftTypeConfig {
+  id           String   @id @default(cuid())
+  code         String   // Internal code (DAY, NIGHT, VACATION, CUSTOM_1, etc.)
+  name         String   // Display name
+  abbreviation String   // Short display (D, N, V, etc.)
+  category     String   // Working, Absence, Other
+  bgColor      String   @default("bg-gray-500")
+  textColor    String   @default("text-white")
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  isSystem     Boolean  @default(false) // True for default shift types
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
 }
 
 // =====================
