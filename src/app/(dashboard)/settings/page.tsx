@@ -24,6 +24,7 @@ import {
   Palette,
   Eye,
   EyeOff,
+  Star,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -262,6 +263,53 @@ export default function SettingsPage() {
       setMessage("Failed to create pattern")
     } finally {
       setCreatingPattern(false)
+    }
+  }
+
+  async function setDefaultPattern(patternId: string) {
+    try {
+      const response = await fetch(`/api/rotation-patterns/${patternId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      })
+
+      if (response.ok) {
+        setPatterns(patterns.map((p) => ({
+          ...p,
+          isDefault: p.id === patternId,
+        })))
+        setMessage("Default pattern updated!")
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        const data = await response.json()
+        setMessage(data.error || "Failed to set default")
+      }
+    } catch (error) {
+      console.error("Failed to set default pattern:", error)
+      setMessage("Failed to set default pattern")
+    }
+  }
+
+  async function deletePattern(pattern: RotationPattern) {
+    if (!confirm(`Delete pattern "${pattern.name}"?`)) return
+
+    try {
+      const response = await fetch(`/api/rotation-patterns/${pattern.id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setPatterns(patterns.filter((p) => p.id !== pattern.id))
+        setMessage("Pattern deleted!")
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        const data = await response.json()
+        setMessage(data.error || "Failed to delete pattern")
+      }
+    } catch (error) {
+      console.error("Failed to delete pattern:", error)
+      setMessage("Failed to delete pattern")
     }
   }
 
@@ -759,7 +807,10 @@ export default function SettingsPage() {
                 patterns.map((pattern) => (
                   <div
                     key={pattern.id}
-                    className="flex items-center justify-between p-3 rounded border"
+                    className={cn(
+                      "flex items-center justify-between p-3 rounded border",
+                      pattern.isDefault && "border-primary bg-primary/5"
+                    )}
                   >
                     <div>
                       <p className="font-medium">{pattern.name}</p>
@@ -768,8 +819,34 @@ export default function SettingsPage() {
                         {pattern.includesNights && " • Day/Night"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
+                    <div className="flex items-center gap-1">
+                      {pattern.isDefault ? (
+                        <Badge variant="secondary" className="mr-1">
+                          <Star className="h-3 w-3 mr-1 fill-current" />
+                          Default
+                        </Badge>
+                      ) : isAdmin && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDefaultPattern(pattern.id)}
+                          title="Set as default"
+                        >
+                          <Star className="h-4 w-4 mr-1" />
+                          Set Default
+                        </Button>
+                      )}
+                      {isAdmin && !pattern.isDefault && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => deletePattern(pattern)}
+                          title="Delete pattern"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))
