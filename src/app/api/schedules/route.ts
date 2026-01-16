@@ -232,13 +232,18 @@ async function generateSchedules(
     }
   }
 
-  // Delete existing non-override schedules in range
+  // Delete existing non-override schedules for the entire year
+  // This ensures old schedule entries are fully cleared when regenerating
+  const startYear = new Date(validatedData.startDate).getUTCFullYear()
+  const yearStart = new Date(Date.UTC(startYear, 0, 1))
+  const yearEnd = new Date(Date.UTC(startYear, 11, 31))
+
   await prisma.schedule.deleteMany({
     where: {
       userId: { in: userIds },
       date: {
-        gte: new Date(validatedData.startDate),
-        lte: new Date(validatedData.endDate),
+        gte: yearStart,
+        lte: yearEnd,
       },
       isOverride: false,
     },
