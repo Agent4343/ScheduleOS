@@ -216,22 +216,33 @@ export default function SettingsPage() {
   const [roleColors, setRoleColors] = useState<Record<string, string>>(DEFAULT_ROLE_COLORS)
   const [editingRole, setEditingRole] = useState<string | null>(null)
 
+  // Bulk schedule generation state
+  const [crews, setCrews] = useState<{ id: string; name: string }[]>([])
+  const [bulkCrewId, setBulkCrewId] = useState<string>("all")
+  const [bulkPatternId, setBulkPatternId] = useState<string>("")
+  const [bulkStartDate, setBulkStartDate] = useState<string>("")
+  const [bulkStartOnNights, setBulkStartOnNights] = useState(false)
+  const [bulkGenerating, setBulkGenerating] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<string>("")
+
   const isAdmin = session?.user?.role === "ADMIN"
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [orgRes, patternsRes, positionsRes, shiftTypesRes] = await Promise.all([
+        const [orgRes, patternsRes, positionsRes, shiftTypesRes, crewsRes] = await Promise.all([
           fetch("/api/organization"),
           fetch("/api/rotation-patterns"),
           fetch("/api/positions"),
           fetch("/api/shift-types"),
+          fetch("/api/crews"),
         ])
 
         const orgData = await orgRes.json()
         const patternsData = await patternsRes.json()
         const positionsData = await positionsRes.json()
         const shiftTypesData = await shiftTypesRes.json()
+        const crewsData = await crewsRes.json()
 
         if (orgData.success) {
           setOrganization(orgData.data)
@@ -243,6 +254,7 @@ export default function SettingsPage() {
         if (patternsData.success) setPatterns(patternsData.data)
         if (positionsData.success) setPositions(positionsData.data)
         if (shiftTypesData.success) setShiftTypes(shiftTypesData.data)
+        if (crewsData.success) setCrews(crewsData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -338,6 +350,81 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Failed to delete pattern:", error)
       setMessage("Failed to delete pattern")
+    }
+  }
+
+  async function generateBulkSchedules() {
+    if (!bulkPatternId || !bulkStartDate) {
+      setBulkMessage("Please select a pattern and start date")
+      return
+    }
+
+    setBulkGenerating(true)
+    setBulkMessage("")
+
+    try {
+      // Get workers - either all workers or by crew
+      const workersUrl = bulkCrewId === "all"
+        ? "/api/users"
+        : `/api/users?crewId=${bulkCrewId}`
+
+      const workersRes = await fetch(workersUrl)
+      const workersData = await workersRes.json()
+
+      if (!workersData.success || !workersData.data?.length) {
+        setBulkMessage("No workers found")
+        setBulkGenerating(false)
+        return
+      }
+
+      const workers = workersData.data.filter((w: { status: string }) => w.status === "ACTIVE")
+
+      if (workers.length === 0) {
+        setBulkMessage("No active workers found")
+        setBulkGenerating(false)
+        return
+      }
+
+      // Generate for 2 years
+      const startDate = new Date(bulkStartDate)
+      const startYear = startDate.getUTCFullYear()
+      const endDate = new Date(Date.UTC(startYear + 1, 11, 31))
+
+      let successCount = 0
+      let errorCount = 0
+
+      // Generate schedule for each worker
+      for (const worker of workers) {
+        try {
+          const response = await fetch("/api/schedules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: worker.id,
+              patternId: bulkPatternId,
+              startDate: bulkStartDate,
+              endDate: endDate.toISOString().split("T")[0],
+              startPhase: 0,
+              startOnNights: bulkStartOnNights,
+            }),
+          })
+
+          if (response.ok) {
+            successCount++
+          } else {
+            errorCount++
+          }
+        } catch {
+          errorCount++
+        }
+      }
+
+      setBulkMessage(`Generated schedules for ${successCount} workers${errorCount > 0 ? `, ${errorCount} failed` : ""}`)
+    } catch (error) {
+      console.error("Bulk schedule generation error:", error)
+      setBulkMessage("Failed to generate schedules")
+    } finally {
+      setBulkGenerating(false)
     }
   }
 
@@ -673,9 +760,9 @@ export default function SettingsPage() {
               <Calendar className="h-5 w-5" />
               Schedule Settings
             </CardTitle>
-            <CardDescription>Configure scheduling preferences</CardDescription>
+            <CardDescription>Configure scheduling preferences and generate schedules</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
               <Input
@@ -705,6 +792,112 @@ export default function SettingsPage() {
                 {organization?.settings?.minStaffingAlertEnabled ? "Enabled" : "Disabled"}
               </Badge>
             </div>
+
+            {/* Bulk Schedule Generation */}
+            {isAdmin && (
+              <div className="pt-4 border-t space-y-4">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  <h4 className="font-semibold">Bulk Schedule Generation</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Generate schedules for multiple workers at once
+                </p>
+
+                {bulkMessage && (
+                  <Alert>
+                    <AlertDescription>{bulkMessage}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="bulkCrew">Crew</Label>
+                    <Select
+                      id="bulkCrew"
+                      value={bulkCrewId}
+                      onChange={(e) => setBulkCrewId(e.target.value)}
+                      options={[
+                        { value: "all", label: "All Workers" },
+                        ...crews.map((c) => ({ value: c.id, label: c.name })),
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bulkPattern">Rotation Pattern</Label>
+                    <Select
+                      id="bulkPattern"
+                      value={bulkPatternId}
+                      onChange={(e) => setBulkPatternId(e.target.value)}
+                      options={[
+                        { value: "", label: "Select pattern..." },
+                        ...patterns.map((p) => ({
+                          value: p.id,
+                          label: `${p.name} (${p.daysOn}/${p.daysOff})`,
+                        })),
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bulkStartDate">Start Date</Label>
+                  <Input
+                    id="bulkStartDate"
+                    type="date"
+                    value={bulkStartDate}
+                    onChange={(e) => setBulkStartDate(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Schedules will be generated for 2 years from this date
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="flex gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={() => setBulkStartOnNights(false)}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
+                        !bulkStartOnNights
+                          ? "bg-green-500 text-white"
+                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                      )}
+                    >
+                      ☀️ Start on Days
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkStartOnNights(true)}
+                      className={cn(
+                        "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
+                        bulkStartOnNights
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                      )}
+                    >
+                      🌙 Start on Nights
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={generateBulkSchedules}
+                  disabled={bulkGenerating || !bulkPatternId || !bulkStartDate}
+                  className="w-full"
+                >
+                  {bulkGenerating ? (
+                    "Generating..."
+                  ) : (
+                    <>
+                      <Clock className="h-4 w-4 mr-2" />
+                      Generate Schedules for {bulkCrewId === "all" ? "All Workers" : "Selected Crew"}
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
