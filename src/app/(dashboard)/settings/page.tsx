@@ -221,7 +221,6 @@ export default function SettingsPage() {
   const [bulkCrewId, setBulkCrewId] = useState<string>("all")
   const [bulkPatternId, setBulkPatternId] = useState<string>("")
   const [bulkStartDate, setBulkStartDate] = useState<string>("")
-  const [bulkStartOnNights, setBulkStartOnNights] = useState(false)
   const [bulkGenerating, setBulkGenerating] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string>("")
 
@@ -406,7 +405,6 @@ export default function SettingsPage() {
               startDate: bulkStartDate,
               endDate: endDate.toISOString().split("T")[0],
               startPhase: 0,
-              startOnNights: bulkStartOnNights,
             }),
           })
 
@@ -872,35 +870,6 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">
                     Schedules will be generated for 2 years from this date
                   </p>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <div className="flex gap-2 w-full">
-                    <button
-                      type="button"
-                      onClick={() => setBulkStartOnNights(false)}
-                      className={cn(
-                        "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
-                        !bulkStartOnNights
-                          ? "bg-green-500 text-white"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                      )}
-                    >
-                      ☀️ Start on Days
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBulkStartOnNights(true)}
-                      className={cn(
-                        "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
-                        bulkStartOnNights
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                      )}
-                    >
-                      🌙 Start on Nights
-                    </button>
-                  </div>
                 </div>
 
                 <Button
