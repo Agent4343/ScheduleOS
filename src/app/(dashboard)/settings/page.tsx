@@ -225,7 +225,8 @@ export default function SettingsPage() {
   const [bulkGenerating, setBulkGenerating] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string>("")
 
-  const isAdmin = session?.user?.role === "ADMIN"
+  // Supervisors have admin-level access
+  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERVISOR"
 
   useEffect(() => {
     async function fetchData() {

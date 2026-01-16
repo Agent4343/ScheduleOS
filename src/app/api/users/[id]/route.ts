@@ -91,13 +91,13 @@ export async function PATCH(
 
     const body = await request.json()
 
-    // Only admins can assign or change to ADMIN role
-    if (body.role === "ADMIN" && session.user.role !== "ADMIN") {
+    // Only admins and supervisors can assign or change to ADMIN role
+    if (body.role === "ADMIN" && !["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
       return NextResponse.json({ error: "Only admins can assign the ADMIN role" }, { status: 403 })
     }
 
-    // Prevent non-admins from demoting admins
-    if (existingUser.role === "ADMIN" && body.role && body.role !== "ADMIN" && session.user.role !== "ADMIN") {
+    // Prevent workers from demoting admins
+    if (existingUser.role === "ADMIN" && body.role && body.role !== "ADMIN" && !["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
       return NextResponse.json({ error: "Only admins can change an admin's role" }, { status: 403 })
     }
 
@@ -187,8 +187,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only admins can delete users
-    if (session.user.role !== "ADMIN") {
+    // Only admins and supervisors can delete users
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
       return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 })
     }
 
