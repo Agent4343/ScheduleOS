@@ -938,69 +938,106 @@ export default function SchedulePage() {
       {/* Shift Type Selection Popover */}
       {selectedCell && (
         <div
-          className="fixed z-50 bg-background border rounded-lg shadow-lg p-2 min-w-[140px]"
+          className="fixed z-50 bg-background border rounded-lg shadow-lg p-2 min-w-[180px] max-h-[80vh] overflow-y-auto"
           style={{
-            left: Math.min(selectedCell.x, window.innerWidth - 160),
-            top: Math.min(selectedCell.y + 4, window.innerHeight - 300),
+            left: Math.min(Math.max(10, selectedCell.x), window.innerWidth - 200),
+            top: Math.min(Math.max(10, selectedCell.y + 4), window.innerHeight - 400),
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="text-xs font-medium text-muted-foreground mb-2 px-2">
+          <div className="text-xs font-medium text-muted-foreground mb-2 px-2 sticky top-0 bg-background pb-1 border-b">
             {workers.find((w) => w.id === selectedCell.workerId)?.name} - {selectedCell.date}
           </div>
           <div className="grid gap-1">
-            {/* Working shifts */}
-            <div className="text-xs font-semibold text-muted-foreground px-2 pt-1">Working</div>
-            {(["DAY", "NIGHT", "OCR_DAY", "OCR_NIGHT", "CCR_DAY", "CCR_NIGHT", "PS", "PL_DAY", "PL_NIGHT"] as ShiftType[]).map((type) => (
+            {/* Working shifts - Field Ops */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-1">Field Ops</div>
+            {(["DAY", "NIGHT"] as ShiftType[]).map((type) => (
               <button
                 key={type}
                 disabled={cellSaving}
                 onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:opacity-80 transition-colors w-full text-left",
+                  SHIFT_COLORS[type].bg,
+                  SHIFT_COLORS[type].text
+                )}
+              >
+                {SHIFT_ICONS[type]}
+                <span>{type === "DAY" ? "Day Shift" : "Night Shift"}</span>
+                <span className="ml-auto opacity-70 font-bold">{SHIFT_ABBREV[type]}</span>
+              </button>
+            ))}
+
+            {/* Control Room */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Control Room</div>
+            {(["OCR_DAY", "OCR_NIGHT", "CCR_DAY", "CCR_NIGHT"] as ShiftType[]).map((type) => (
+              <button
+                key={type}
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:opacity-80 transition-colors w-full text-left",
                   SHIFT_COLORS[type].bg,
                   SHIFT_COLORS[type].text
                 )}
               >
                 {SHIFT_ICONS[type]}
                 <span>{type.replace(/_/g, " ")}</span>
-                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+                <span className="ml-auto opacity-70 font-bold">{SHIFT_ABBREV[type]}</span>
               </button>
             ))}
 
-            {/* Non-operational */}
-            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Other</div>
+            {/* Acting/Backfill Roles */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Acting/Backfill</div>
+            {(["PS", "PL_DAY", "PL_NIGHT"] as ShiftType[]).map((type) => (
+              <button
+                key={type}
+                disabled={cellSaving}
+                onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:opacity-80 transition-colors w-full text-left",
+                  SHIFT_COLORS[type].bg,
+                  SHIFT_COLORS[type].text
+                )}
+              >
+                <span>{type === "PS" ? "Prod Supervisor" : type === "PL_DAY" ? "Prod Lead Day" : "Prod Lead Night"}</span>
+                <span className="ml-auto opacity-70 font-bold">{SHIFT_ABBREV[type]}</span>
+              </button>
+            ))}
+
+            {/* Training */}
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Training</div>
             {(["TRAINING", "OSCC"] as ShiftType[]).map((type) => (
               <button
                 key={type}
                 disabled={cellSaving}
                 onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:opacity-80 transition-colors w-full text-left",
                   SHIFT_COLORS[type].bg,
                   SHIFT_COLORS[type].text
                 )}
               >
-                <span>{type}</span>
-                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+                <span>{type === "TRAINING" ? "Training" : "OSCC Course"}</span>
+                <span className="ml-auto opacity-70 font-bold">{SHIFT_ABBREV[type]}</span>
               </button>
             ))}
 
             {/* Absence */}
-            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Absence</div>
-            {(["VACATION", "SICK", "LEAVE"] as ShiftType[]).map((type) => (
+            <div className="text-xs font-semibold text-muted-foreground px-2 pt-2">Absence/Leave</div>
+            {(["VACATION", "SICK", "LEAVE", "SHUTDOWN"] as ShiftType[]).map((type) => (
               <button
                 key={type}
                 disabled={cellSaving}
                 onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, type)}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-muted transition-colors w-full text-left",
+                  "flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:opacity-80 transition-colors w-full text-left",
                   SHIFT_COLORS[type].bg,
                   SHIFT_COLORS[type].text
                 )}
               >
-                <span>{type}</span>
-                <span className="ml-auto opacity-70">{SHIFT_ABBREV[type]}</span>
+                <span>{type === "SICK" ? "Sick Leave" : type}</span>
+                <span className="ml-auto opacity-70 font-bold">{SHIFT_ABBREV[type]}</span>
               </button>
             ))}
 
@@ -1009,7 +1046,7 @@ export default function SchedulePage() {
               <button
                 disabled={cellSaving}
                 onClick={() => saveCellShift(selectedCell.workerId, selectedCell.date, null)}
-                className="flex items-center gap-2 px-2 py-1 rounded text-xs hover:bg-red-100 transition-colors w-full text-left text-red-600"
+                className="flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-red-100 transition-colors w-full text-left text-red-600 font-medium"
               >
                 <span>Clear / Off</span>
               </button>
