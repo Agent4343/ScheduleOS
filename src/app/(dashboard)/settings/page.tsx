@@ -219,8 +219,6 @@ export default function SettingsPage() {
   // Bulk schedule generation state
   const [crews, setCrews] = useState<{ id: string; name: string }[]>([])
   const [bulkCrewId, setBulkCrewId] = useState<string>("all")
-  const [bulkPatternId, setBulkPatternId] = useState<string>("")
-  const [bulkStartDate, setBulkStartDate] = useState<string>("")
   const [bulkGenerating, setBulkGenerating] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string>("")
 
@@ -354,15 +352,18 @@ export default function SettingsPage() {
   }
 
   async function generateBulkSchedules() {
-    if (!bulkPatternId || !bulkStartDate) {
-      setBulkMessage("Please select a pattern and start date")
-      return
-    }
-
     setBulkGenerating(true)
     setBulkMessage("")
 
     try {
+      // Find the default pattern
+      const defaultPattern = patterns.find(p => p.isDefault)
+      if (!defaultPattern) {
+        setBulkMessage("No default rotation pattern found. Please set a default pattern first.")
+        setBulkGenerating(false)
+        return
+      }
+
       // Get workers - either all workers or by crew
       const workersUrl = bulkCrewId === "all"
         ? "/api/users"
@@ -385,10 +386,10 @@ export default function SettingsPage() {
         return
       }
 
-      // Generate for 2 years
-      const startDate = new Date(bulkStartDate)
-      const startYear = startDate.getUTCFullYear()
-      const endDate = new Date(Date.UTC(startYear + 1, 11, 31))
+      // Generate for 2 years starting from Jan 1 of current year
+      const currentYear = new Date().getUTCFullYear()
+      const startDate = `${currentYear}-01-01`
+      const endDate = new Date(Date.UTC(currentYear + 1, 11, 31))
 
       let successCount = 0
       let errorCount = 0
@@ -401,8 +402,8 @@ export default function SettingsPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userId: worker.id,
-              patternId: bulkPatternId,
-              startDate: bulkStartDate,
+              patternId: defaultPattern.id,
+              startDate: startDate,
               endDate: endDate.toISOString().split("T")[0],
               startPhase: 0,
             }),
@@ -418,7 +419,7 @@ export default function SettingsPage() {
         }
       }
 
-      setBulkMessage(`Generated schedules for ${successCount} workers${errorCount > 0 ? `, ${errorCount} failed` : ""}`)
+      setBulkMessage(`Generated ${currentYear}-${currentYear + 1} schedules for ${successCount} workers${errorCount > 0 ? `, ${errorCount} failed` : ""}`)
     } catch (error) {
       console.error("Bulk schedule generation error:", error)
       setBulkMessage("Failed to generate schedules")
@@ -820,7 +821,7 @@ export default function SettingsPage() {
                   <h4 className="font-semibold">Bulk Schedule Generation</h4>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Generate schedules for multiple workers at once
+                  Generate 2-year schedules using the default rotation pattern
                 </p>
 
                 {bulkMessage && (
@@ -829,52 +830,22 @@ export default function SettingsPage() {
                   </Alert>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="bulkCrew">Crew</Label>
-                    <Select
-                      id="bulkCrew"
-                      value={bulkCrewId}
-                      onChange={(e) => setBulkCrewId(e.target.value)}
-                      options={[
-                        { value: "all", label: "All Workers" },
-                        ...crews.map((c) => ({ value: c.id, label: c.name })),
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bulkPattern">Rotation Pattern</Label>
-                    <Select
-                      id="bulkPattern"
-                      value={bulkPatternId}
-                      onChange={(e) => setBulkPatternId(e.target.value)}
-                      options={[
-                        { value: "", label: "Select pattern..." },
-                        ...patterns.map((p) => ({
-                          value: p.id,
-                          label: `${p.name} (${p.daysOn}/${p.daysOff})`,
-                        })),
-                      ]}
-                    />
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="bulkStartDate">Start Date</Label>
-                  <Input
-                    id="bulkStartDate"
-                    type="date"
-                    value={bulkStartDate}
-                    onChange={(e) => setBulkStartDate(e.target.value)}
+                  <Label htmlFor="bulkCrew">Crew</Label>
+                  <Select
+                    id="bulkCrew"
+                    value={bulkCrewId}
+                    onChange={(e) => setBulkCrewId(e.target.value)}
+                    options={[
+                      { value: "all", label: "All Workers" },
+                      ...crews.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Schedules will be generated for 2 years from this date
-                  </p>
                 </div>
 
                 <Button
                   onClick={generateBulkSchedules}
-                  disabled={bulkGenerating || !bulkPatternId || !bulkStartDate}
+                  disabled={bulkGenerating}
                   className="w-full"
                 >
                   {bulkGenerating ? (
