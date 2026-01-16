@@ -178,13 +178,13 @@ const SHIFT_ICONS: Record<string, React.ReactNode> = {
   PL_NIGHT: null,
 }
 
-// Get all days in a year
+// Get all days in a year (using UTC to avoid timezone issues)
 function getDaysInYear(year: number) {
   const days: Date[] = []
-  const date = new Date(year, 0, 1)
-  while (date.getFullYear() === year) {
+  const date = new Date(Date.UTC(year, 0, 1))
+  while (date.getUTCFullYear() === year) {
     days.push(new Date(date))
-    date.setDate(date.getDate() + 1)
+    date.setUTCDate(date.getUTCDate() + 1)
   }
   return days
 }
@@ -260,11 +260,11 @@ export default function SchedulePage() {
     let currentGroup: Date[] = []
 
     for (const day of yearDays) {
-      if (day.getMonth() !== currentMonth) {
+      if (day.getUTCMonth() !== currentMonth) {
         if (currentGroup.length > 0) {
           groups.push({ month: currentMonth, days: currentGroup })
         }
-        currentMonth = day.getMonth()
+        currentMonth = day.getUTCMonth()
         currentGroup = []
       }
       currentGroup.push(day)
@@ -494,8 +494,8 @@ export default function SchedulePage() {
     try {
       // Generate for the full year from start date
       const startDate = new Date(scheduleStartDate)
-      const generatedYear = startDate.getFullYear()
-      const endDate = new Date(generatedYear, 11, 31) // End of year
+      const generatedYear = startDate.getUTCFullYear()
+      const endDate = new Date(Date.UTC(generatedYear, 11, 31)) // End of year (UTC)
 
       const response = await fetch("/api/schedules", {
         method: "POST",
@@ -632,8 +632,9 @@ export default function SchedulePage() {
     })
   }
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Get today's date at UTC midnight for consistent comparison
+  const now = new Date()
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] -m-4 lg:-m-6">
@@ -793,9 +794,9 @@ export default function SchedulePage() {
                       {/* Day headers */}
                       <div className="flex h-10 border-b">
                         {yearDays.map((day) => {
-                          const isToday = day.getTime() === today.getTime()
-                          const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                          const isFirstOfMonth = day.getDate() === 1
+                          const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+                          const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
+                          const isFirstOfMonth = day.getUTCDate() === 1
 
                           return (
                             <div
@@ -808,10 +809,10 @@ export default function SchedulePage() {
                               )}
                             >
                               <span className="text-muted-foreground text-[10px]">
-                                {day.toLocaleDateString("en-US", { weekday: "narrow" })}
+                                {["S", "M", "T", "W", "T", "F", "S"][day.getUTCDay()]}
                               </span>
                               <span className={cn("text-xs", isToday && "text-primary")}>
-                                {day.getDate()}
+                                {day.getUTCDate()}
                               </span>
                             </div>
                           )
@@ -826,12 +827,12 @@ export default function SchedulePage() {
                       return (
                         <div key={worker.id} className="flex h-10 border-b hover:bg-muted/20">
                           {yearDays.map((day) => {
-                            // Use local date format to avoid timezone issues
-                            const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+                            // Use UTC date format to match schedule dates from API
+                            const dateKey = `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`
                             const schedule = userSchedules?.get(dateKey)
-                            const isToday = day.getTime() === today.getTime()
-                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                            const isFirstOfMonth = day.getDate() === 1
+                            const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+                            const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
+                            const isFirstOfMonth = day.getUTCDate() === 1
                             const isOff = schedule?.shiftType === "OFF"
 
                             const isSelected = selectedCell?.workerId === worker.id && selectedCell?.date === dateKey
