@@ -26,6 +26,10 @@ import {
   Pencil,
   Trash2,
   Award,
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Loader2,
 } from "lucide-react"
 import { UserRole, UserStatus } from "@/types"
 
@@ -138,6 +142,16 @@ export default function WorkersPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
 
+  // Upload modal state
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<{
+    created: number
+    updated: number
+    errors: { row: number; email: string; error: string }[]
+  } | null>(null)
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -158,6 +172,68 @@ export default function WorkersPage() {
       console.error("Failed to fetch data:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  function openUploadModal() {
+    setUploadFile(null)
+    setUploadResult(null)
+    setUploadModalOpen(true)
+  }
+
+  async function downloadTemplate() {
+    try {
+      const response = await fetch("/api/users/upload")
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "worker_template.xlsx"
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Failed to download template:", error)
+    }
+  }
+
+  async function handleUpload() {
+    if (!uploadFile) return
+
+    setUploading(true)
+    setUploadResult(null)
+
+    try {
+      const formData = new FormData()
+      formData.append("file", uploadFile)
+
+      const response = await fetch("/api/users/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setUploadResult(result.data)
+        // Refresh users list
+        fetchData()
+      } else {
+        setUploadResult({
+          created: 0,
+          updated: 0,
+          errors: [{ row: 0, email: "", error: result.error || "Upload failed" }],
+        })
+      }
+    } catch {
+      setUploadResult({
+        created: 0,
+        updated: 0,
+        errors: [{ row: 0, email: "", error: "Failed to upload file" }],
+      })
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -304,10 +380,16 @@ export default function WorkersPage() {
             Manage your workforce ({users.length} total)
           </p>
         </div>
-        <Button onClick={openAddModal}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Worker
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={openUploadModal}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import Excel
+          </Button>
+          <Button onClick={openAddModal}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Worker
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -703,6 +785,115 @@ export default function WorkersPage() {
             <Button variant="destructive" onClick={handleDelete}>
               Delete Worker
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Upload Modal */}
+      <Modal
+        isOpen={uploadModalOpen}
+        onClose={() => setUploadModalOpen(false)}
+        title="Import Workers from Excel"
+        description="Upload an Excel file to add or update multiple workers at once"
+      >
+        <div className="space-y-4">
+          {/* Template Download */}
+          <div className="p-4 bg-muted rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-sm">Download Template</p>
+                  <p className="text-xs text-muted-foreground">
+                    Get a pre-formatted Excel template with sample data
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" onClick={downloadTemplate}>
+                <Download className="h-4 w-4 mr-1" />
+                Template
+              </Button>
+            </div>
+          </div>
+
+          {/* File Upload */}
+          <div className="space-y-2">
+            <Label>Upload Excel File</Label>
+            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="excel-upload"
+              />
+              <label htmlFor="excel-upload" className="cursor-pointer">
+                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm font-medium">
+                  {uploadFile ? uploadFile.name : "Click to select file"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Supports .xlsx and .xls files
+                </p>
+              </label>
+            </div>
+          </div>
+
+          {/* Required Fields Info */}
+          <div className="text-xs text-muted-foreground">
+            <p className="font-medium mb-1">Required columns:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>Full Name</li>
+              <li>Email</li>
+            </ul>
+            <p className="font-medium mt-2 mb-1">Optional columns:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>Primary Position, Rotation Group, System Role</li>
+              <li>Phone, Hire Date</li>
+              <li>CCR Trained, PS Capable, PL Capable (Yes/No)</li>
+            </ul>
+          </div>
+
+          {/* Upload Result */}
+          {uploadResult && (
+            <div className={`p-3 rounded-lg ${uploadResult.errors.length > 0 && uploadResult.created === 0 && uploadResult.updated === 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+              <p className="font-medium">
+                {uploadResult.created > 0 && `${uploadResult.created} workers created. `}
+                {uploadResult.updated > 0 && `${uploadResult.updated} workers updated. `}
+                {uploadResult.errors.length > 0 && `${uploadResult.errors.length} errors.`}
+              </p>
+              {uploadResult.errors.length > 0 && (
+                <div className="mt-2 text-xs max-h-32 overflow-auto">
+                  {uploadResult.errors.map((err, i) => (
+                    <p key={i}>
+                      {err.row > 0 ? `Row ${err.row}` : ""} {err.email && `(${err.email})`}: {err.error}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setUploadModalOpen(false)}>
+              {uploadResult ? "Close" : "Cancel"}
+            </Button>
+            {!uploadResult && (
+              <Button onClick={handleUpload} disabled={!uploadFile || uploading}>
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Workers
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>
