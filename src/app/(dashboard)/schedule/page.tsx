@@ -1267,12 +1267,28 @@ export default function SchedulePage() {
                 value={bulkShiftType}
                 onChange={(e) => setBulkShiftType(e.target.value)}
                 options={[
+                  // Absence / Leave
                   { value: "VACATION", label: "🏖️ Vacation" },
                   { value: "SICK", label: "🤒 Sick Leave" },
                   { value: "LEAVE", label: "📋 Scheduled Leave" },
+                  { value: "OFF", label: "🏠 Off / Home" },
+                  // Training
                   { value: "TRAINING", label: "📚 Training" },
                   { value: "OSCC", label: "🎓 OSCC Course" },
-                  { value: "OFF", label: "🏠 Off / Home" },
+                  // Field Operations
+                  { value: "DAY", label: "☀️ Day Shift" },
+                  { value: "NIGHT", label: "🌙 Night Shift" },
+                  // Control Room
+                  { value: "OCR_DAY", label: "🖥️ OCR Day" },
+                  { value: "OCR_NIGHT", label: "🖥️ OCR Night" },
+                  { value: "CCR_DAY", label: "🎛️ CCR Day" },
+                  { value: "CCR_NIGHT", label: "🎛️ CCR Night" },
+                  // Backfill/Acting
+                  { value: "PS", label: "👔 Production Supervisor" },
+                  { value: "PL_DAY", label: "🧑‍💼 PL Day" },
+                  { value: "PL_NIGHT", label: "🧑‍💼 PL Night" },
+                  // Other
+                  { value: "SHUTDOWN", label: "🔧 Shutdown" },
                 ]}
               />
             </div>
