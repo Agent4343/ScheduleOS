@@ -792,7 +792,7 @@ export default function SchedulePage() {
       )}
 
       {/* Full-page Schedule Grid */}
-      <div className="flex-1 overflow-auto border-t">
+      <div ref={scrollRef} className="flex-1 overflow-auto border-t">
           {loading ? (
             <div className="animate-pulse space-y-2 p-4">
               {[...Array(10)].map((_, i) => (
@@ -808,18 +808,18 @@ export default function SchedulePage() {
               </div>
             </div>
           ) : (
-            <div className="flex min-h-full">
+            <div className="inline-flex min-w-max min-h-full">
               {/* Fixed left column for worker info */}
               <div className="sticky left-0 z-30 bg-background border-r shadow-md shrink-0">
-                {/* Header for worker column - sticky top AND left */}
-                <div className="h-[66px] border-b flex items-end p-2 bg-muted/50 sticky top-0 z-40">
+                {/* Header for worker column - sticky top AND left (corner cell) */}
+                <div className="h-[66px] border-b flex items-end p-2 bg-muted sticky top-0 z-40">
                   <span className="font-semibold text-sm">Worker</span>
                 </div>
                 {/* Worker rows */}
                 {sortedWorkers.map((worker) => (
                   <div
                     key={worker.id}
-                    className="h-10 border-b flex items-center px-2 min-w-[180px] hover:bg-muted/50 cursor-pointer group"
+                    className="h-10 border-b flex items-center px-2 min-w-[180px] hover:bg-muted/50 cursor-pointer group bg-background"
                     onClick={() => openEditModal(worker)}
                   >
                     <div
@@ -840,103 +840,98 @@ export default function SchedulePage() {
                 ))}
               </div>
 
-              {/* Scrollable calendar grid */}
-              <div
-                ref={scrollRef}
-                className="flex-1 overflow-x-auto"
-              >
-                  <div className="inline-block min-w-max">
-                    {/* Sticky header container - stays at top when scrolling */}
-                    <div className="sticky top-0 z-20 bg-background shadow-sm">
-                      {/* Month headers */}
-                      <div className="flex h-6 border-b bg-muted/50">
-                        {monthGroups.map(({ month, days }) => (
-                          <div
-                            key={month}
-                            className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                            style={{ width: `${days.length * 32}px` }}
-                          >
-                            {getMonthName(month)}
-                          </div>
-                        ))}
+              {/* Calendar grid - no nested scroll, shares scroll with main container */}
+              <div className="flex-1">
+                {/* Sticky header for dates - stays at top when scrolling vertically */}
+                <div className="sticky top-0 z-20 bg-background shadow-sm">
+                  {/* Month headers */}
+                  <div className="flex h-6 border-b bg-muted/50">
+                    {monthGroups.map(({ month, days }) => (
+                      <div
+                        key={month}
+                        className="text-center text-xs font-semibold border-r flex items-center justify-center"
+                        style={{ width: `${days.length * 32}px` }}
+                      >
+                        {getMonthName(month)}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Day headers */}
-                      <div className="flex h-10 border-b">
-                        {yearDays.map((day) => {
-                          const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
-                          const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
-                          const isFirstOfMonth = day.getUTCDate() === 1
-
-                          return (
-                            <div
-                              key={day.toISOString()}
-                              className={cn(
-                                "w-8 text-center text-xs flex flex-col items-center justify-center",
-                                isWeekend && "bg-muted/50",
-                                isToday && "bg-primary/20 font-bold",
-                                isFirstOfMonth && "border-l border-gray-300"
-                              )}
-                            >
-                              <span className="text-muted-foreground text-[10px]">
-                                {["S", "M", "T", "W", "T", "F", "S"][day.getUTCDay()]}
-                              </span>
-                              <span className={cn("text-xs", isToday && "text-primary")}>
-                                {day.getUTCDate()}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Schedule rows */}
-                    {sortedWorkers.map((worker) => {
-                      const userSchedules = schedulesByUser.get(worker.id)
+                  {/* Day headers */}
+                  <div className="flex h-10 border-b">
+                    {yearDays.map((day) => {
+                      const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+                      const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
+                      const isFirstOfMonth = day.getUTCDate() === 1
 
                       return (
-                        <div key={worker.id} className="flex h-10 border-b hover:bg-muted/20">
-                          {yearDays.map((day) => {
-                            // Use UTC date format to match schedule dates from API
-                            const dateKey = `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`
-                            const schedule = userSchedules?.get(dateKey)
-                            const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
-                            const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
-                            const isFirstOfMonth = day.getUTCDate() === 1
-                            const isOff = schedule?.shiftType === "OFF"
-
-                            const isSelected = selectedCell?.workerId === worker.id && selectedCell?.date === dateKey
-
-                            return (
-                              <div
-                                key={dateKey}
-                                onClick={(e) => handleCellClick(e, worker.id, dateKey)}
-                                className={cn(
-                                  "w-8 h-10 flex items-center justify-center text-xs font-bold border-r cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all",
-                                  isFirstOfMonth && "border-l border-l-gray-400",
-                                  isToday && "ring-1 ring-primary ring-inset",
-                                  isSelected && "ring-2 ring-primary",
-                                  schedule && !isOff
-                                    ? cn(
-                                        SHIFT_COLORS[schedule.shiftType].bg,
-                                        SHIFT_COLORS[schedule.shiftType].text
-                                      )
-                                    : cn(
-                                        isWeekend ? "bg-gray-50" : "bg-white"
-                                      )
-                                )}
-                                title={schedule && !isOff ? `${schedule.shiftType} - ${worker.name}` : "Click to add shift"}
-                              >
-                                {schedule && !isOff ? SHIFT_ABBREV[schedule.shiftType] : ""}
-                              </div>
-                            )
-                          })}
+                        <div
+                          key={day.toISOString()}
+                          className={cn(
+                            "w-8 text-center text-xs flex flex-col items-center justify-center",
+                            isWeekend && "bg-muted/50",
+                            isToday && "bg-primary/20 font-bold",
+                            isFirstOfMonth && "border-l border-gray-300"
+                          )}
+                        >
+                          <span className="text-muted-foreground text-[10px]">
+                            {["S", "M", "T", "W", "T", "F", "S"][day.getUTCDay()]}
+                          </span>
+                          <span className={cn("text-xs", isToday && "text-primary")}>
+                            {day.getUTCDate()}
+                          </span>
                         </div>
                       )
                     })}
                   </div>
                 </div>
+
+                {/* Schedule rows */}
+                {sortedWorkers.map((worker) => {
+                  const userSchedules = schedulesByUser.get(worker.id)
+
+                  return (
+                    <div key={worker.id} className="flex h-10 border-b hover:bg-muted/20">
+                      {yearDays.map((day) => {
+                        // Use UTC date format to match schedule dates from API
+                        const dateKey = `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`
+                        const schedule = userSchedules?.get(dateKey)
+                        const isToday = day.toISOString().split('T')[0] === today.toISOString().split('T')[0]
+                        const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6
+                        const isFirstOfMonth = day.getUTCDate() === 1
+                        const isOff = schedule?.shiftType === "OFF"
+
+                        const isSelected = selectedCell?.workerId === worker.id && selectedCell?.date === dateKey
+
+                        return (
+                          <div
+                            key={dateKey}
+                            onClick={(e) => handleCellClick(e, worker.id, dateKey)}
+                            className={cn(
+                              "w-8 h-10 flex items-center justify-center text-xs font-bold border-r cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all",
+                              isFirstOfMonth && "border-l border-l-gray-400",
+                              isToday && "ring-1 ring-primary ring-inset",
+                              isSelected && "ring-2 ring-primary",
+                              schedule && !isOff
+                                ? cn(
+                                    SHIFT_COLORS[schedule.shiftType].bg,
+                                    SHIFT_COLORS[schedule.shiftType].text
+                                  )
+                                : cn(
+                                    isWeekend ? "bg-gray-50" : "bg-white"
+                                  )
+                            )}
+                            title={schedule && !isOff ? `${schedule.shiftType} - ${worker.name}` : "Click to add shift"}
+                          >
+                            {schedule && !isOff ? SHIFT_ABBREV[schedule.shiftType] : ""}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
               </div>
+            </div>
           )}
       </div>
 
