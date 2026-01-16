@@ -19,6 +19,7 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  Check,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -250,6 +251,13 @@ export default function SchedulePage() {
   // Cell editing state
   const [selectedCell, setSelectedCell] = useState<{ workerId: string; date: string; x: number; y: number } | null>(null)
   const [cellSaving, setCellSaving] = useState(false)
+
+  // Bulk update state (for vacation, training, sick, etc.)
+  const [bulkStartDate, setBulkStartDate] = useState<string>("")
+  const [bulkEndDate, setBulkEndDate] = useState<string>("")
+  const [bulkShiftType, setBulkShiftType] = useState<string>("VACATION")
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null)
 
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
@@ -546,6 +554,68 @@ export default function SchedulePage() {
       setSaveError(error instanceof Error ? error.message : "Failed to generate")
     } finally {
       setGenerating(false)
+    }
+  }
+
+  // Bulk update schedule (for vacation, training, sick, etc.)
+  async function applyBulkUpdate() {
+    if (!selectedWorker || !bulkStartDate || !bulkEndDate || !bulkShiftType) return
+
+    setBulkUpdating(true)
+    setBulkSuccess(null)
+    setSaveError(null)
+
+    try {
+      // Calculate all dates in the range
+      const start = new Date(bulkStartDate)
+      const end = new Date(bulkEndDate)
+      const dates: string[] = []
+      const current = new Date(start)
+
+      while (current <= end) {
+        dates.push(current.toISOString().split("T")[0])
+        current.setUTCDate(current.getUTCDate() + 1)
+      }
+
+      // Create/update schedule entries for each date
+      const results = await Promise.all(
+        dates.map(async (date) => {
+          const response = await fetch("/api/schedules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: selectedWorker.id,
+              date,
+              shiftType: bulkShiftType,
+              isOverride: true, // Mark as override so it won't be cleared when regenerating
+            }),
+          })
+          return response.ok
+        })
+      )
+
+      const successCount = results.filter(Boolean).length
+      setBulkSuccess(`Updated ${successCount} days to ${bulkShiftType}`)
+
+      // Refresh schedules
+      const fetchStartDate = `${currentYear}-01-01`
+      const fetchEndDate = `${currentYear}-12-31`
+      const schedulesResponse = await fetch(
+        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
+      )
+      const schedulesResult = await schedulesResponse.json()
+      if (schedulesResult.success) {
+        setSchedules(schedulesResult.data)
+      }
+
+      // Clear the form
+      setBulkStartDate("")
+      setBulkEndDate("")
+    } catch (error) {
+      console.error("Bulk update error:", error)
+      setSaveError(error instanceof Error ? error.message : "Failed to update")
+    } finally {
+      setBulkUpdating(false)
     }
   }
 
@@ -1154,6 +1224,80 @@ export default function SchedulePage() {
                 </>
               )}
             </Button>
+          </div>
+
+          {/* Quick Update Section (Vacation, Training, Sick, etc.) */}
+          <div className="pt-4 border-t space-y-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4" />
+              <h3 className="font-semibold">Quick Update (Vacation, Training, Sick, etc.)</h3>
+            </div>
+
+            {bulkSuccess && (
+              <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md">
+                {bulkSuccess}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="bulkStart">Start Date</Label>
+                <Input
+                  id="bulkStart"
+                  type="date"
+                  value={bulkStartDate}
+                  onChange={(e) => setBulkStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="bulkEnd">End Date</Label>
+                <Input
+                  id="bulkEnd"
+                  type="date"
+                  value={bulkEndDate}
+                  onChange={(e) => setBulkEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="bulkType">Type</Label>
+              <Select
+                id="bulkType"
+                value={bulkShiftType}
+                onChange={(e) => setBulkShiftType(e.target.value)}
+                options={[
+                  { value: "VACATION", label: "🏖️ Vacation" },
+                  { value: "SICK", label: "🤒 Sick Leave" },
+                  { value: "LEAVE", label: "📋 Scheduled Leave" },
+                  { value: "TRAINING", label: "📚 Training" },
+                  { value: "OSCC", label: "🎓 OSCC Course" },
+                  { value: "OFF", label: "🏠 Off / Home" },
+                ]}
+              />
+            </div>
+
+            <Button
+              onClick={applyBulkUpdate}
+              disabled={bulkUpdating || !bulkStartDate || !bulkEndDate}
+              className="w-full"
+              variant="outline"
+            >
+              {bulkUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Apply to Date Range
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              These updates are saved as overrides and won&apos;t be cleared when regenerating the schedule.
+            </p>
           </div>
         </div>
       </Modal>
