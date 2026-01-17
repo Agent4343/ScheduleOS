@@ -532,7 +532,7 @@ export default function SchedulePage() {
       if (schedulesResult.success) {
         setSchedules(schedulesResult.data)
       }
-    } catch (error) {
+    } catch {
       setBulkResult("Failed to generate schedules")
     } finally {
       setBulkGenerating(false)
