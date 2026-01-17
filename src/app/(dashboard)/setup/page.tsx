@@ -1,0 +1,504 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Calendar,
+  Users,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+  Wand2,
+  ArrowRight,
+  RefreshCw,
+} from "lucide-react"
+
+interface Worker {
+  id: string
+  name: string
+  email: string
+  position: string | null
+  status: string
+  crewId: string | null
+  crew: { id: string; name: string; color: string } | null
+}
+
+interface Crew {
+  id: string
+  name: string
+  color: string
+  rotationPatternId: string | null
+  rotationPattern: RotationPattern | null
+  _count?: { workers: number }
+}
+
+interface RotationPattern {
+  id: string
+  name: string
+  description: string | null
+  daysOn: number
+  daysOff: number
+  includesNights: boolean
+  nightDays: number
+  nightsAtStart: boolean
+}
+
+export default function SetupPage() {
+  const router = useRouter()
+  const [workers, setWorkers] = useState<Worker[]>([])
+  const [crews, setCrews] = useState<Crew[]>([])
+  const [patterns, setPatterns] = useState<RotationPattern[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+
+  // Form state
+  const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set())
+  const [selectedCrew, setSelectedCrew] = useState<string>("")
+  const [selectedPattern, setSelectedPattern] = useState<string>("")
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date()
+    return today.toISOString().split("T")[0]
+  })
+  const [endDate, setEndDate] = useState(() => {
+    const end = new Date()
+    end.setFullYear(end.getFullYear() + 1)
+    return end.toISOString().split("T")[0]
+  })
+
+  // Fetch data on mount
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [workersRes, crewsRes, patternsRes] = await Promise.all([
+          fetch("/api/users?status=ACTIVE"),
+          fetch("/api/crews"),
+          fetch("/api/rotation-patterns"),
+        ])
+
+        const workersData = await workersRes.json()
+        const crewsData = await crewsRes.json()
+        const patternsData = await patternsRes.json()
+
+        if (workersData.success) setWorkers(workersData.data)
+        if (crewsData.success) setCrews(crewsData.data)
+        if (patternsData.success) setPatterns(patternsData.data)
+      } catch {
+        setError("Failed to load data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // When crew is selected, auto-select workers in that crew
+  useEffect(() => {
+    if (selectedCrew) {
+      const crewWorkers = workers.filter((w) => w.crewId === selectedCrew)
+      setSelectedWorkers(new Set(crewWorkers.map((w) => w.id)))
+
+      // Also select the crew's pattern if it has one
+      const crew = crews.find((c) => c.id === selectedCrew)
+      if (crew?.rotationPatternId) {
+        setSelectedPattern(crew.rotationPatternId)
+      }
+    }
+  }, [selectedCrew, workers, crews])
+
+  const toggleWorker = (workerId: string) => {
+    const newSelected = new Set(selectedWorkers)
+    if (newSelected.has(workerId)) {
+      newSelected.delete(workerId)
+    } else {
+      newSelected.add(workerId)
+    }
+    setSelectedWorkers(newSelected)
+  }
+
+  const selectAllWorkers = () => {
+    if (selectedWorkers.size === workers.length) {
+      setSelectedWorkers(new Set())
+    } else {
+      setSelectedWorkers(new Set(workers.map((w) => w.id)))
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (selectedWorkers.size === 0) {
+      setError("Please select at least one worker")
+      return
+    }
+    if (!selectedPattern) {
+      setError("Please select a rotation pattern")
+      return
+    }
+    if (!startDate || !endDate) {
+      setError("Please select start and end dates")
+      return
+    }
+
+    setIsGenerating(true)
+    setError("")
+    setSuccess("")
+
+    try {
+      // Generate schedules for each selected worker
+      const workerIds = Array.from(selectedWorkers)
+      let successCount = 0
+
+      for (const userId of workerIds) {
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            patternId: selectedPattern,
+            startDate,
+            endDate,
+            startPhase: 0,
+          }),
+        })
+
+        if (response.ok) {
+          successCount++
+        }
+      }
+
+      setSuccess(`Successfully generated schedules for ${successCount} worker(s)!`)
+
+      // Redirect to schedule view after short delay
+      setTimeout(() => {
+        router.push("/schedule")
+      }, 2000)
+    } catch {
+      setError("Failed to generate schedules. Please try again.")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const selectedPattern_obj = patterns.find((p) => p.id === selectedPattern)
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Schedule Setup</h1>
+        <p className="text-muted-foreground mt-1">
+          Quickly set up schedules for your workers in just a few steps
+        </p>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert className="border-green-500 bg-green-50 text-green-700">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Step 1: Select Crew or Workers */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                1
+              </div>
+              <div>
+                <CardTitle className="text-lg">Select Workers</CardTitle>
+                <CardDescription>Choose a crew or individual workers</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Quick crew select */}
+            <div>
+              <Label className="text-sm font-medium">Quick Select by Crew</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {crews.map((crew) => (
+                  <Button
+                    key={crew.id}
+                    variant={selectedCrew === crew.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedCrew(selectedCrew === crew.id ? "" : crew.id)}
+                    style={{
+                      borderColor: crew.color,
+                      ...(selectedCrew === crew.id && { backgroundColor: crew.color }),
+                    }}
+                  >
+                    {crew.name}
+                    {crew._count && (
+                      <span className="ml-1 opacity-70">({crew._count.workers})</span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-sm font-medium">Or Select Individual Workers</Label>
+                <Button variant="ghost" size="sm" onClick={selectAllWorkers}>
+                  {selectedWorkers.size === workers.length ? "Deselect All" : "Select All"}
+                </Button>
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2">
+                {workers.map((worker) => (
+                  <div
+                    key={worker.id}
+                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                      selectedWorkers.has(worker.id)
+                        ? "bg-primary/10 border border-primary"
+                        : "hover:bg-muted border border-transparent"
+                    }`}
+                    onClick={() => toggleWorker(worker.id)}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                        selectedWorkers.has(worker.id)
+                          ? "bg-primary border-primary"
+                          : "border-muted-foreground"
+                      }`}
+                    >
+                      {selectedWorkers.has(worker.id) && (
+                        <CheckCircle2 className="h-3 w-3 text-primary-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{worker.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {worker.position || "No position"}
+                        {worker.crew && (
+                          <span
+                            className="ml-2 px-1.5 py-0.5 rounded text-white"
+                            style={{ backgroundColor: worker.crew.color }}
+                          >
+                            {worker.crew.name}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {workers.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">
+                    No workers found. <a href="/workers" className="text-primary hover:underline">Add workers first</a>
+                  </p>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {selectedWorkers.size} worker(s) selected
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Step 2: Select Rotation Pattern */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                2
+              </div>
+              <div>
+                <CardTitle className="text-lg">Choose Rotation</CardTitle>
+                <CardDescription>Select the work rotation pattern</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              {patterns.map((pattern) => (
+                <div
+                  key={pattern.id}
+                  className={`p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                    selectedPattern === pattern.id
+                      ? "border-primary bg-primary/5"
+                      : "border-transparent bg-muted/50 hover:bg-muted"
+                  }`}
+                  onClick={() => setSelectedPattern(pattern.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{pattern.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {pattern.daysOn}/{pattern.daysOff}
+                    </span>
+                  </div>
+                  {pattern.description && (
+                    <p className="text-sm text-muted-foreground mt-1">{pattern.description}</p>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                      {pattern.daysOn} days on
+                    </span>
+                    <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                      {pattern.daysOff} days off
+                    </span>
+                    {pattern.includesNights && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        {pattern.nightDays} nights
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {patterns.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No rotation patterns found. <a href="/settings" className="text-primary hover:underline">Create one first</a>
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Step 3: Set Dates & Generate */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                3
+              </div>
+              <div>
+                <CardTitle className="text-lg">Set Dates</CardTitle>
+                <CardDescription>Choose the schedule period</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">End Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="border-t pt-4 space-y-2">
+              <h4 className="font-medium">Summary</h4>
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Workers:</span>
+                  <span className="font-medium">{selectedWorkers.size}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Pattern:</span>
+                  <span className="font-medium">
+                    {selectedPattern_obj ? selectedPattern_obj.name : "Not selected"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Period:</span>
+                  <span className="font-medium">
+                    {startDate && endDate
+                      ? `${Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))} days`
+                      : "Not set"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              className="w-full gap-2"
+              size="lg"
+              onClick={handleGenerate}
+              disabled={isGenerating || selectedWorkers.size === 0 || !selectedPattern}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  Generate Schedules
+                </>
+              )}
+            </Button>
+
+            {selectedWorkers.size > 0 && selectedPattern && (
+              <p className="text-xs text-center text-muted-foreground">
+                This will create schedules for {selectedWorkers.size} worker(s) using the{" "}
+                {selectedPattern_obj?.name} pattern
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Quick Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <a href="/workers">
+                <Users className="h-5 w-5" />
+                <span>Manage Workers</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <a href="/crews">
+                <Users className="h-5 w-5" />
+                <span>Manage Crews</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <a href="/schedule">
+                <Calendar className="h-5 w-5" />
+                <span>View Schedule</span>
+              </a>
+            </Button>
+            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <a href="/settings">
+                <ArrowRight className="h-5 w-5" />
+                <span>Edit Patterns</span>
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
