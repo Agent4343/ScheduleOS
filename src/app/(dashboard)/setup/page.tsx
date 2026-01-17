@@ -16,6 +16,8 @@ import {
   Wand2,
   ArrowRight,
   RefreshCw,
+  Plus,
+  X,
 } from "lucide-react"
 
 interface Worker {
@@ -72,30 +74,41 @@ export default function SetupPage() {
     return end.toISOString().split("T")[0]
   })
 
+  // Add worker form state
+  const [showAddWorker, setShowAddWorker] = useState(false)
+  const [isAddingWorker, setIsAddingWorker] = useState(false)
+  const [newWorker, setNewWorker] = useState({
+    name: "",
+    email: "",
+    position: "",
+    crewId: "",
+  })
+
+  // Fetch data function
+  const fetchData = async () => {
+    try {
+      const [workersRes, crewsRes, patternsRes] = await Promise.all([
+        fetch("/api/users?status=ACTIVE"),
+        fetch("/api/crews"),
+        fetch("/api/rotation-patterns"),
+      ])
+
+      const workersData = await workersRes.json()
+      const crewsData = await crewsRes.json()
+      const patternsData = await patternsRes.json()
+
+      if (workersData.success) setWorkers(workersData.data)
+      if (crewsData.success) setCrews(crewsData.data)
+      if (patternsData.success) setPatterns(patternsData.data)
+    } catch {
+      setError("Failed to load data")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Fetch data on mount
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [workersRes, crewsRes, patternsRes] = await Promise.all([
-          fetch("/api/users?status=ACTIVE"),
-          fetch("/api/crews"),
-          fetch("/api/rotation-patterns"),
-        ])
-
-        const workersData = await workersRes.json()
-        const crewsData = await crewsRes.json()
-        const patternsData = await patternsRes.json()
-
-        if (workersData.success) setWorkers(workersData.data)
-        if (crewsData.success) setCrews(crewsData.data)
-        if (patternsData.success) setPatterns(patternsData.data)
-      } catch {
-        setError("Failed to load data")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
     fetchData()
   }, [])
 
@@ -128,6 +141,51 @@ export default function SetupPage() {
       setSelectedWorkers(new Set())
     } else {
       setSelectedWorkers(new Set(workers.map((w) => w.id)))
+    }
+  }
+
+  const handleAddWorker = async () => {
+    if (!newWorker.name || !newWorker.email) {
+      setError("Name and email are required")
+      return
+    }
+
+    setIsAddingWorker(true)
+    setError("")
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newWorker.name,
+          email: newWorker.email,
+          position: newWorker.position || null,
+          crewId: newWorker.crewId || null,
+          role: "WORKER",
+          status: "ACTIVE",
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Refresh workers list
+        await fetchData()
+        // Auto-select the new worker
+        setSelectedWorkers((prev) => new Set([...prev, data.data.id]))
+        // Reset form
+        setNewWorker({ name: "", email: "", position: "", crewId: "" })
+        setShowAddWorker(false)
+        setSuccess(`Worker "${newWorker.name}" added successfully!`)
+        setTimeout(() => setSuccess(""), 3000)
+      } else {
+        setError(data.error || "Failed to add worker")
+      }
+    } catch {
+      setError("Failed to add worker. Please try again.")
+    } finally {
+      setIsAddingWorker(false)
     }
   }
 
@@ -311,6 +369,83 @@ export default function SetupPage() {
               <p className="text-sm text-muted-foreground mt-2">
                 {selectedWorkers.size} worker(s) selected
               </p>
+            </div>
+
+            {/* Quick Add Worker */}
+            <div className="border-t pt-4">
+              {!showAddWorker ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setShowAddWorker(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Quick Add Worker
+                </Button>
+              ) : (
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-medium">Add New Worker</Label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAddWorker(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Name *"
+                      value={newWorker.name}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, name: e.target.value })
+                      }
+                    />
+                    <Input
+                      type="email"
+                      placeholder="Email *"
+                      value={newWorker.email}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, email: e.target.value })
+                      }
+                    />
+                    <Input
+                      placeholder="Position (optional)"
+                      value={newWorker.position}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, position: e.target.value })
+                      }
+                    />
+                    <select
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                      value={newWorker.crewId}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, crewId: e.target.value })
+                      }
+                    >
+                      <option value="">No Crew (optional)</option>
+                      {crews.map((crew) => (
+                        <option key={crew.id} value={crew.id}>
+                          {crew.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    className="w-full gap-2"
+                    onClick={handleAddWorker}
+                    disabled={isAddingWorker || !newWorker.name || !newWorker.email}
+                  >
+                    {isAddingWorker ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    Add Worker
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
