@@ -22,8 +22,6 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
-  GripVertical,
-  ArrowUpDown,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -47,13 +45,6 @@ interface Crew {
   id: string
   name: string
   color: string
-  currentPhase?: number
-  rotationPattern?: {
-    id: string
-    name: string
-    daysOn: number
-    daysOff: number
-  } | null
 }
 
 interface Worker {
@@ -202,31 +193,7 @@ export default function SchedulePage() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
-  // Drag-and-drop reordering state
-  const [customOrder, setCustomOrder] = useState<string[]>([])
-  const [draggedWorker, setDraggedWorker] = useState<string | null>(null)
-  const [dragOverWorker, setDragOverWorker] = useState<string | null>(null)
-
-  // Bulk schedule generation state
-  const [bulkModalOpen, setBulkModalOpen] = useState(false)
-  const [bulkStartDate, setBulkStartDate] = useState<string>("")
-  const [bulkEndDate, setBulkEndDate] = useState<string>("")
-  const [bulkGenerating, setBulkGenerating] = useState(false)
-  const [bulkResult, setBulkResult] = useState<string | null>(null)
-
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
-
-  // Load custom order from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("schedule-worker-order")
-    if (saved) {
-      try {
-        setCustomOrder(JSON.parse(saved))
-      } catch {
-        // Ignore invalid JSON
-      }
-    }
-  }, [])
 
   // Group days by month for header
   const monthGroups = useMemo(() => {
@@ -345,20 +312,8 @@ export default function SchedulePage() {
     return map
   }, [schedules])
 
-  // Sort workers by custom order if set, otherwise by crew/position/name
+  // Sort workers by crew name, then position, then name
   const sortedWorkers = useMemo(() => {
-    if (customOrder.length > 0) {
-      // Use custom order, putting unknown workers at the end
-      const orderMap = new Map(customOrder.map((id, index) => [id, index]))
-      return [...workers].sort((a, b) => {
-        const aIndex = orderMap.get(a.id) ?? Infinity
-        const bIndex = orderMap.get(b.id) ?? Infinity
-        if (aIndex !== bIndex) return aIndex - bIndex
-        // Fallback for workers not in custom order
-        return (a.name || "").localeCompare(b.name || "")
-      })
-    }
-    // Default sort: crew name, then position, then name
     return [...workers].sort((a, b) => {
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
@@ -366,7 +321,7 @@ export default function SchedulePage() {
       if (posCompare !== 0) return posCompare
       return (a.name || "").localeCompare(b.name || "")
     })
-  }, [workers, customOrder])
+  }, [workers])
 
   function navigateYear(direction: number) {
     setCurrentYear(currentYear + direction)
@@ -410,153 +365,6 @@ export default function SchedulePage() {
     setEditModalOpen(false)
     setSelectedWorker(null)
     setSaveError(null)
-  }
-
-  // Drag-and-drop handlers
-  function handleDragStart(workerId: string) {
-    setDraggedWorker(workerId)
-  }
-
-  function handleDragOver(e: React.DragEvent, workerId: string) {
-    e.preventDefault()
-    if (workerId !== draggedWorker) {
-      setDragOverWorker(workerId)
-    }
-  }
-
-  function handleDragLeave() {
-    setDragOverWorker(null)
-  }
-
-  function handleDrop(targetWorkerId: string) {
-    if (!draggedWorker || draggedWorker === targetWorkerId) {
-      setDraggedWorker(null)
-      setDragOverWorker(null)
-      return
-    }
-
-    // Get current order (either custom or from sorted workers)
-    const currentIds = customOrder.length > 0
-      ? [...customOrder]
-      : sortedWorkers.map(w => w.id)
-
-    // Find positions
-    const draggedIndex = currentIds.indexOf(draggedWorker)
-    const targetIndex = currentIds.indexOf(targetWorkerId)
-
-    if (draggedIndex === -1 || targetIndex === -1) {
-      setDraggedWorker(null)
-      setDragOverWorker(null)
-      return
-    }
-
-    // Reorder
-    currentIds.splice(draggedIndex, 1)
-    currentIds.splice(targetIndex, 0, draggedWorker)
-
-    // Save to state and localStorage
-    setCustomOrder(currentIds)
-    localStorage.setItem("schedule-worker-order", JSON.stringify(currentIds))
-
-    setDraggedWorker(null)
-    setDragOverWorker(null)
-  }
-
-  function handleDragEnd() {
-    setDraggedWorker(null)
-    setDragOverWorker(null)
-  }
-
-  function resetWorkerOrder() {
-    setCustomOrder([])
-    localStorage.removeItem("schedule-worker-order")
-  }
-
-  function openBulkGenerateModal() {
-    const today = new Date()
-    setBulkStartDate(today.toISOString().split("T")[0])
-    const endOfYear = new Date(currentYear, 11, 31)
-    setBulkEndDate(endOfYear.toISOString().split("T")[0])
-    setBulkResult(null)
-    setBulkModalOpen(true)
-  }
-
-  async function handleBulkGenerate() {
-    if (!bulkStartDate || !bulkEndDate) return
-
-    setBulkGenerating(true)
-    setBulkResult(null)
-
-    try {
-      // Get workers to generate for (either filtered crew or all)
-      const workersToGenerate = sortedWorkers
-
-      let totalGenerated = 0
-      let successCount = 0
-      let errorCount = 0
-      let skippedCount = 0
-
-      for (const worker of workersToGenerate) {
-        // Find the crew's rotation pattern for this worker
-        const workerCrew = crews.find(c => c.id === worker.crew?.id)
-        const patternId = workerCrew?.rotationPattern?.id
-
-        if (!patternId) {
-          skippedCount++
-          continue // Skip workers without a crew rotation pattern
-        }
-
-        try {
-          const response = await fetch("/api/schedules", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: worker.id,
-              patternId: patternId,
-              startDate: bulkStartDate,
-              endDate: bulkEndDate,
-              startPhase: workerCrew?.currentPhase ?? 0,
-            }),
-          })
-
-          const result = await response.json()
-          if (result.success) {
-            totalGenerated += result.data?.daysGenerated || 0
-            successCount++
-          } else {
-            errorCount++
-          }
-        } catch {
-          errorCount++
-        }
-      }
-
-      let message = `Generated schedules for ${successCount} workers (${totalGenerated} total days)`
-      if (skippedCount > 0) {
-        message += `. ${skippedCount} skipped (no crew pattern).`
-      }
-      if (errorCount > 0) {
-        message += ` ${errorCount} failed.`
-      }
-      setBulkResult(message)
-
-      // Refresh schedules
-      const fetchStartDate = `${currentYear}-01-01`
-      const fetchEndDate = `${currentYear}-12-31`
-      let url = `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
-      if (selectedCrew) {
-        url += `&crewId=${selectedCrew}`
-      }
-      const schedulesResponse = await fetch(url)
-      const schedulesResult = await schedulesResponse.json()
-      if (schedulesResult.success) {
-        setSchedules(schedulesResult.data)
-      }
-    } catch {
-      setBulkResult("Failed to generate schedules")
-    } finally {
-      setBulkGenerating(false)
-    }
   }
 
   async function saveWorker() {
@@ -678,10 +486,6 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button onClick={openBulkGenerateModal}>
-            <CalendarPlus className="h-4 w-4 mr-2" />
-            Generate All
-          </Button>
           <Button variant="outline" size="sm" onClick={goToCurrentYear}>
             Today
           </Button>
@@ -754,38 +558,16 @@ export default function SchedulePage() {
                 {/* Fixed left column for worker info */}
                 <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
                   {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end justify-between p-2 bg-muted/50">
+                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
                     <span className="font-semibold text-sm">Worker</span>
-                    {customOrder.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 px-1 text-[10px]"
-                        onClick={resetWorkerOrder}
-                        title="Reset to default order"
-                      >
-                        <ArrowUpDown className="h-3 w-3 mr-1" />
-                        Reset
-                      </Button>
-                    )}
                   </div>
                   {/* Worker rows */}
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      draggable
-                      onDragStart={() => handleDragStart(worker.id)}
-                      onDragOver={(e) => handleDragOver(e, worker.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={() => handleDrop(worker.id)}
-                      onDragEnd={handleDragEnd}
-                      className={cn(
-                        "h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-grab group transition-colors",
-                        draggedWorker === worker.id && "opacity-50 bg-muted",
-                        dragOverWorker === worker.id && "bg-primary/20 border-t-2 border-t-primary"
-                      )}
+                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
+                      onClick={() => openEditModal(worker)}
                     >
-                      <GripVertical className="h-3 w-3 text-muted-foreground mr-1 flex-shrink-0 opacity-30 group-hover:opacity-100" />
                       <div
                         className={cn(
                           "w-2 h-6 rounded-full mr-2 flex-shrink-0",
@@ -793,20 +575,14 @@ export default function SchedulePage() {
                         )}
                         title={worker.position || "No position"}
                       />
-                      <div
-                        className="min-w-0 flex-1 cursor-pointer"
-                        onClick={() => openEditModal(worker)}
-                      >
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
                         <p className="text-[10px] text-muted-foreground truncate">
                           {worker.position || "No position"}
                           {worker.crew && ` • ${worker.crew.name}`}
                         </p>
                       </div>
-                      <Pencil
-                        className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1 cursor-pointer"
-                        onClick={() => openEditModal(worker)}
-                      />
+                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
                     </div>
                   ))}
                 </div>
@@ -1078,77 +854,6 @@ export default function SchedulePage() {
                 <>
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Generate Year Schedule
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Bulk Generate Modal */}
-      <Modal
-        isOpen={bulkModalOpen}
-        onClose={() => setBulkModalOpen(false)}
-        title="Generate All Schedules"
-        description="Generate schedules using each crew's assigned rotation pattern"
-      >
-        <div className="space-y-4">
-          {bulkResult && (
-            <div className={cn(
-              "p-3 text-sm rounded-md",
-              bulkResult.includes("Failed") ? "text-red-600 bg-red-50" : "text-green-600 bg-green-50"
-            )}>
-              {bulkResult}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="bulkStart">Start Date</Label>
-              <Input
-                id="bulkStart"
-                type="date"
-                value={bulkStartDate}
-                onChange={(e) => setBulkStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="bulkEnd">End Date</Label>
-              <Input
-                id="bulkEnd"
-                type="date"
-                value={bulkEndDate}
-                onChange={(e) => setBulkEndDate(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p>
-              This will generate schedules for {sortedWorkers.length} worker{sortedWorkers.length !== 1 ? "s" : ""}
-              using their crew&apos;s rotation pattern.
-              {selectedCrew && " (filtered by selected crew)"}
-            </p>
-            <p>Workers without a crew rotation pattern will be skipped.</p>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setBulkModalOpen(false)} disabled={bulkGenerating}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleBulkGenerate}
-              disabled={bulkGenerating || !bulkStartDate || !bulkEndDate}
-            >
-              {bulkGenerating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <CalendarPlus className="h-4 w-4 mr-2" />
-                  Generate for All Workers
                 </>
               )}
             </Button>
