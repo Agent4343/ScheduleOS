@@ -457,9 +457,11 @@ export default function SchedulePage() {
       // Refresh schedules
       const fetchStartDate = `${currentYear}-01-01`
       const fetchEndDate = `${currentYear}-12-31`
-      const schedulesResponse = await fetch(
-        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
-      )
+      let url = `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
+      if (selectedCrew) {
+        url += `&crewId=${selectedCrew}`
+      }
+      const schedulesResponse = await fetch(url)
       const schedulesResult = await schedulesResponse.json()
       if (schedulesResult.success) {
         setSchedules(schedulesResult.data)
