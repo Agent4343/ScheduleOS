@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { parse, isValid, format } from 'date-fns';
 
@@ -154,8 +155,12 @@ export async function POST(request: NextRequest) {
       where: { organizationId: user.organizationId },
       select: { id: true, name: true, email: true },
     });
-    const validUserIds = new Set(validUsers.map(u => u.id));
-    const userNameMap = new Map(validUsers.map(u => [u.id, u.name || u.email]));
+    const validUserIds = new Set<string>();
+    const userNameMap = new Map<string, string>();
+    for (const u of validUsers) {
+      validUserIds.add(u.id);
+      userNameMap.set(u.id, u.name || u.email);
+    }
 
     // Parse rows and find changes
     const changes: ScheduleChange[] = [];
@@ -226,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use transaction to apply all changes
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const change of changes) {
         const date = new Date(change.date);
 

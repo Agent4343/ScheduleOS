@@ -115,6 +115,9 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Define schedule type for filter callbacks
+    type ScheduleWithUser = typeof schedules[number];
+
     // Group schedules by date
     const schedulesByDate = new Map<string, typeof schedules>()
     for (const schedule of schedules) {
@@ -145,7 +148,7 @@ export async function GET(request: NextRequest) {
         const matchingShiftTypes = getMatchingShiftTypes(position.shiftType)
 
         // Find workers scheduled for this position's shift type
-        const workersForPosition = daySchedules.filter((s) => {
+        const workersForPosition = daySchedules.filter((s: ScheduleWithUser) => {
           const matchesShift = matchingShiftTypes.includes(s.shiftType)
           const matchesPosition =
             s.user.primaryPosition === position.name ||
@@ -155,7 +158,7 @@ export async function GET(request: NextRequest) {
         })
 
         // Also count workers on generic day/night shifts if no specific position match
-        const genericWorkers = daySchedules.filter((s) => {
+        const genericWorkers = daySchedules.filter((s: ScheduleWithUser) => {
           const matchesShift = matchingShiftTypes.includes(s.shiftType)
           const hasNoSpecificPosition = !s.user.primaryPosition
           return matchesShift && hasNoSpecificPosition && !workersForPosition.includes(s)
@@ -257,11 +260,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Summary statistics
+    type PositionType = typeof positions[number];
     const summary = {
       totalDays: dailyStaffing.length,
       daysWithGaps: dailyStaffing.filter((d) => d.hasGaps).length,
       totalGaps: gaps.length,
-      gapsByPosition: positions.map((p) => ({
+      gapsByPosition: positions.map((p: PositionType) => ({
         position: p.name,
         gapCount: gaps.filter((g) => g.position.id === p.id).length,
       })),

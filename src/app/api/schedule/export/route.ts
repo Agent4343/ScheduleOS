@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
     ];
 
     // Data rows
-    const rows = workers.map(worker => {
+    const rows = workers.map((worker: typeof workers[number]) => {
       const row: (string | null)[] = [
         worker.id,
         worker.name || worker.email,
