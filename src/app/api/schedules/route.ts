@@ -228,7 +228,7 @@ async function generateSchedules(
         userId,
         date: schedule.date,
         shiftType: schedule.shiftType,
-        crewId: user?.crewId,
+        crewId: user?.crewId ?? null,
         isOverride: false,
       })
     }
