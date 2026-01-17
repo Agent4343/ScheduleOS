@@ -47,6 +47,13 @@ interface Crew {
   id: string
   name: string
   color: string
+  currentPhase?: number
+  rotationPattern?: {
+    id: string
+    name: string
+    daysOn: number
+    daysOff: number
+  } | null
 }
 
 interface Worker {
@@ -202,7 +209,6 @@ export default function SchedulePage() {
 
   // Bulk schedule generation state
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
-  const [bulkPatternId, setBulkPatternId] = useState<string>("")
   const [bulkStartDate, setBulkStartDate] = useState<string>("")
   const [bulkEndDate, setBulkEndDate] = useState<string>("")
   const [bulkGenerating, setBulkGenerating] = useState(false)
@@ -471,13 +477,12 @@ export default function SchedulePage() {
     setBulkStartDate(today.toISOString().split("T")[0])
     const endOfYear = new Date(currentYear, 11, 31)
     setBulkEndDate(endOfYear.toISOString().split("T")[0])
-    setBulkPatternId("")
     setBulkResult(null)
     setBulkModalOpen(true)
   }
 
   async function handleBulkGenerate() {
-    if (!bulkPatternId || !bulkStartDate || !bulkEndDate) return
+    if (!bulkStartDate || !bulkEndDate) return
 
     setBulkGenerating(true)
     setBulkResult(null)
@@ -489,18 +494,28 @@ export default function SchedulePage() {
       let totalGenerated = 0
       let successCount = 0
       let errorCount = 0
+      let skippedCount = 0
 
       for (const worker of workersToGenerate) {
+        // Find the crew's rotation pattern for this worker
+        const workerCrew = crews.find(c => c.id === worker.crew?.id)
+        const patternId = workerCrew?.rotationPattern?.id
+
+        if (!patternId) {
+          skippedCount++
+          continue // Skip workers without a crew rotation pattern
+        }
+
         try {
           const response = await fetch("/api/schedules", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userId: worker.id,
-              patternId: bulkPatternId,
+              patternId: patternId,
               startDate: bulkStartDate,
               endDate: bulkEndDate,
-              startPhase: 0,
+              startPhase: workerCrew?.currentPhase ?? 0,
             }),
           })
 
@@ -516,9 +531,14 @@ export default function SchedulePage() {
         }
       }
 
-      setBulkResult(
-        `Generated schedules for ${successCount} workers (${totalGenerated} total days)${errorCount > 0 ? `. ${errorCount} failed.` : ""}`
-      )
+      let message = `Generated schedules for ${successCount} workers (${totalGenerated} total days)`
+      if (skippedCount > 0) {
+        message += `. ${skippedCount} skipped (no crew pattern).`
+      }
+      if (errorCount > 0) {
+        message += ` ${errorCount} failed.`
+      }
+      setBulkResult(message)
 
       // Refresh schedules
       const fetchStartDate = `${currentYear}-01-01`
@@ -1070,10 +1090,7 @@ export default function SchedulePage() {
         isOpen={bulkModalOpen}
         onClose={() => setBulkModalOpen(false)}
         title="Generate All Schedules"
-        description={selectedCrew
-          ? `Generate schedules for all ${sortedWorkers.length} workers in selected crew`
-          : `Generate schedules for all ${sortedWorkers.length} workers`
-        }
+        description="Generate schedules using each crew's assigned rotation pattern"
       >
         <div className="space-y-4">
           {bulkResult && (
@@ -1084,22 +1101,6 @@ export default function SchedulePage() {
               {bulkResult}
             </div>
           )}
-
-          <div className="space-y-2">
-            <Label htmlFor="bulkPattern">Rotation Pattern</Label>
-            <Select
-              id="bulkPattern"
-              value={bulkPatternId}
-              onChange={(e) => setBulkPatternId(e.target.value)}
-              options={[
-                { value: "", label: "Select a pattern..." },
-                ...rotationPatterns.map((p) => ({
-                  value: p.id,
-                  label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? `, ${p.nightDays} nights` : ""})`,
-                })),
-              ]}
-            />
-          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -1122,10 +1123,14 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
-            This will generate schedules for {sortedWorkers.length} worker{sortedWorkers.length !== 1 ? "s" : ""}.
-            {selectedCrew && " (filtered by selected crew)"}
-          </p>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>
+              This will generate schedules for {sortedWorkers.length} worker{sortedWorkers.length !== 1 ? "s" : ""}
+              using their crew&apos;s rotation pattern.
+              {selectedCrew && " (filtered by selected crew)"}
+            </p>
+            <p>Workers without a crew rotation pattern will be skipped.</p>
+          </div>
 
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => setBulkModalOpen(false)} disabled={bulkGenerating}>
@@ -1133,7 +1138,7 @@ export default function SchedulePage() {
             </Button>
             <Button
               onClick={handleBulkGenerate}
-              disabled={bulkGenerating || !bulkPatternId || !bulkStartDate || !bulkEndDate}
+              disabled={bulkGenerating || !bulkStartDate || !bulkEndDate}
             >
               {bulkGenerating ? (
                 <>
