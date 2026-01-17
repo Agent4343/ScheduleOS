@@ -45,6 +45,11 @@ interface Crew {
   id: string
   name: string
   color: string
+  currentPhase?: number
+  rotationPattern?: {
+    id: string
+    name: string
+  } | null
 }
 
 interface Worker {
@@ -192,6 +197,13 @@ export default function SchedulePage() {
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
+
+  // Bulk generation state
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
+  const [bulkStartDate, setBulkStartDate] = useState<string>("")
+  const [bulkEndDate, setBulkEndDate] = useState<string>("")
+  const [bulkGenerating, setBulkGenerating] = useState(false)
+  const [bulkResult, setBulkResult] = useState<string | null>(null)
 
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
@@ -367,6 +379,77 @@ export default function SchedulePage() {
     setSaveError(null)
   }
 
+  function openBulkModal() {
+    const today = new Date()
+    setBulkStartDate(today.toISOString().split("T")[0])
+    const endOfYear = new Date(currentYear, 11, 31)
+    setBulkEndDate(endOfYear.toISOString().split("T")[0])
+    setBulkResult(null)
+    setBulkModalOpen(true)
+  }
+
+  async function handleBulkGenerate() {
+    if (!bulkStartDate || !bulkEndDate) return
+
+    setBulkGenerating(true)
+    setBulkResult(null)
+
+    let successCount = 0
+    let errorCount = 0
+    let skippedCount = 0
+    let totalDays = 0
+
+    for (const worker of workers) {
+      // Find crew's rotation pattern
+      const workerCrew = crews.find(c => c.id === worker.crew?.id)
+      if (!workerCrew?.rotationPattern?.id) {
+        skippedCount++
+        continue
+      }
+
+      try {
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: worker.id,
+            patternId: workerCrew.rotationPattern.id,
+            startDate: bulkStartDate,
+            endDate: bulkEndDate,
+            startPhase: workerCrew.currentPhase ?? 0,
+          }),
+        })
+
+        const result = await response.json()
+        if (result.success) {
+          successCount++
+          totalDays += result.data?.daysGenerated || 0
+        } else {
+          errorCount++
+        }
+      } catch {
+        errorCount++
+      }
+    }
+
+    let msg = `Generated ${totalDays} days for ${successCount} workers`
+    if (skippedCount > 0) msg += `, ${skippedCount} skipped (no pattern)`
+    if (errorCount > 0) msg += `, ${errorCount} failed`
+    setBulkResult(msg)
+
+    // Refresh schedules
+    const fetchStart = `${currentYear}-01-01`
+    const fetchEnd = `${currentYear}-12-31`
+    let url = `/api/schedules?startDate=${fetchStart}&endDate=${fetchEnd}`
+    if (selectedCrew) url += `&crewId=${selectedCrew}`
+
+    const res = await fetch(url)
+    const data = await res.json()
+    if (data.success) setSchedules(data.data)
+
+    setBulkGenerating(false)
+  }
+
   async function saveWorker() {
     if (!selectedWorker) return
 
@@ -488,6 +571,10 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button size="sm" onClick={openBulkModal}>
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Generate All
+          </Button>
           <Button variant="outline" size="sm" onClick={goToCurrentYear}>
             Today
           </Button>
@@ -856,6 +943,70 @@ export default function SchedulePage() {
                 <>
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Generate Year Schedule
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Generate Modal */}
+      <Modal
+        isOpen={bulkModalOpen}
+        onClose={() => setBulkModalOpen(false)}
+        title="Generate All Schedules"
+        description="Generate schedules using each crew's rotation pattern"
+      >
+        <div className="space-y-4">
+          {bulkResult && (
+            <div className={cn(
+              "p-3 text-sm rounded-md",
+              bulkResult.includes("failed") ? "bg-yellow-50 text-yellow-800" : "bg-green-50 text-green-800"
+            )}>
+              {bulkResult}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulkStart">Start Date</Label>
+              <Input
+                id="bulkStart"
+                type="date"
+                value={bulkStartDate}
+                onChange={(e) => setBulkStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bulkEnd">End Date</Label>
+              <Input
+                id="bulkEnd"
+                type="date"
+                value={bulkEndDate}
+                onChange={(e) => setBulkEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Each worker will use their crew&apos;s assigned rotation pattern.
+            Workers without a crew pattern will be skipped.
+          </p>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setBulkModalOpen(false)} disabled={bulkGenerating}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkGenerate} disabled={bulkGenerating || !bulkStartDate || !bulkEndDate}>
+              {bulkGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <CalendarPlus className="h-4 w-4 mr-2" />
+                  Generate All
                 </>
               )}
             </Button>
