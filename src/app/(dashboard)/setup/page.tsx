@@ -176,7 +176,7 @@ export default function SetupPage() {
         // Refresh workers list
         await fetchData()
         // Auto-select the new worker
-        setSelectedWorkers((prev) => new Set([...prev, data.data.id]))
+        setSelectedWorkers((prev) => new Set([...Array.from(prev), data.data.id]))
         // Reset form
         setNewWorker({ name: "", email: "", position: "", crewId: "" })
         setShowAddWorker(false)
