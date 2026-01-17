@@ -22,6 +22,8 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  GripVertical,
+  ArrowUpDown,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -193,7 +195,24 @@ export default function SchedulePage() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
+  // Drag-and-drop reordering state
+  const [customOrder, setCustomOrder] = useState<string[]>([])
+  const [draggedWorker, setDraggedWorker] = useState<string | null>(null)
+  const [dragOverWorker, setDragOverWorker] = useState<string | null>(null)
+
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
+
+  // Load custom order from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("schedule-worker-order")
+    if (saved) {
+      try {
+        setCustomOrder(JSON.parse(saved))
+      } catch {
+        // Ignore invalid JSON
+      }
+    }
+  }, [])
 
   // Group days by month for header
   const monthGroups = useMemo(() => {
@@ -312,8 +331,20 @@ export default function SchedulePage() {
     return map
   }, [schedules])
 
-  // Sort workers by crew name, then position, then name
+  // Sort workers by custom order if set, otherwise by crew/position/name
   const sortedWorkers = useMemo(() => {
+    if (customOrder.length > 0) {
+      // Use custom order, putting unknown workers at the end
+      const orderMap = new Map(customOrder.map((id, index) => [id, index]))
+      return [...workers].sort((a, b) => {
+        const aIndex = orderMap.get(a.id) ?? Infinity
+        const bIndex = orderMap.get(b.id) ?? Infinity
+        if (aIndex !== bIndex) return aIndex - bIndex
+        // Fallback for workers not in custom order
+        return (a.name || "").localeCompare(b.name || "")
+      })
+    }
+    // Default sort: crew name, then position, then name
     return [...workers].sort((a, b) => {
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
@@ -321,7 +352,7 @@ export default function SchedulePage() {
       if (posCompare !== 0) return posCompare
       return (a.name || "").localeCompare(b.name || "")
     })
-  }, [workers])
+  }, [workers, customOrder])
 
   function navigateYear(direction: number) {
     setCurrentYear(currentYear + direction)
@@ -365,6 +396,66 @@ export default function SchedulePage() {
     setEditModalOpen(false)
     setSelectedWorker(null)
     setSaveError(null)
+  }
+
+  // Drag-and-drop handlers
+  function handleDragStart(workerId: string) {
+    setDraggedWorker(workerId)
+  }
+
+  function handleDragOver(e: React.DragEvent, workerId: string) {
+    e.preventDefault()
+    if (workerId !== draggedWorker) {
+      setDragOverWorker(workerId)
+    }
+  }
+
+  function handleDragLeave() {
+    setDragOverWorker(null)
+  }
+
+  function handleDrop(targetWorkerId: string) {
+    if (!draggedWorker || draggedWorker === targetWorkerId) {
+      setDraggedWorker(null)
+      setDragOverWorker(null)
+      return
+    }
+
+    // Get current order (either custom or from sorted workers)
+    const currentIds = customOrder.length > 0
+      ? [...customOrder]
+      : sortedWorkers.map(w => w.id)
+
+    // Find positions
+    const draggedIndex = currentIds.indexOf(draggedWorker)
+    const targetIndex = currentIds.indexOf(targetWorkerId)
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedWorker(null)
+      setDragOverWorker(null)
+      return
+    }
+
+    // Reorder
+    currentIds.splice(draggedIndex, 1)
+    currentIds.splice(targetIndex, 0, draggedWorker)
+
+    // Save to state and localStorage
+    setCustomOrder(currentIds)
+    localStorage.setItem("schedule-worker-order", JSON.stringify(currentIds))
+
+    setDraggedWorker(null)
+    setDragOverWorker(null)
+  }
+
+  function handleDragEnd() {
+    setDraggedWorker(null)
+    setDragOverWorker(null)
+  }
+
+  function resetWorkerOrder() {
+    setCustomOrder([])
+    localStorage.removeItem("schedule-worker-order")
   }
 
   async function saveWorker() {
@@ -558,16 +649,38 @@ export default function SchedulePage() {
                 {/* Fixed left column for worker info */}
                 <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
                   {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
+                  <div className="h-16 border-b flex items-end justify-between p-2 bg-muted/50">
                     <span className="font-semibold text-sm">Worker</span>
+                    {customOrder.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1 text-[10px]"
+                        onClick={resetWorkerOrder}
+                        title="Reset to default order"
+                      >
+                        <ArrowUpDown className="h-3 w-3 mr-1" />
+                        Reset
+                      </Button>
+                    )}
                   </div>
                   {/* Worker rows */}
                   {sortedWorkers.map((worker) => (
                     <div
                       key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
-                      onClick={() => openEditModal(worker)}
+                      draggable
+                      onDragStart={() => handleDragStart(worker.id)}
+                      onDragOver={(e) => handleDragOver(e, worker.id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={() => handleDrop(worker.id)}
+                      onDragEnd={handleDragEnd}
+                      className={cn(
+                        "h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-grab group transition-colors",
+                        draggedWorker === worker.id && "opacity-50 bg-muted",
+                        dragOverWorker === worker.id && "bg-primary/20 border-t-2 border-t-primary"
+                      )}
                     >
+                      <GripVertical className="h-3 w-3 text-muted-foreground mr-1 flex-shrink-0 opacity-30 group-hover:opacity-100" />
                       <div
                         className={cn(
                           "w-2 h-6 rounded-full mr-2 flex-shrink-0",
@@ -575,14 +688,20 @@ export default function SchedulePage() {
                         )}
                         title={worker.position || "No position"}
                       />
-                      <div className="min-w-0 flex-1">
+                      <div
+                        className="min-w-0 flex-1 cursor-pointer"
+                        onClick={() => openEditModal(worker)}
+                      >
                         <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
                         <p className="text-[10px] text-muted-foreground truncate">
                           {worker.position || "No position"}
                           {worker.crew && ` • ${worker.crew.name}`}
                         </p>
                       </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                      <Pencil
+                        className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1 cursor-pointer"
+                        onClick={() => openEditModal(worker)}
+                      />
                     </div>
                   ))}
                 </div>
