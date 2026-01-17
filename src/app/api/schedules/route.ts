@@ -225,22 +225,25 @@ async function generateSchedules(
     }
   }
 
-  // Delete existing non-override schedules in range
-  await prisma.schedule.deleteMany({
-    where: {
-      userId: { in: userIds },
-      date: {
-        gte: new Date(validatedData.startDate),
-        lte: new Date(validatedData.endDate),
+  // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
+  await prisma.$transaction(async (tx) => {
+    // Delete existing non-override schedules in range
+    await tx.schedule.deleteMany({
+      where: {
+        userId: { in: userIds },
+        date: {
+          gte: new Date(validatedData.startDate),
+          lte: new Date(validatedData.endDate),
+        },
+        isOverride: false,
       },
-      isOverride: false,
-    },
-  })
+    })
 
-  // Create new schedules
-  await prisma.schedule.createMany({
-    data: scheduleData,
-    skipDuplicates: true,
+    // Create new schedules
+    await tx.schedule.createMany({
+      data: scheduleData,
+      skipDuplicates: true,
+    })
   })
 
   return NextResponse.json({
