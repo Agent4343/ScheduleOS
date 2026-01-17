@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
@@ -207,7 +208,7 @@ async function generateSchedules(
   )
 
   // Create schedules for all users
-  const scheduleData = []
+  const scheduleData: Prisma.ScheduleCreateManyInput[] = []
   for (const userId of userIds) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
