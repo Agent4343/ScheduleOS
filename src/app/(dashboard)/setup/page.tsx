@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -88,7 +88,7 @@ export default function SetupPage() {
   })
 
   // Fetch data function
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [workersRes, crewsRes, patternsRes] = await Promise.all([
         fetch("/api/users?status=ACTIVE"),
@@ -108,12 +108,12 @@ export default function SetupPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   // Fetch data on mount
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [fetchData])
 
   // When crew is selected, auto-select workers in that crew
   useEffect(() => {

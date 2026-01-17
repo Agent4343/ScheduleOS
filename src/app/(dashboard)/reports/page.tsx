@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -80,7 +80,7 @@ export default function ReportsPage() {
     crews: [],
   })
 
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     setIsLoading(true)
     try {
       // Fetch schedules for date range
@@ -144,11 +144,11 @@ export default function ReportsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [startDate, endDate])
 
   useEffect(() => {
     fetchReportData()
-  }, [])
+  }, [fetchReportData])
 
   const handleRefresh = () => {
     fetchReportData()
