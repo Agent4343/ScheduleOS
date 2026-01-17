@@ -68,11 +68,14 @@ export default function SetupPage() {
     const today = new Date()
     return today.toISOString().split("T")[0]
   })
-  const [endDate, setEndDate] = useState(() => {
-    const end = new Date()
-    end.setFullYear(end.getFullYear() + 1)
-    return end.toISOString().split("T")[0]
-  })
+  const [duration, setDuration] = useState("12") // months
+
+  // Calculate end date from duration
+  const getEndDate = () => {
+    const start = new Date(startDate)
+    start.setMonth(start.getMonth() + parseInt(duration))
+    return start.toISOString().split("T")[0]
+  }
 
   // Add worker form state
   const [showAddWorker, setShowAddWorker] = useState(false)
@@ -198,10 +201,12 @@ export default function SetupPage() {
       setError("Please select a rotation pattern")
       return
     }
-    if (!startDate || !endDate) {
-      setError("Please select start and end dates")
+    if (!startDate) {
+      setError("Please select a start date")
       return
     }
+
+    const endDate = getEndDate()
 
     setIsGenerating(true)
     setError("")
@@ -533,13 +538,30 @@ export default function SetupPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="endDate">End Date</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
+                <Label htmlFor="duration">Schedule Duration</Label>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {[
+                    { value: "3", label: "3 mo" },
+                    { value: "6", label: "6 mo" },
+                    { value: "12", label: "1 year" },
+                    { value: "18", label: "18 mo" },
+                    { value: "24", label: "2 years" },
+                    { value: "36", label: "3 years" },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      variant={duration === option.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setDuration(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Schedules will generate until {new Date(getEndDate()).toLocaleDateString()}
+                </p>
               </div>
             </div>
 
@@ -558,11 +580,11 @@ export default function SetupPage() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Period:</span>
+                  <span className="text-muted-foreground">Duration:</span>
                   <span className="font-medium">
-                    {startDate && endDate
-                      ? `${Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24))} days`
-                      : "Not set"}
+                    {parseInt(duration) >= 12
+                      ? `${parseInt(duration) / 12} year${parseInt(duration) > 12 ? "s" : ""}`
+                      : `${duration} months`}
                   </span>
                 </div>
               </div>
