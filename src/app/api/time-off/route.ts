@@ -190,7 +190,7 @@ export async function POST(request: NextRequest) {
     })
 
     await prisma.notification.createMany({
-      data: supervisors.map(supervisor => ({
+      data: supervisors.map((supervisor: { id: string }) => ({
         userId: supervisor.id,
         type: "TIME_OFF_REQUEST",
         title: "New Time Off Request",

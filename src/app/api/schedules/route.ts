@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
 import { generateRotationSchedule } from "@/lib/scheduling"
+
+// Type for schedule creation data
+interface ScheduleCreateInput {
+  userId: string
+  date: Date
+  shiftType: string
+  crewId: string | null
+  isOverride: boolean
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -185,7 +193,7 @@ async function generateSchedules(
       where: { crewId: validatedData.crewId, organizationId, status: "ACTIVE" },
       select: { id: true, crewId: true },
     })
-    userIds = crewUsers.map(u => u.id)
+    userIds = crewUsers.map((u: { id: string }) => u.id)
   } else {
     return NextResponse.json(
       { error: "Either userId or crewId is required" },
@@ -208,7 +216,7 @@ async function generateSchedules(
   )
 
   // Create schedules for all users
-  const scheduleData: Prisma.ScheduleCreateManyInput[] = []
+  const scheduleData: ScheduleCreateInput[] = []
   for (const userId of userIds) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -227,7 +235,7 @@ async function generateSchedules(
   }
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: typeof prisma) => {
     // Delete existing non-override schedules in range
     await tx.schedule.deleteMany({
       where: {
