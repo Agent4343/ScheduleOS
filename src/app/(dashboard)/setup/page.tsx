@@ -73,6 +73,7 @@ export default function SetupPage() {
   const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
   const [customEndDate, setCustomEndDate] = useState("")
   const [startShift, setStartShift] = useState<"day" | "night">("day")
+  const [clearOverrides, setClearOverrides] = useState(false)
 
   // Calculate end date from duration or custom selection
   const getEndDate = () => {
@@ -243,6 +244,7 @@ export default function SetupPage() {
           startDate,
           endDate,
           startPhase: 0,
+          clearOverrides,
           // Send startingShift if pattern includes nights
           ...(pattern?.includesNights && {
             startingShift: startShift === "day" ? "DAY" : "NIGHT",
@@ -717,6 +719,24 @@ export default function SetupPage() {
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="clearOverrides"
+                checked={clearOverrides}
+                onChange={(e) => setClearOverrides(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="clearOverrides" className="text-sm">
+                Clear manual edits
+              </label>
+            </div>
+            {clearOverrides && (
+              <p className="text-xs text-orange-600">
+                Warning: This will delete all manually edited shifts for selected workers
+              </p>
+            )}
 
             <Button
               className="w-full gap-2"
