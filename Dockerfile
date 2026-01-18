@@ -34,10 +34,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # Build arguments for environment variables needed at build time
-ARG NEXTAUTH_URL
-ARG NEXTAUTH_SECRET
+# Note: NEXTAUTH_SECRET is provided at runtime, not build time
+ARG NEXTAUTH_URL=http://localhost:3000
+
+# Use a placeholder secret for build (actual secret provided at runtime)
+ENV NEXTAUTH_SECRET=build-time-placeholder-secret-do-not-use-in-production
 
 RUN npm run build
+
+# Clear the build-time placeholder
+ENV NEXTAUTH_SECRET=
 
 
 # Stage 3: Production runner
