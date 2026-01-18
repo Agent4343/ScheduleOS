@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
       },
       update: {
         shiftType: validatedData.shiftType,
+        customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? true,
         overrideReason: validatedData.overrideReason,
         notes: validatedData.notes,
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
         userId: validatedData.userId,
         date: new Date(validatedData.date),
         shiftType: validatedData.shiftType,
+        customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? false,
         overrideReason: validatedData.overrideReason,
         notes: validatedData.notes,

@@ -19,6 +19,7 @@ import {
   Pencil,
   Trash2,
   X,
+  Palette,
 } from "lucide-react"
 
 interface Organization {
@@ -64,6 +65,24 @@ interface NewPattern {
   nightsAtStart: boolean
 }
 
+interface CustomShiftType {
+  id: string
+  code: string
+  name: string
+  color: string
+  textColor: string
+  description: string | null
+  isActive: boolean
+}
+
+interface NewShiftType {
+  code: string
+  name: string
+  color: string
+  textColor: string
+  description: string
+}
+
 export default function SettingsPage() {
   const { data: session } = useSession()
   const [organization, setOrganization] = useState<Organization | null>(null)
@@ -84,6 +103,19 @@ export default function SettingsPage() {
     includesNights: false,
     nightDays: 0,
     nightsAtStart: true,
+  })
+
+  // Custom shift type state
+  const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
+  const [showShiftTypeForm, setShowShiftTypeForm] = useState(false)
+  const [editingShiftType, setEditingShiftType] = useState<CustomShiftType | null>(null)
+  const [savingShiftType, setSavingShiftType] = useState(false)
+  const [newShiftType, setNewShiftType] = useState<NewShiftType>({
+    code: "",
+    name: "",
+    color: "#6b7280",
+    textColor: "#ffffff",
+    description: "",
   })
 
   const isAdmin = session?.user?.role === "ADMIN"
@@ -183,19 +215,114 @@ export default function SettingsPage() {
     }
   }
 
+  // Custom shift type handlers
+  const resetShiftTypeForm = () => {
+    setNewShiftType({
+      code: "",
+      name: "",
+      color: "#6b7280",
+      textColor: "#ffffff",
+      description: "",
+    })
+    setEditingShiftType(null)
+    setShowShiftTypeForm(false)
+  }
+
+  const startEditShiftType = (shiftType: CustomShiftType) => {
+    setEditingShiftType(shiftType)
+    setNewShiftType({
+      code: shiftType.code,
+      name: shiftType.name,
+      color: shiftType.color,
+      textColor: shiftType.textColor,
+      description: shiftType.description || "",
+    })
+    setShowShiftTypeForm(true)
+  }
+
+  const handleSaveShiftType = async () => {
+    if (!newShiftType.code.trim() || !newShiftType.name.trim()) {
+      setMessage("Code and name are required")
+      return
+    }
+
+    setSavingShiftType(true)
+    setMessage("")
+
+    try {
+      const url = editingShiftType
+        ? `/api/custom-shift-types/${editingShiftType.id}`
+        : "/api/custom-shift-types"
+
+      const response = await fetch(url, {
+        method: editingShiftType ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newShiftType),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Refresh shift types list
+        const shiftTypesRes = await fetch("/api/custom-shift-types")
+        const shiftTypesData = await shiftTypesRes.json()
+        if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
+
+        setMessage(editingShiftType ? "Shift type updated successfully" : "Shift type created successfully")
+        resetShiftTypeForm()
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to save shift type")
+      }
+    } catch (error) {
+      console.error("Failed to save shift type:", error)
+      setMessage("Failed to save shift type")
+    } finally {
+      setSavingShiftType(false)
+    }
+  }
+
+  const handleDeleteShiftType = async (shiftTypeId: string) => {
+    if (!confirm("Are you sure you want to delete this shift type?")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/custom-shift-types/${shiftTypeId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCustomShiftTypes(customShiftTypes.filter(st => st.id !== shiftTypeId))
+        setMessage("Shift type deleted successfully")
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to delete shift type")
+      }
+    } catch (error) {
+      console.error("Failed to delete shift type:", error)
+      setMessage("Failed to delete shift type")
+    }
+  }
+
   useEffect(() => {
     async function fetchData() {
       try {
-        const [orgRes, patternsRes] = await Promise.all([
+        const [orgRes, patternsRes, shiftTypesRes] = await Promise.all([
           fetch("/api/organization"),
           fetch("/api/rotation-patterns"),
+          fetch("/api/custom-shift-types"),
         ])
 
         const orgData = await orgRes.json()
         const patternsData = await patternsRes.json()
+        const shiftTypesData = await shiftTypesRes.json()
 
         if (orgData.success) setOrganization(orgData.data)
         if (patternsData.success) setPatterns(patternsData.data)
+        if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -582,6 +709,190 @@ export default function SettingsPage() {
               {patterns.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">
                   No rotation patterns configured
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Custom Shift Types */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="h-5 w-5" />
+                  Custom Shift Types
+                </CardTitle>
+                <CardDescription>Create custom shift types for your organization</CardDescription>
+              </div>
+              {isAdmin && !showShiftTypeForm && (
+                <Button size="sm" onClick={() => setShowShiftTypeForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Shift Type
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Built-in types info */}
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-2">
+                <strong>Built-in shift types:</strong> Day, Night, Off, Leave, Vacation, Sick, Training, Shutdown, PL Day, PL Night
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Create custom shift types below for additional needs like Bereavement, Jury Duty, Medical Leave, etc.
+              </p>
+            </div>
+
+            {/* Shift Type Form */}
+            {showShiftTypeForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">
+                    {editingShiftType ? "Edit Shift Type" : "New Shift Type"}
+                  </h4>
+                  <Button variant="ghost" size="sm" onClick={resetShiftTypeForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="shiftCode">Code (1-10 chars)</Label>
+                    <Input
+                      id="shiftCode"
+                      placeholder="e.g., BRV, JD, MED"
+                      value={newShiftType.code}
+                      onChange={(e) => setNewShiftType({ ...newShiftType, code: e.target.value.toUpperCase() })}
+                      maxLength={10}
+                    />
+                    <p className="text-xs text-muted-foreground">Short code shown in calendar cells</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shiftName">Name</Label>
+                    <Input
+                      id="shiftName"
+                      placeholder="e.g., Bereavement"
+                      value={newShiftType.name}
+                      onChange={(e) => setNewShiftType({ ...newShiftType, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shiftColor">Background Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="shiftColor"
+                        type="color"
+                        value={newShiftType.color}
+                        onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
+                        className="w-16 h-10 p-1"
+                      />
+                      <Input
+                        value={newShiftType.color}
+                        onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
+                        placeholder="#6b7280"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shiftTextColor">Text Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="shiftTextColor"
+                        type="color"
+                        value={newShiftType.textColor}
+                        onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
+                        className="w-16 h-10 p-1"
+                      />
+                      <Input
+                        value={newShiftType.textColor}
+                        onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
+                        placeholder="#ffffff"
+                      />
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="shiftDesc">Description (optional)</Label>
+                    <Input
+                      id="shiftDesc"
+                      placeholder="e.g., For family bereavement leave"
+                      value={newShiftType.description}
+                      onChange={(e) => setNewShiftType({ ...newShiftType, description: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Preview</Label>
+                    <div className="mt-2 flex items-center gap-4">
+                      <div
+                        className="px-3 py-2 rounded text-sm font-bold"
+                        style={{ backgroundColor: newShiftType.color, color: newShiftType.textColor }}
+                      >
+                        {newShiftType.code || "CODE"}
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {newShiftType.name || "Shift Name"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetShiftTypeForm}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveShiftType} disabled={savingShiftType}>
+                    {savingShiftType ? "Saving..." : editingShiftType ? "Update Shift Type" : "Create Shift Type"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Shift Types List */}
+            <div className="space-y-2">
+              {customShiftTypes.map((shiftType) => (
+                <div
+                  key={shiftType.id}
+                  className="flex items-center justify-between p-3 rounded border"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="px-2 py-1 rounded text-xs font-bold min-w-[40px] text-center"
+                      style={{ backgroundColor: shiftType.color, color: shiftType.textColor }}
+                    >
+                      {shiftType.code}
+                    </div>
+                    <div>
+                      <p className="font-medium">{shiftType.name}</p>
+                      {shiftType.description && (
+                        <p className="text-sm text-muted-foreground">{shiftType.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!shiftType.isActive && <Badge variant="secondary">Inactive</Badge>}
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEditShiftType(shiftType)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteShiftType(shiftType.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {customShiftTypes.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No custom shift types created yet
                 </p>
               )}
             </div>

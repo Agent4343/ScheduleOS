@@ -77,6 +77,7 @@ export const createScheduleSchema = z.object({
   userId: z.string(),
   date: z.coerce.date(),
   shiftType: z.nativeEnum(ShiftType),
+  customShiftCode: z.string().optional(),
   isOverride: z.boolean().default(false),
   overrideReason: z.string().optional(),
   notes: z.string().optional(),

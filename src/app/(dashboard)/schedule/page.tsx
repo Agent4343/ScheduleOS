@@ -26,6 +26,7 @@ interface Schedule {
   id: string
   date: string
   shiftType: ShiftType
+  customShiftCode: string | null
   user: {
     id: string
     name: string
@@ -77,8 +78,18 @@ interface RotationPattern {
   nightDays: number
 }
 
-// Shift colors for the Excel-like cells
-const SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+interface CustomShiftType {
+  id: string
+  code: string
+  name: string
+  color: string
+  textColor: string
+  description: string | null
+  isActive: boolean
+}
+
+// Built-in shift colors for the Excel-like cells
+const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
   NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
   OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
@@ -127,6 +138,7 @@ function SchedulePageContent() {
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
+  const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -163,6 +175,21 @@ function SchedulePageContent() {
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
 
+  // Combine built-in and custom shift styles
+  const SHIFT_STYLES = useMemo(() => {
+    const styles = { ...BUILT_IN_SHIFT_STYLES }
+    for (const customType of customShiftTypes) {
+      if (customType.isActive) {
+        styles[`CUSTOM:${customType.code}`] = {
+          bg: customType.color,
+          text: customType.textColor,
+          label: customType.code,
+        }
+      }
+    }
+    return styles
+  }, [customShiftTypes])
+
   // Fetch crews
   useEffect(() => {
     async function fetchCrews() {
@@ -193,6 +220,22 @@ function SchedulePageContent() {
       }
     }
     fetchPatterns()
+  }, [])
+
+  // Fetch custom shift types
+  useEffect(() => {
+    async function fetchCustomShiftTypes() {
+      try {
+        const response = await fetch("/api/custom-shift-types")
+        const result = await response.json()
+        if (result.success) {
+          setCustomShiftTypes(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom shift types:", error)
+      }
+    }
+    fetchCustomShiftTypes()
   }, [])
 
   // Fetch workers
@@ -448,6 +491,11 @@ function SchedulePageContent() {
         current.setDate(current.getDate() + 1)
       }
 
+      // Determine if this is a custom shift type
+      const isCustomType = scheduleEditShiftType.startsWith("CUSTOM:")
+      const actualShiftType = isCustomType ? "CUSTOM" : scheduleEditShiftType
+      const customShiftCode = isCustomType ? scheduleEditShiftType.split(":")[1] : undefined
+
       // Update each date
       for (const dateStr of datesToUpdate) {
         const response = await fetch("/api/schedules", {
@@ -456,7 +504,8 @@ function SchedulePageContent() {
           body: JSON.stringify({
             userId: scheduleEditWorker.id,
             date: dateStr,
-            shiftType: scheduleEditShiftType,
+            shiftType: actualShiftType,
+            customShiftCode: customShiftCode,
             isOverride: true,
             overrideReason: scheduleEditReason || undefined,
           }),
@@ -468,7 +517,10 @@ function SchedulePageContent() {
         }
       }
 
-      setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s) to ${scheduleEditShiftType}`)
+      const displayName = isCustomType
+        ? customShiftTypes.find(t => t.code === customShiftCode)?.name || customShiftCode
+        : scheduleEditShiftType
+      setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s) to ${displayName}`)
 
       // Refresh schedules
       const schedulesResponse = await fetch(
@@ -641,7 +693,13 @@ function SchedulePageContent() {
                           const date = new Date(currentYear, month, day)
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6
                           const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-                          const style = schedule ? SHIFT_STYLES[schedule.shiftType] : null
+                          // Handle custom shift types by building the key
+                          const shiftKey = schedule
+                            ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+                              ? `CUSTOM:${schedule.customShiftCode}`
+                              : schedule.shiftType
+                            : null
+                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
 
                           return (
                             <td
@@ -656,7 +714,7 @@ function SchedulePageContent() {
                                   ? { backgroundColor: style.bg, color: style.text }
                                   : undefined
                               }
-                              title={schedule ? `${schedule.shiftType} - Click to edit` : "Click to add schedule"}
+                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
                               onClick={() => openScheduleEditModal(worker, month, day)}
                             >
                               <span className="text-xs font-bold">
@@ -910,6 +968,11 @@ function SchedulePageContent() {
                 { value: "PL_NIGHT", label: "🌃 PL Night" },
                 { value: "TRAINING", label: "📚 Training" },
                 { value: "SHUTDOWN", label: "🔧 Shutdown" },
+                // Custom shift types
+                ...customShiftTypes.filter(t => t.isActive).map(t => ({
+                  value: `CUSTOM:${t.code}`,
+                  label: `${t.name} (${t.code})`,
+                })),
               ]}
             />
           </div>
@@ -925,6 +988,13 @@ function SchedulePageContent() {
                 { type: "OFF", label: "Off", bg: "#e5e7eb", text: "#6b7280" },
                 { type: "DAY", label: "Day", bg: "#22c55e" },
                 { type: "NIGHT", label: "Night", bg: "#2563eb" },
+                // Add custom shift types to quick select
+                ...customShiftTypes.filter(t => t.isActive).map(t => ({
+                  type: `CUSTOM:${t.code}`,
+                  label: t.code,
+                  bg: t.color,
+                  text: t.textColor,
+                })),
               ].map(({ type, label, bg, text }) => (
                 <Button
                   key={type}
