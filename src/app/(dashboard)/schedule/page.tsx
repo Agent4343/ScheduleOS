@@ -159,6 +159,7 @@ function SchedulePageContent() {
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
+  const [clearOverrides, setClearOverrides] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
@@ -336,6 +337,7 @@ function SchedulePageContent() {
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
     setStartingShift("DAY")
+    setClearOverrides(false)
     setGenerateSuccess(null)
     setSaveError(null)
     setEditModalOpen(true)
@@ -419,6 +421,7 @@ function SchedulePageContent() {
         endDate: endDateStr,
         startPhase: 0,
         startingShift: startingShift,
+        clearOverrides: clearOverrides,
       }
 
       console.log("Generating schedule:", requestBody)
@@ -925,6 +928,24 @@ function SchedulePageContent() {
                 onChange={(e) => setScheduleStartDate(e.target.value)}
               />
             </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="clearOverrides"
+                checked={clearOverrides}
+                onChange={(e) => setClearOverrides(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="clearOverrides" className="text-sm font-normal">
+                Clear manual edits
+              </Label>
+            </div>
+            {clearOverrides && (
+              <p className="text-xs text-orange-600">
+                Warning: This will delete all manually edited shifts for this worker
+              </p>
+            )}
 
             <Button
               onClick={generateSchedule}

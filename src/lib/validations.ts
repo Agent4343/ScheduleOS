@@ -98,6 +98,7 @@ export const generateScheduleSchema = z.object({
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
   startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  clearOverrides: z.boolean().optional(),  // When true, also delete manually edited schedules
 })
 
 // Time off request validations
