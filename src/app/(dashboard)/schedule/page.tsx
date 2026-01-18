@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useState, useMemo, useRef } from "react"
+import { Suspense, useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,10 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  Sun,
-  Moon,
-  Home,
-  Filter,
   Users,
   Pencil,
   Loader2,
@@ -81,121 +77,56 @@ interface RotationPattern {
   nightDays: number
 }
 
-// Position-based color coding
-const POSITION_COLORS: Record<string, string> = {
-  "Operator": "bg-blue-500",
-  "Senior Operator": "bg-blue-600",
-  "Lead Operator": "bg-blue-700",
-  "Technician": "bg-green-500",
-  "Senior Technician": "bg-green-600",
-  "Lead Technician": "bg-green-700",
-  "Supervisor": "bg-purple-500",
-  "Manager": "bg-purple-700",
-  "Engineer": "bg-orange-500",
-  "Maintenance": "bg-yellow-500",
-  "Safety": "bg-red-500",
-  "Quality": "bg-pink-500",
-  "Logistics": "bg-cyan-500",
-  "default": "bg-gray-500",
+// Shift colors for the Excel-like cells
+const SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
+  NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
+  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
+  LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
+  PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
+  PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
+  VACATION: { bg: "#10b981", text: "#ffffff", label: "V" },
+  SICK: { bg: "#ef4444", text: "#ffffff", label: "S" },
+  TRAINING: { bg: "#eab308", text: "#000000", label: "T" },
+  SHUTDOWN: { bg: "#64748b", text: "#ffffff", label: "X" },
 }
 
-const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
-  DAY: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
-  NIGHT: { bg: "bg-blue-600", text: "text-white", border: "border-blue-700" },
-  OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
-  LEAVE: { bg: "bg-orange-400", text: "text-orange-900", border: "border-orange-500" },
-  PL_DAY: { bg: "bg-teal-400", text: "text-teal-900", border: "border-teal-500" },
-  PL_NIGHT: { bg: "bg-indigo-400", text: "text-indigo-900", border: "border-indigo-500" },
-  VACATION: { bg: "bg-emerald-400", text: "text-emerald-900", border: "border-emerald-500" },
-  SICK: { bg: "bg-red-400", text: "text-red-900", border: "border-red-500" },
-  TRAINING: { bg: "bg-yellow-300", text: "text-yellow-900", border: "border-yellow-400" },
-  SHUTDOWN: { bg: "bg-slate-500", text: "text-white", border: "border-slate-600" },
+// Format date as YYYY-MM-DD
+function formatDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
-const SHIFT_ABBREV: Record<ShiftType, string> = {
-  DAY: "D",
-  NIGHT: "N",
-  OFF: "O",
-  LEAVE: "L",
-  PL_DAY: "PD",
-  PL_NIGHT: "PN",
-  VACATION: "V",
-  SICK: "S",
-  TRAINING: "T",
-  SHUTDOWN: "X",
-}
-
-const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
-  DAY: <Sun className="h-3 w-3" />,
-  NIGHT: <Moon className="h-3 w-3" />,
-  OFF: <Home className="h-3 w-3" />,
-  LEAVE: null,
-  PL_DAY: <Sun className="h-3 w-3" />,
-  PL_NIGHT: <Moon className="h-3 w-3" />,
-  VACATION: null,
-  SICK: null,
-  TRAINING: null,
-  SHUTDOWN: null,
-}
-
-// Format date as YYYY-MM-DD using local timezone
-function formatDateLocal(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-// Get all days in a year
-function getDaysInYear(year: number) {
-  const days: Date[] = []
-  const date = new Date(year, 0, 1)
-  while (date.getFullYear() === year) {
-    days.push(new Date(date))
-    date.setDate(date.getDate() + 1)
-  }
-  return days
-}
-
-// Get month name
-function getMonthName(month: number) {
-  return new Date(2024, month, 1).toLocaleDateString("en-US", { month: "short" })
-}
-
-// Get position color
-function getPositionColor(position: string | null): string {
-  if (!position) return POSITION_COLORS.default
-
-  // Check for exact match first
-  if (POSITION_COLORS[position]) return POSITION_COLORS[position]
-
-  // Check for partial match
-  for (const [key, value] of Object.entries(POSITION_COLORS)) {
-    if (position.toLowerCase().includes(key.toLowerCase())) {
-      return value
-    }
-  }
-
-  return POSITION_COLORS.default
+// Get days in a month
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate()
 }
 
 function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
+  const monthFromUrl = searchParams.get("month")
+
   const [currentYear, setCurrentYear] = useState(() => {
     if (yearFromUrl) {
       const parsed = parseInt(yearFromUrl)
-      if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2100) {
-        return parsed
-      }
+      if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2100) return parsed
     }
     return new Date().getFullYear()
   })
+
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (monthFromUrl) {
+      const parsed = parseInt(monthFromUrl)
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 11) return parsed
+    }
+    return new Date().getMonth()
+  })
+
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Rotation patterns
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
 
   // Edit modal state
@@ -219,30 +150,14 @@ function SchedulePageContent() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
-  const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
+  // Get days for current month
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth)
+  const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
-  // Group days by month for header
-  const monthGroups = useMemo(() => {
-    const groups: { month: number; days: Date[] }[] = []
-    let currentMonth = -1
-    let currentGroup: Date[] = []
-
-    for (const day of yearDays) {
-      if (day.getMonth() !== currentMonth) {
-        if (currentGroup.length > 0) {
-          groups.push({ month: currentMonth, days: currentGroup })
-        }
-        currentMonth = day.getMonth()
-        currentGroup = []
-      }
-      currentGroup.push(day)
-    }
-    if (currentGroup.length > 0) {
-      groups.push({ month: currentMonth, days: currentGroup })
-    }
-
-    return groups
-  }, [yearDays])
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
 
   // Fetch crews
   useEffect(() => {
@@ -296,13 +211,13 @@ function SchedulePageContent() {
     fetchWorkers()
   }, [selectedCrew])
 
-  // Fetch schedules for the year
+  // Fetch schedules for the month
   useEffect(() => {
     async function fetchSchedules() {
       setLoading(true)
       try {
-        const startDate = `${currentYear}-01-01`
-        const endDate = `${currentYear}-12-31`
+        const startDate = formatDate(currentYear, currentMonth, 1)
+        const endDate = formatDate(currentYear, currentMonth, daysInMonth)
 
         let url = `/api/schedules?startDate=${startDate}&endDate=${endDate}`
         if (selectedCrew) {
@@ -313,6 +228,8 @@ function SchedulePageContent() {
         const result = await response.json()
         if (result.success) {
           setSchedules(result.data)
+        } else {
+          console.error("Failed to fetch schedules:", result.error)
         }
       } catch (error) {
         console.error("Failed to fetch schedules:", error)
@@ -321,66 +238,64 @@ function SchedulePageContent() {
       }
     }
     fetchSchedules()
-  }, [currentYear, selectedCrew])
+  }, [currentYear, currentMonth, daysInMonth, selectedCrew])
 
-  // Group schedules by user
-  const schedulesByUser = useMemo(() => {
-    const map = new Map<string, Map<string, Schedule>>()
-
+  // Build schedule lookup map
+  const scheduleMap = useMemo(() => {
+    const map = new Map<string, Schedule>()
     for (const schedule of schedules) {
-      if (!map.has(schedule.user.id)) {
-        map.set(schedule.user.id, new Map())
-      }
-      const dateKey = schedule.date.split("T")[0]
-      map.get(schedule.user.id)!.set(dateKey, schedule)
+      // Extract date part from ISO string
+      const dateStr = schedule.date.split("T")[0]
+      const key = `${schedule.user.id}-${dateStr}`
+      map.set(key, schedule)
     }
-
     return map
   }, [schedules])
 
-  // Sort workers by crew name, then position, then name
+  // Sort workers
   const sortedWorkers = useMemo(() => {
     return [...workers].sort((a, b) => {
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
-      const posCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
-      if (posCompare !== 0) return posCompare
       return (a.name || "").localeCompare(b.name || "")
     })
   }, [workers])
 
-  function navigateYear(direction: number) {
-    setCurrentYear(currentYear + direction)
+  function navigateMonth(direction: number) {
+    let newMonth = currentMonth + direction
+    let newYear = currentYear
+
+    if (newMonth < 0) {
+      newMonth = 11
+      newYear -= 1
+    } else if (newMonth > 11) {
+      newMonth = 0
+      newYear += 1
+    }
+
+    setCurrentMonth(newMonth)
+    setCurrentYear(newYear)
   }
 
-  function goToCurrentYear() {
-    setCurrentYear(new Date().getFullYear())
-    // Scroll to today
-    setTimeout(() => {
-      const today = new Date()
-      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
-      if (scrollRef.current) {
-        const cellWidth = 28 // approximate width per day
-        scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
-      }
-    }, 100)
+  function goToToday() {
+    const today = new Date()
+    setCurrentYear(today.getFullYear())
+    setCurrentMonth(today.getMonth())
   }
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
 
-    // Safely parse hire date (using local timezone)
     let hireDateStr = ""
     if (worker.hireDate) {
       const hireDate = new Date(worker.hireDate)
-      // Check if date is valid and not 1970 (Unix epoch)
       if (!isNaN(hireDate.getTime()) && hireDate.getFullYear() > 1970) {
-        hireDateStr = formatDateLocal(hireDate)
+        hireDateStr = formatDate(hireDate.getFullYear(), hireDate.getMonth(), hireDate.getDate())
       }
     }
 
-    // Always use today's date for schedule generation start (local timezone)
-    const todayStr = formatDateLocal(new Date())
+    const today = new Date()
+    const todayStr = formatDate(today.getFullYear(), today.getMonth(), today.getDate())
 
     setEditForm({
       name: worker.name || "",
@@ -390,7 +305,6 @@ function SchedulePageContent() {
       role: worker.role || "WORKER",
       hireDate: hireDateStr,
     })
-    // Reset schedule generation fields - always start from today
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
     setStartingShift("DAY")
@@ -431,7 +345,6 @@ function SchedulePageContent() {
         throw new Error(result.error || "Failed to update worker")
       }
 
-      // Update local state
       setWorkers((prev) =>
         prev.map((w) =>
           w.id === selectedWorker.id
@@ -466,12 +379,9 @@ function SchedulePageContent() {
     setGenerateSuccess(null)
 
     try {
-      // Generate for the full year from start date
       const startDate = new Date(scheduleStartDate)
-      const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
-
-      // Format end date using local timezone
-      const endDateStr = formatDateLocal(endDate)
+      const endDate = new Date(startDate.getFullYear(), 11, 31)
+      const endDateStr = formatDate(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
 
       const response = await fetch("/api/schedules", {
         method: "POST",
@@ -493,12 +403,12 @@ function SchedulePageContent() {
       }
 
       setGenerateSuccess(
-        `Generated ${result.data?.daysGenerated || 0} schedule days for ${startDate.getFullYear()}`
+        `Generated ${result.data?.daysGenerated || 0} schedule days`
       )
 
       // Refresh schedules
-      const fetchStartDate = `${currentYear}-01-01`
-      const fetchEndDate = `${currentYear}-12-31`
+      const fetchStartDate = formatDate(currentYear, currentMonth, 1)
+      const fetchEndDate = formatDate(currentYear, currentMonth, daysInMonth)
       const schedulesResponse = await fetch(
         `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
       )
@@ -513,40 +423,45 @@ function SchedulePageContent() {
     }
   }
 
+  function getScheduleForDay(workerId: string, day: number): Schedule | undefined {
+    const dateStr = formatDate(currentYear, currentMonth, day)
+    return scheduleMap.get(`${workerId}-${dateStr}`)
+  }
+
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth
+  const todayDate = today.getDate()
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Yearly Schedule</h1>
+          <h1 className="text-2xl font-bold">Schedule Calendar</h1>
           <p className="text-muted-foreground">
-            {currentYear} Annual View - {sortedWorkers.length} Workers
+            {monthNames[currentMonth]} {currentYear} - {sortedWorkers.length} Workers
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToCurrentYear}>
+          <Button variant="outline" size="sm" onClick={goToToday}>
             Today
           </Button>
-          <Button variant="outline" size="icon" onClick={() => navigateYear(-1)}>
+          <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-semibold px-2">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => navigateYear(1)}>
+          <span className="font-semibold px-2 min-w-[140px] text-center">
+            {monthNames[currentMonth]} {currentYear}
+          </span>
+          <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filter */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Filter:</span>
-        </div>
+        <span className="text-sm text-muted-foreground">Filter by Crew:</span>
         <Select
           value={selectedCrew}
           onChange={(e) => setSelectedCrew(e.target.value)}
@@ -560,20 +475,24 @@ function SchedulePageContent() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_COLORS).map(([type, colors]) => (
-          <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
-            {SHIFT_ICONS[type as ShiftType]}
-            <span className="ml-1">{type}</span>
-          </Badge>
+        {Object.entries(SHIFT_STYLES).map(([type, style]) => (
+          <div
+            key={type}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: style.bg, color: style.text }}
+          >
+            <span className="font-bold">{style.label}</span>
+            <span>= {type}</span>
+          </div>
         ))}
       </div>
 
-      {/* Schedule grid */}
+      {/* Schedule Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            {currentYear} Schedule
+            {monthNames[currentMonth]} {currentYear}
             <Badge variant="secondary" className="ml-2">
               <Users className="h-3 w-3 mr-1" />
               {sortedWorkers.length} workers
@@ -582,165 +501,97 @@ function SchedulePageContent() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="animate-pulse space-y-2 p-4">
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className="h-8 bg-muted rounded" />
-              ))}
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : sortedWorkers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No workers found</p>
-              <p className="text-sm">Add workers to see their schedules</p>
             </div>
           ) : (
-            <div className="relative">
-              {/* Sticky worker info column */}
-              <div className="flex">
-                {/* Fixed left column for worker info */}
-                <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
-                    <span className="font-semibold text-sm">Worker</span>
-                  </div>
-                  {/* Worker rows */}
-                  {sortedWorkers.map((worker) => (
-                    <div
-                      key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
-                      onClick={() => openEditModal(worker)}
-                    >
-                      <div
-                        className={cn(
-                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
-                          getPositionColor(worker.position)
-                        )}
-                        title={worker.position || "No position"}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">
-                          {worker.position || "No position"}
-                          {worker.crew && ` • ${worker.crew.name}`}
-                        </p>
-                      </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Scrollable calendar grid */}
-                <div
-                  ref={scrollRef}
-                  className="overflow-x-auto flex-1"
-                >
-                  <div className="inline-block min-w-max">
-                    {/* Month headers */}
-                    <div className="flex h-8 border-b bg-muted/30">
-                      {monthGroups.map(({ month, days }) => (
-                        <div
-                          key={month}
-                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 28}px` }}
-                        >
-                          {getMonthName(month)}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Day headers */}
-                    <div className="flex h-8 border-b">
-                      {yearDays.map((day) => {
-                        const isToday = day.getTime() === today.getTime()
-                        const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                        const isFirstOfMonth = day.getDate() === 1
-
-                        return (
-                          <div
-                            key={day.toISOString()}
-                            className={cn(
-                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
-                              isWeekend && "bg-muted/50",
-                              isToday && "bg-primary/20 font-bold",
-                              isFirstOfMonth && "border-l border-gray-300"
-                            )}
-                          >
-                            <span className="text-muted-foreground">
-                              {day.toLocaleDateString("en-US", { weekday: "narrow" })}
-                            </span>
-                            <span className={cn(isToday && "text-primary")}>
-                              {day.getDate()}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Schedule rows */}
-                    {sortedWorkers.map((worker) => {
-                      const userSchedules = schedulesByUser.get(worker.id)
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted/50 min-w-[180px]">
+                      Worker
+                    </th>
+                    {monthDays.map((day) => {
+                      const date = new Date(currentYear, currentMonth, day)
+                      const dayName = date.toLocaleDateString("en-US", { weekday: "short" })
+                      const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                      const isTodayCell = isCurrentMonth && day === todayDate
 
                       return (
-                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
-                          {yearDays.map((day) => {
-                            // Use local date format to avoid timezone issues
-                            const dateKey = formatDateLocal(day)
-                            const schedule = userSchedules?.get(dateKey)
-                            const isToday = day.getTime() === today.getTime()
-                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                            const isFirstOfMonth = day.getDate() === 1
-
-                            return (
-                              <div
-                                key={dateKey}
-                                className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
-                                  isFirstOfMonth && "border-l-2 border-l-gray-400",
-                                  isToday && "ring-2 ring-primary ring-inset",
-                                  schedule
-                                    ? cn(
-                                        SHIFT_COLORS[schedule.shiftType].bg,
-                                        SHIFT_COLORS[schedule.shiftType].text,
-                                        "border-white/20"
-                                      )
-                                    : cn(
-                                        isWeekend ? "bg-gray-100" : "bg-white",
-                                        "text-muted-foreground/30"
-                                      )
-                                )}
-                                title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
-                              >
-                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
-                              </div>
-                            )
-                          })}
-                        </div>
+                        <th
+                          key={day}
+                          className={cn(
+                            "border p-1 text-center min-w-[36px] font-normal",
+                            isWeekend && "bg-gray-100",
+                            isTodayCell && "bg-blue-100 font-bold"
+                          )}
+                        >
+                          <div className="text-xs text-muted-foreground">{dayName.charAt(0)}</div>
+                          <div className={cn(isTodayCell && "text-blue-600")}>{day}</div>
+                        </th>
                       )
                     })}
-                  </div>
-                </div>
-              </div>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedWorkers.map((worker) => (
+                    <tr key={worker.id} className="hover:bg-muted/30">
+                      <td
+                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50"
+                        onClick={() => openEditModal(worker)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-8 rounded"
+                            style={{ backgroundColor: worker.crew?.color || "#gray" }}
+                          />
+                          <div>
+                            <div className="font-medium">{worker.name || "Unnamed"}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {worker.crew?.name || "No crew"}
+                            </div>
+                          </div>
+                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto" />
+                        </div>
+                      </td>
+                      {monthDays.map((day) => {
+                        const schedule = getScheduleForDay(worker.id, day)
+                        const date = new Date(currentYear, currentMonth, day)
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                        const isTodayCell = isCurrentMonth && day === todayDate
+                        const style = schedule ? SHIFT_STYLES[schedule.shiftType] : null
+
+                        return (
+                          <td
+                            key={day}
+                            className={cn(
+                              "border text-center font-bold",
+                              isWeekend && !style && "bg-gray-50",
+                              isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                            )}
+                            style={
+                              style
+                                ? { backgroundColor: style.bg, color: style.text }
+                                : undefined
+                            }
+                            title={schedule ? `${schedule.shiftType}` : "No schedule"}
+                          >
+                            {style ? style.label : "-"}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Position Color Legend */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Position Colors</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(POSITION_COLORS)
-              .filter(([key]) => key !== "default")
-              .map(([position, color]) => (
-                <div key={position} className="flex items-center gap-1">
-                  <div className={cn("w-3 h-3 rounded-full", color)} />
-                  <span className="text-xs text-muted-foreground">{position}</span>
-                </div>
-              ))}
-          </div>
         </CardContent>
       </Card>
 
@@ -774,7 +625,7 @@ function SchedulePageContent() {
               id="position"
               value={editForm.position}
               onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
-              placeholder="e.g., Operator, Technician, Supervisor"
+              placeholder="e.g., Operator, Technician"
             />
           </div>
 
@@ -816,7 +667,7 @@ function SchedulePageContent() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="hireDate">Hire / Start Date</Label>
+            <Label htmlFor="hireDate">Hire Date</Label>
             <Input
               id="hireDate"
               type="date"
@@ -864,13 +715,12 @@ function SchedulePageContent() {
                   { value: "", label: "Select a pattern..." },
                   ...rotationPatterns.map((p) => ({
                     value: p.id,
-                    label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? `, ${p.nightDays} nights` : ""})`,
+                    label: `${p.name} (${p.daysOn}/${p.daysOff}${p.includesNights ? ` + ${p.nightDays}N` : ""})`,
                   })),
                 ]}
               />
             </div>
 
-            {/* Show starting shift option if selected pattern includes nights */}
             {selectedPatternId && rotationPatterns.find(p => p.id === selectedPatternId)?.includesNights && (
               <div className="space-y-2">
                 <Label htmlFor="startingShift">Starting Shift</Label>
@@ -883,23 +733,17 @@ function SchedulePageContent() {
                     { value: "NIGHT", label: "Nights First" },
                   ]}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Choose whether worker starts on day shift or night shift
-                </p>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="scheduleStart">Schedule Start Date</Label>
+              <Label htmlFor="scheduleStart">Start Date</Label>
               <Input
                 id="scheduleStart"
                 type="date"
                 value={scheduleStartDate}
                 onChange={(e) => setScheduleStartDate(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Schedule will be generated from this date to end of year
-              </p>
             </div>
 
             <Button
@@ -915,7 +759,7 @@ function SchedulePageContent() {
               ) : (
                 <>
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Generate Year Schedule
+                  Generate Schedule
                 </>
               )}
             </Button>
@@ -928,11 +772,13 @@ function SchedulePageContent() {
 
 export default function SchedulePage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <SchedulePageContent />
     </Suspense>
   )
