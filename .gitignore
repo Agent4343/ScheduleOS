@@ -12,6 +12,9 @@
 /test-results/
 /e2e/.auth/
 
+# database backups
+/backups/
+
 # next.js
 /.next/
 /out/
