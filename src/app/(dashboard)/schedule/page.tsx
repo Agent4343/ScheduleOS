@@ -641,7 +641,8 @@ export default function SchedulePage() {
                       return (
                         <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
                           {yearDays.map((day) => {
-                            const dateKey = day.toISOString().split("T")[0]
+                            // Use local date format to avoid timezone issues
+                            const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
                             const schedule = userSchedules?.get(dateKey)
                             const isToday = day.getTime() === today.getTime()
                             const isWeekend = day.getDay() === 0 || day.getDay() === 6
