@@ -9,13 +9,12 @@ import { audit, AuditAction, getClientInfo } from "@/lib/audit"
 export async function POST(request: NextRequest) {
   try {
     // Rate limit: 5 requests per 15 minutes per IP
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
-    const rateLimitResult = checkRateLimit(`reset-password:${ip}`, {
+    const rateLimitResult = checkRateLimit(request, {
       maxRequests: 5,
       windowMs: 15 * 60 * 1000,
     })
 
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: "Too many attempts. Please try again later." },
         { status: 429 }

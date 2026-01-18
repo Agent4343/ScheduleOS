@@ -12,13 +12,12 @@ const RESET_TOKEN_EXPIRY_MINUTES = 60
 export async function POST(request: NextRequest) {
   try {
     // Rate limit: 3 requests per 15 minutes per IP
-    const ip = request.headers.get("x-forwarded-for") || "unknown"
-    const rateLimitResult = checkRateLimit(`forgot-password:${ip}`, {
+    const rateLimitResult = checkRateLimit(request, {
       maxRequests: 3,
       windowMs: 15 * 60 * 1000,
     })
 
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult.success) {
       return NextResponse.json(
         { error: "Too many password reset requests. Please try again later." },
         { status: 429 }
