@@ -17,47 +17,46 @@ export async function GET(request: NextRequest) {
     const organizationId = session.user.organizationId
 
     const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate")
-    const endDate = searchParams.get("endDate")
-    const userId = searchParams.get("userId")
-    const crewId = searchParams.get("crewId")
+    const startDateParam = searchParams.get("startDate")
+    const endDateParam = searchParams.get("endDate")
+    const userIdParam = searchParams.get("userId")
+    const crewIdParam = searchParams.get("crewId")
 
-    if (!startDate || !endDate) {
+    if (!startDateParam || !endDateParam) {
       return NextResponse.json(
         { error: "startDate and endDate are required" },
         { status: 400 }
       )
     }
 
-    // First get all user IDs in this organization
-    const orgUsers = await prisma.user.findMany({
-      where: { organizationId },
-      select: { id: true },
-    })
+    // Parse dates - ensure they're valid
+    const startDate = new Date(startDateParam + "T00:00:00.000Z")
+    const endDate = new Date(endDateParam + "T23:59:59.999Z")
 
-    // If no users in organization, return empty array
-    if (orgUsers.length === 0) {
-      return NextResponse.json({ success: true, data: [] })
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid date format" },
+        { status: 400 }
+      )
     }
 
-    const orgUserIds = orgUsers.map((u: { id: string }) => u.id)
-
-    // Build where clause properly - only include crewId if specified
-    const whereClause: {
-      userId: string | { in: string[] }
-      date: { gte: Date; lte: Date }
-      crewId?: string
-    } = {
-      userId: userId ? userId : { in: orgUserIds },
+    // Build the where clause explicitly to avoid Prisma issues
+    const whereClause: Prisma.ScheduleWhereInput = {
+      user: {
+        organizationId: organizationId,
+      },
       date: {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
+        gte: startDate,
+        lte: endDate,
       },
     }
 
-    // Only add crewId filter if it's specified
-    if (crewId) {
-      whereClause.crewId = crewId
+    // Add optional filters only if provided
+    if (userIdParam) {
+      whereClause.userId = userIdParam
+    }
+    if (crewIdParam) {
+      whereClause.crewId = crewIdParam
     }
 
     const schedules = await prisma.schedule.findMany({
@@ -86,11 +85,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching schedules:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json({
       error: "Failed to fetch schedules",
       details: errorMessage,
-      stack: errorStack
     }, { status: 500 })
   }
 }
