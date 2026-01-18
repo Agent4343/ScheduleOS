@@ -138,6 +138,11 @@ const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
   SHUTDOWN: null,
 }
 
+// Format date as YYYY-MM-DD using local timezone
+function formatDateLocal(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 // Get all days in a year
 function getDaysInYear(year: number) {
   const days: Date[] = []
@@ -364,18 +369,18 @@ function SchedulePageContent() {
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
 
-    // Safely parse hire date
+    // Safely parse hire date (using local timezone)
     let hireDateStr = ""
     if (worker.hireDate) {
       const hireDate = new Date(worker.hireDate)
       // Check if date is valid and not 1970 (Unix epoch)
       if (!isNaN(hireDate.getTime()) && hireDate.getFullYear() > 1970) {
-        hireDateStr = hireDate.toISOString().split("T")[0]
+        hireDateStr = formatDateLocal(hireDate)
       }
     }
 
-    // Always use today's date for schedule generation start
-    const today = new Date().toISOString().split("T")[0]
+    // Always use today's date for schedule generation start (local timezone)
+    const todayStr = formatDateLocal(new Date())
 
     setEditForm({
       name: worker.name || "",
@@ -387,7 +392,7 @@ function SchedulePageContent() {
     })
     // Reset schedule generation fields - always start from today
     setSelectedPatternId("")
-    setScheduleStartDate(today)
+    setScheduleStartDate(todayStr)
     setStartingShift("DAY")
     setGenerateSuccess(null)
     setSaveError(null)
@@ -465,6 +470,9 @@ function SchedulePageContent() {
       const startDate = new Date(scheduleStartDate)
       const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
 
+      // Format end date using local timezone
+      const endDateStr = formatDateLocal(endDate)
+
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -472,7 +480,7 @@ function SchedulePageContent() {
           userId: selectedWorker.id,
           patternId: selectedPatternId,
           startDate: scheduleStartDate,
-          endDate: endDate.toISOString().split("T")[0],
+          endDate: endDateStr,
           startPhase: 0,
           startingShift: startingShift,
         }),
@@ -675,7 +683,8 @@ function SchedulePageContent() {
                       return (
                         <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
                           {yearDays.map((day) => {
-                            const dateKey = day.toISOString().split("T")[0]
+                            // Use local date format to avoid timezone issues
+                            const dateKey = formatDateLocal(day)
                             const schedule = userSchedules?.get(dateKey)
                             const isToday = day.getTime() === today.getTime()
                             const isWeekend = day.getDay() === 0 || day.getDay() === 6
