@@ -6,6 +6,7 @@ import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/va
 import { ShiftType } from "@prisma/client"
 import { getDateRange } from "@/lib/utils"
 import { logger } from "@/lib/logger"
+import { audit, AuditAction, getClientInfo } from "@/lib/audit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -321,6 +322,27 @@ export async function PATCH(request: NextRequest) {
         data: { requestId },
       },
     })
+
+    // Audit log for time-off approval/denial
+    const clientInfo = getClientInfo(request)
+    audit(
+      validatedData.status === "APPROVED"
+        ? AuditAction.TIME_OFF_APPROVED
+        : AuditAction.TIME_OFF_DENIED,
+      {
+        userId: session.user.id,
+        targetId: existingRequest.userId,
+        targetType: "user",
+        organizationId: session.user.organizationId,
+        metadata: {
+          requestId,
+          type: existingRequest.type,
+          startDate: existingRequest.startDate,
+          endDate: existingRequest.endDate,
+        },
+        ...clientInfo,
+      }
+    )
 
     return NextResponse.json({
       success: true,

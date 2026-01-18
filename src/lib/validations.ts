@@ -7,6 +7,21 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 })
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Invalid email address"),
+})
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+    ),
+})
+
 export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z
@@ -162,6 +177,8 @@ export const importUsersSchema = z.array(z.object({
 
 // Type exports
 export type LoginInput = z.infer<typeof loginSchema>
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export type RegisterInput = z.infer<typeof registerSchema>
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>

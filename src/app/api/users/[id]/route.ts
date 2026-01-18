@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateUserSchema } from "@/lib/validations"
 import { logger } from "@/lib/logger"
+import { audit, AuditAction, getClientInfo } from "@/lib/audit"
 
 export async function GET(
   request: NextRequest,
@@ -126,6 +127,30 @@ export async function PATCH(
       },
     })
 
+    // Audit log for user update
+    const clientInfo = getClientInfo(request)
+    const changedFields = Object.keys(validatedData).filter(key => validatedData[key as keyof typeof validatedData] !== undefined)
+
+    if (validatedData.role && validatedData.role !== existingUser.role) {
+      audit(AuditAction.USER_ROLE_CHANGED, {
+        userId: session.user.id,
+        targetId: params.id,
+        targetType: "user",
+        organizationId: session.user.organizationId,
+        metadata: { oldRole: existingUser.role, newRole: validatedData.role },
+        ...clientInfo,
+      })
+    }
+
+    audit(AuditAction.USER_UPDATED, {
+      userId: session.user.id,
+      targetId: params.id,
+      targetType: "user",
+      organizationId: session.user.organizationId,
+      metadata: { changedFields },
+      ...clientInfo,
+    })
+
     return NextResponse.json({
       success: true,
       data: user,
@@ -180,6 +205,17 @@ export async function DELETE(
 
     await prisma.user.delete({
       where: { id: params.id },
+    })
+
+    // Audit log for user deletion
+    const clientInfo = getClientInfo(request)
+    audit(AuditAction.USER_DELETED, {
+      userId: session.user.id,
+      targetId: params.id,
+      targetType: "user",
+      organizationId: session.user.organizationId,
+      metadata: { deletedUserEmail: existingUser.email },
+      ...clientInfo,
     })
 
     return NextResponse.json({

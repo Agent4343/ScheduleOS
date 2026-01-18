@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
+import { audit, AuditAction, getClientInfo } from "@/lib/audit"
 
 const sqlStatements = [
   // Create enums
@@ -285,6 +286,13 @@ export async function GET(request: NextRequest) {
       SELECT tablename FROM pg_tables WHERE schemaname = 'public'
     `
     const newTableNames = newTables.map((t: { tablename: string }) => t.tablename)
+
+    // Audit log for initial setup
+    const clientInfo = getClientInfo(request)
+    audit(AuditAction.INITIAL_SETUP, {
+      metadata: { tableCount: newTableNames.length, tables: newTableNames },
+      ...clientInfo,
+    })
 
     logger.info("Database setup completed", { tableCount: newTableNames.length })
 

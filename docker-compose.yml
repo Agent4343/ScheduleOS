@@ -1,0 +1,58 @@
+# ScheduleOS Docker Compose Configuration
+# Use: docker-compose up -d
+
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXTAUTH_URL: ${NEXTAUTH_URL}
+        NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NODE_ENV=production
+      # Optional email configuration
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - scheduleos-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scheduleos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scheduleos_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-scheduleos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scheduleos} -d ${POSTGRES_DB:-scheduleos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - scheduleos-network
+
+volumes:
+  postgres_data:
+
+networks:
+  scheduleos-network:
+    driver: bridge
