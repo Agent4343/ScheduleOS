@@ -268,21 +268,25 @@ async function generateSchedules(
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let deletedCount = 0
   await prisma.$transaction(async (tx: any) => {
     // Delete ALL existing non-override schedules for the user(s)
     // This ensures the old schedule is completely replaced when regenerating
-    await tx.schedule.deleteMany({
+    const deleteResult = await tx.schedule.deleteMany({
       where: {
         userId: { in: userIds },
         isOverride: false,
       },
     })
+    deletedCount = deleteResult.count
+    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds)
 
     // Create new schedules
     await tx.schedule.createMany({
       data: scheduleData,
       skipDuplicates: true,
     })
+    console.log(`Created ${scheduleData.length} new schedules`)
   })
 
   return NextResponse.json({
@@ -292,6 +296,7 @@ async function generateSchedules(
       usersProcessed: userIds.length,
       daysGenerated: generatedSchedules.length,
       totalRecords: scheduleData.length,
+      deletedRecords: deletedCount,
     },
   })
 }
