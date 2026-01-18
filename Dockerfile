@@ -78,11 +78,10 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
-# Start the application
-CMD ["node", "server.js"]
+# Start the application - set HOSTNAME inline to avoid Railway env conflicts
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 node server.js"]
