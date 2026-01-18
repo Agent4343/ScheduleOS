@@ -27,18 +27,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const schedules = await prisma.schedule.findMany({
-      where: {
-        user: {
-          organizationId: session.user.organizationId,
-        },
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate),
-        },
-        ...(userId && { userId }),
-        ...(crewId && { crewId }),
+    // Parse dates safely
+    const startDateParsed = new Date(startDate + "T00:00:00.000Z")
+    const endDateParsed = new Date(endDate + "T23:59:59.999Z")
+
+    const whereClause: {
+      user: { organizationId: string }
+      date: { gte: Date; lte: Date }
+      userId?: string
+      crewId?: string
+    } = {
+      user: {
+        organizationId: session.user.organizationId,
       },
+      date: {
+        gte: startDateParsed,
+        lte: endDateParsed,
+      },
+    }
+
+    if (userId) whereClause.userId = userId
+    if (crewId) whereClause.crewId = crewId
+
+    const schedules = await prisma.schedule.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -56,13 +68,17 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [{ date: "asc" }],
+      orderBy: { date: "asc" },
     })
 
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
     console.error("Error fetching schedules:", error)
-    return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return NextResponse.json({
+      error: "Failed to fetch schedules",
+      details: errorMessage
+    }, { status: 500 })
   }
 }
 
