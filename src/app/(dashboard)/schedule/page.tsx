@@ -487,48 +487,62 @@ function SchedulePageContent() {
       const datesToUpdate: string[] = []
       const current = new Date(start)
       while (current <= end) {
-        datesToUpdate.push(formatDate(current.getFullYear(), current.getMonth(), current.getDate()))
-        current.setDate(current.getDate() + 1)
+        // Use UTC methods to avoid timezone issues
+        datesToUpdate.push(formatDate(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate()))
+        current.setUTCDate(current.getUTCDate() + 1)
       }
 
       // Determine if this is a custom shift type
-      const isCustomType = scheduleEditShiftType.startsWith("CUSTOM:")
-      const actualShiftType = isCustomType ? "CUSTOM" : scheduleEditShiftType
-      const customShiftCode = isCustomType ? scheduleEditShiftType.split(":")[1] : undefined
+      const shiftTypeStr = String(scheduleEditShiftType)
+      const isCustomType = shiftTypeStr.startsWith("CUSTOM:")
+      const actualShiftType = isCustomType ? "CUSTOM" : shiftTypeStr
+      const customShiftCode = isCustomType ? shiftTypeStr.split(":")[1] : null
 
       // Update each date
       for (const dateStr of datesToUpdate) {
+        const requestBody = {
+          userId: scheduleEditWorker.id,
+          date: dateStr,
+          shiftType: actualShiftType,
+          customShiftCode: customShiftCode,
+          isOverride: true,
+          overrideReason: scheduleEditReason || null,
+        }
+
+        console.log("Saving schedule:", requestBody)
+
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: scheduleEditWorker.id,
-            date: dateStr,
-            shiftType: actualShiftType,
-            customShiftCode: customShiftCode,
-            isOverride: true,
-            overrideReason: scheduleEditReason || undefined,
-          }),
+          body: JSON.stringify(requestBody),
         })
 
+        const result = await response.json()
+        console.log("Save response:", result)
+
         if (!response.ok) {
-          const result = await response.json()
-          throw new Error(result.error || "Failed to update schedule")
+          throw new Error(result.error || result.details || "Failed to update schedule")
         }
       }
 
       const displayName = isCustomType
         ? customShiftTypes.find(t => t.code === customShiftCode)?.name || customShiftCode
-        : scheduleEditShiftType
+        : shiftTypeStr
       setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s) to ${displayName}`)
 
-      // Refresh schedules
-      const schedulesResponse = await fetch(
-        `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      )
+      // Refresh schedules - wait for completion
+      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
+      console.log("Refreshing schedules from:", refreshUrl)
+
+      const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-      if (schedulesResult.success) {
+
+      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
+
+      if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
+      } else {
+        console.error("Failed to refresh schedules:", schedulesResult)
       }
 
       // Close modal after short delay to show success message
@@ -536,6 +550,7 @@ function SchedulePageContent() {
         closeScheduleEditModal()
       }, 1500)
     } catch (error) {
+      console.error("Schedule edit error:", error)
       setScheduleEditError(error instanceof Error ? error.message : "Failed to update schedule")
     } finally {
       setScheduleEditSaving(false)
