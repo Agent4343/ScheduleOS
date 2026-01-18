@@ -71,6 +71,7 @@ export default function SetupPage() {
   const [duration, setDuration] = useState("12") // months
   const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
   const [customEndDate, setCustomEndDate] = useState("")
+  const [startShift, setStartShift] = useState<"day" | "night">("day")
 
   // Calculate end date from duration or custom selection
   const getEndDate = () => {
@@ -228,6 +229,22 @@ export default function SetupPage() {
       const workerIds = Array.from(selectedWorkers)
       let successCount = 0
 
+      // Calculate startPhase based on whether starting on days or nights
+      const pattern = patterns.find((p) => p.id === selectedPattern)
+      let startPhase = 0
+      if (pattern && pattern.includesNights && startShift === "night") {
+        // If pattern has nights at start, night shift = phase 0
+        // If pattern has days first, night shift = skip past day portion
+        if (!pattern.nightsAtStart) {
+          startPhase = pattern.daysOn - pattern.nightDays
+        }
+      } else if (pattern && pattern.includesNights && startShift === "day") {
+        // If pattern has nights at start, day shift = skip past night portion
+        if (pattern.nightsAtStart) {
+          startPhase = pattern.nightDays
+        }
+      }
+
       for (const userId of workerIds) {
         const response = await fetch("/api/schedules", {
           method: "POST",
@@ -237,7 +254,7 @@ export default function SetupPage() {
             patternId: selectedPattern,
             startDate,
             endDate,
-            startPhase: 0,
+            startPhase,
           }),
         })
 
@@ -548,6 +565,32 @@ export default function SetupPage() {
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </div>
+              {selectedPattern_obj?.includesNights && (
+                <div>
+                  <Label>Starting Shift</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <Button
+                      type="button"
+                      variant={startShift === "day" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStartShift("day")}
+                    >
+                      ☀️ Day Shift
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={startShift === "night" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setStartShift("night")}
+                    >
+                      🌙 Night Shift
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Workers will start their rotation on {startShift} shift
+                  </p>
+                </div>
+              )}
               <div>
                 <Label>Schedule End</Label>
                 <div className="grid grid-cols-3 gap-2 mt-1 mb-3">
@@ -639,6 +682,14 @@ export default function SetupPage() {
                     {selectedPattern_obj ? selectedPattern_obj.name : "Not selected"}
                   </span>
                 </div>
+                {selectedPattern_obj?.includesNights && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Starting:</span>
+                    <span className="font-medium">
+                      {startShift === "day" ? "☀️ Day Shift" : "🌙 Night Shift"}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Duration:</span>
                   <span className="font-medium">
