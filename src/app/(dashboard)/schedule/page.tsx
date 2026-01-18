@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useMemo, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -162,7 +163,17 @@ function getPositionColor(position: string | null): string {
 }
 
 export default function SchedulePage() {
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
+  const searchParams = useSearchParams()
+  const yearFromUrl = searchParams.get("year")
+  const [currentYear, setCurrentYear] = useState(() => {
+    if (yearFromUrl) {
+      const parsed = parseInt(yearFromUrl)
+      if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2100) {
+        return parsed
+      }
+    }
+    return new Date().getFullYear()
+  })
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [crews, setCrews] = useState<Crew[]>([])

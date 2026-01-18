@@ -258,16 +258,25 @@ export default function SetupPage() {
           }),
         })
 
-        if (response.ok) {
+        const data = await response.json()
+        if (response.ok && data.success) {
           successCount++
+        } else {
+          console.error("Failed to generate schedule for user:", userId, data.error)
         }
       }
 
-      setSuccess(`Successfully generated schedules for ${successCount} worker(s)!`)
+      if (successCount === 0) {
+        setError("Failed to generate schedules. Please check that workers and pattern are correctly selected.")
+        return
+      }
+
+      const scheduleYear = new Date(startDate).getFullYear()
+      setSuccess(`Successfully generated schedules for ${successCount} of ${workerIds.length} worker(s)! Schedules start from ${new Date(startDate).toLocaleDateString()}.`)
 
       // Redirect to schedule view after short delay
       setTimeout(() => {
-        router.push("/schedule")
+        router.push(`/schedule?year=${scheduleYear}`)
       }, 2000)
     } catch {
       setError("Failed to generate schedules. Please try again.")
