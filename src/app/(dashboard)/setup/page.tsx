@@ -229,21 +229,8 @@ export default function SetupPage() {
       const workerIds = Array.from(selectedWorkers)
       let successCount = 0
 
-      // Calculate startPhase based on whether starting on days or nights
+      // Get the pattern to check if it includes nights
       const pattern = patterns.find((p) => p.id === selectedPattern)
-      let startPhase = 0
-      if (pattern && pattern.includesNights && startShift === "night") {
-        // If pattern has nights at start, night shift = phase 0
-        // If pattern has days first, night shift = skip past day portion
-        if (!pattern.nightsAtStart) {
-          startPhase = pattern.daysOn - pattern.nightDays
-        }
-      } else if (pattern && pattern.includesNights && startShift === "day") {
-        // If pattern has nights at start, day shift = skip past night portion
-        if (pattern.nightsAtStart) {
-          startPhase = pattern.nightDays
-        }
-      }
 
       for (const userId of workerIds) {
         const response = await fetch("/api/schedules", {
@@ -254,7 +241,11 @@ export default function SetupPage() {
             patternId: selectedPattern,
             startDate,
             endDate,
-            startPhase,
+            startPhase: 0,
+            // Send startingShift if pattern includes nights
+            ...(pattern?.includesNights && {
+              startingShift: startShift === "day" ? "DAY" : "NIGHT",
+            }),
           }),
         })
 
