@@ -42,16 +42,26 @@ export async function GET(request: NextRequest) {
 
     const orgUserIds = orgUsers.map((u: { id: string }) => u.id)
 
-    // Build where clause - simpler approach
-    const schedules = await prisma.schedule.findMany({
-      where: {
-        userId: userId ? userId : { in: orgUserIds },
-        crewId: crewId ? crewId : undefined,
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate),
-        },
+    // Build where clause properly - only include crewId if specified
+    const whereClause: {
+      userId: string | { in: string[] }
+      date: { gte: Date; lte: Date }
+      crewId?: string
+    } = {
+      userId: userId ? userId : { in: orgUserIds },
+      date: {
+        gte: new Date(startDate),
+        lte: new Date(endDate),
       },
+    }
+
+    // Only add crewId filter if it's specified
+    if (crewId) {
+      whereClause.crewId = crewId
+    }
+
+    const schedules = await prisma.schedule.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
