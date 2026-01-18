@@ -22,11 +22,11 @@ function Avatar({ className, src, alt, fallback, size = "md", ...props }: Avatar
   const initials = React.useMemo(() => {
     if (fallback) return fallback.slice(0, 2).toUpperCase()
     if (alt) {
-      const parts = alt.split(" ")
+      const parts = alt.split(" ").filter(part => part.length > 0)
       if (parts.length >= 2) {
         return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
       }
-      return alt.slice(0, 2).toUpperCase()
+      return alt.trim().slice(0, 2).toUpperCase()
     }
     return "??"
   }, [fallback, alt])
