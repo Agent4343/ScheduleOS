@@ -15,6 +15,10 @@ import {
   Shield,
   Clock,
   Save,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react"
 
 interface Organization {
@@ -38,13 +42,26 @@ interface Organization {
 interface RotationPattern {
   id: string
   name: string
+  description: string | null
   daysOn: number
   daysOff: number
   includesNights: boolean
+  nightDays: number
+  nightsAtStart: boolean
   isDefault: boolean
   _count: {
     crews: number
   }
+}
+
+interface NewPattern {
+  name: string
+  description: string
+  daysOn: number
+  daysOff: number
+  includesNights: boolean
+  nightDays: number
+  nightsAtStart: boolean
 }
 
 export default function SettingsPage() {
@@ -55,7 +72,116 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
 
+  // Pattern form state
+  const [showPatternForm, setShowPatternForm] = useState(false)
+  const [editingPattern, setEditingPattern] = useState<RotationPattern | null>(null)
+  const [savingPattern, setSavingPattern] = useState(false)
+  const [newPattern, setNewPattern] = useState<NewPattern>({
+    name: "",
+    description: "",
+    daysOn: 14,
+    daysOff: 14,
+    includesNights: false,
+    nightDays: 0,
+    nightsAtStart: true,
+  })
+
   const isAdmin = session?.user?.role === "ADMIN"
+
+  const resetPatternForm = () => {
+    setNewPattern({
+      name: "",
+      description: "",
+      daysOn: 14,
+      daysOff: 14,
+      includesNights: false,
+      nightDays: 0,
+      nightsAtStart: true,
+    })
+    setEditingPattern(null)
+    setShowPatternForm(false)
+  }
+
+  const startEditPattern = (pattern: RotationPattern) => {
+    setEditingPattern(pattern)
+    setNewPattern({
+      name: pattern.name,
+      description: pattern.description || "",
+      daysOn: pattern.daysOn,
+      daysOff: pattern.daysOff,
+      includesNights: pattern.includesNights,
+      nightDays: pattern.nightDays,
+      nightsAtStart: pattern.nightsAtStart,
+    })
+    setShowPatternForm(true)
+  }
+
+  const handleSavePattern = async () => {
+    if (!newPattern.name.trim()) {
+      setMessage("Pattern name is required")
+      return
+    }
+
+    setSavingPattern(true)
+    setMessage("")
+
+    try {
+      const url = editingPattern
+        ? `/api/rotation-patterns?id=${editingPattern.id}`
+        : "/api/rotation-patterns"
+
+      const response = await fetch(url, {
+        method: editingPattern ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newPattern),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Refresh patterns list
+        const patternsRes = await fetch("/api/rotation-patterns")
+        const patternsData = await patternsRes.json()
+        if (patternsData.success) setPatterns(patternsData.data)
+
+        setMessage(editingPattern ? "Pattern updated successfully" : "Pattern created successfully")
+        resetPatternForm()
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to save pattern")
+      }
+    } catch (error) {
+      console.error("Failed to save pattern:", error)
+      setMessage("Failed to save pattern")
+    } finally {
+      setSavingPattern(false)
+    }
+  }
+
+  const handleDeletePattern = async (patternId: string) => {
+    if (!confirm("Are you sure you want to delete this pattern? Crews using it will need to be reassigned.")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/rotation-patterns?id=${patternId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setPatterns(patterns.filter(p => p.id !== patternId))
+        setMessage("Pattern deleted successfully")
+        setTimeout(() => setMessage(""), 3000)
+      } else {
+        setMessage(data.error || "Failed to delete pattern")
+      }
+    } catch (error) {
+      console.error("Failed to delete pattern:", error)
+      setMessage("Failed to delete pattern")
+    }
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -272,34 +398,192 @@ export default function SettingsPage() {
         </Card>
 
         {/* Rotation Patterns */}
-        <Card>
+        <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Rotation Patterns
-            </CardTitle>
-            <CardDescription>Configure shift rotation patterns</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Rotation Patterns
+                </CardTitle>
+                <CardDescription>Configure shift rotation patterns</CardDescription>
+              </div>
+              {isAdmin && !showPatternForm && (
+                <Button size="sm" onClick={() => setShowPatternForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Pattern
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
+            {/* Pattern Form */}
+            {showPatternForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">
+                    {editingPattern ? "Edit Pattern" : "New Pattern"}
+                  </h4>
+                  <Button variant="ghost" size="sm" onClick={resetPatternForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="patternName">Pattern Name</Label>
+                    <Input
+                      id="patternName"
+                      placeholder="e.g., 14/14 with Nights"
+                      value={newPattern.name}
+                      onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="patternDesc">Description (optional)</Label>
+                    <Input
+                      id="patternDesc"
+                      placeholder="e.g., Standard offshore rotation"
+                      value={newPattern.description}
+                      onChange={(e) => setNewPattern({ ...newPattern, description: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="daysOn">Days On</Label>
+                    <Input
+                      id="daysOn"
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={newPattern.daysOn}
+                      onChange={(e) => setNewPattern({ ...newPattern, daysOn: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="daysOff">Days Off</Label>
+                    <Input
+                      id="daysOff"
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={newPattern.daysOff}
+                      onChange={(e) => setNewPattern({ ...newPattern, daysOff: parseInt(e.target.value) || 1 })}
+                    />
+                  </div>
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="includesNights"
+                        checked={newPattern.includesNights}
+                        onChange={(e) => setNewPattern({
+                          ...newPattern,
+                          includesNights: e.target.checked,
+                          nightDays: e.target.checked ? Math.floor(newPattern.daysOn / 2) : 0,
+                        })}
+                        className="h-4 w-4"
+                      />
+                      <Label htmlFor="includesNights">Includes Night Shifts</Label>
+                    </div>
+                    {newPattern.includesNights && (
+                      <div className="ml-6 grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="nightDays">Number of Night Days</Label>
+                          <Input
+                            id="nightDays"
+                            type="number"
+                            min={1}
+                            max={newPattern.daysOn}
+                            value={newPattern.nightDays}
+                            onChange={(e) => setNewPattern({ ...newPattern, nightDays: parseInt(e.target.value) || 1 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Night Shift Position</Label>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={newPattern.nightsAtStart ? "default" : "outline"}
+                              onClick={() => setNewPattern({ ...newPattern, nightsAtStart: true })}
+                            >
+                              Start
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={!newPattern.nightsAtStart ? "default" : "outline"}
+                              onClick={() => setNewPattern({ ...newPattern, nightsAtStart: false })}
+                            >
+                              End
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {newPattern.nightsAtStart
+                              ? "Night shifts at the start of the rotation"
+                              : "Night shifts at the end of the rotation"}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetPatternForm}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSavePattern} disabled={savingPattern}>
+                    {savingPattern ? "Saving..." : editingPattern ? "Update Pattern" : "Create Pattern"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Patterns List */}
             <div className="space-y-2">
               {patterns.map((pattern) => (
                 <div
                   key={pattern.id}
-                  className="flex items-center justify-between p-2 rounded border"
+                  className="flex items-center justify-between p-3 rounded border"
                 >
                   <div>
-                    <p className="font-medium text-sm">{pattern.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="font-medium">{pattern.name}</p>
+                    <p className="text-sm text-muted-foreground">
                       {pattern.daysOn} on / {pattern.daysOff} off
-                      {pattern.includesNights && " • Includes nights"}
+                      {pattern.includesNights && ` • ${pattern.nightDays} nights`}
+                      {pattern.includesNights && (pattern.nightsAtStart ? " (at start)" : " (at end)")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
                     <Badge variant="outline">{pattern._count.crews} crews</Badge>
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEditPattern(pattern)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeletePattern(pattern.id)}
+                          disabled={pattern._count.crews > 0}
+                          title={pattern._count.crews > 0 ? "Cannot delete - pattern is in use" : "Delete pattern"}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
+              {patterns.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No rotation patterns configured
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
