@@ -271,12 +271,15 @@ function SchedulePageContent() {
           url += `&crewId=${selectedCrew}`
         }
 
+        console.log("Fetching schedules from:", url)
         const response = await fetch(url)
         const result = await response.json()
+        console.log("Fetch schedules response:", response.status, result)
+
         if (result.success) {
           setSchedules(result.data)
         } else {
-          console.error("Failed to fetch schedules:", result.error)
+          console.error("Failed to fetch schedules:", result.error, result.details)
         }
       } catch (error) {
         console.error("Failed to fetch schedules:", error)
