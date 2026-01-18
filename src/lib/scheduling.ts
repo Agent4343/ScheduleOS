@@ -21,13 +21,15 @@ export interface GeneratedSchedule {
  * @param startDate - The start date for schedule generation
  * @param endDate - The end date for schedule generation
  * @param startPhase - The starting phase offset (0 = beginning of rotation)
+ * @param startingShift - Override for which shift type to start with ("DAY" or "NIGHT")
  * @returns Array of generated schedules
  */
 export function generateRotationSchedule(
   pattern: RotationPattern,
   startDate: Date,
   endDate: Date,
-  startPhase: number = 0
+  startPhase: number = 0,
+  startingShift?: "DAY" | "NIGHT"
 ): GeneratedSchedule[] {
   const schedules: GeneratedSchedule[] = []
   const totalCycleDays = pattern.daysOn + pattern.daysOff
@@ -35,13 +37,18 @@ export function generateRotationSchedule(
   let currentDate = new Date(startDate)
   let dayInCycle = startPhase % totalCycleDays
 
+  // Determine if nights come first based on startingShift override or pattern default
+  const nightsFirst = startingShift
+    ? startingShift === "NIGHT"
+    : pattern.nightsAtStart
+
   while (currentDate <= endDate) {
     let shiftType: ShiftType
 
     if (dayInCycle < pattern.daysOn) {
       // Working days
       if (pattern.includesNights) {
-        if (pattern.nightsAtStart) {
+        if (nightsFirst) {
           // Night shifts first, then day shifts
           shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
         } else {

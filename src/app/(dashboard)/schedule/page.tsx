@@ -210,6 +210,7 @@ function SchedulePageContent() {
   // Schedule generation state
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
+  const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
@@ -376,6 +377,7 @@ function SchedulePageContent() {
     // Reset schedule generation fields
     setSelectedPatternId("")
     setScheduleStartDate(hireDateStr || new Date().toISOString().split("T")[0])
+    setStartingShift("DAY")
     setGenerateSuccess(null)
     setSaveError(null)
     setEditModalOpen(true)
@@ -461,6 +463,7 @@ function SchedulePageContent() {
           startDate: scheduleStartDate,
           endDate: endDate.toISOString().split("T")[0],
           startPhase: 0,
+          startingShift: startingShift,
         }),
       })
 
@@ -846,6 +849,25 @@ function SchedulePageContent() {
                 ]}
               />
             </div>
+
+            {/* Show starting shift option if selected pattern includes nights */}
+            {selectedPatternId && rotationPatterns.find(p => p.id === selectedPatternId)?.includesNights && (
+              <div className="space-y-2">
+                <Label htmlFor="startingShift">Starting Shift</Label>
+                <Select
+                  id="startingShift"
+                  value={startingShift}
+                  onChange={(e) => setStartingShift(e.target.value as "DAY" | "NIGHT")}
+                  options={[
+                    { value: "DAY", label: "Days First" },
+                    { value: "NIGHT", label: "Nights First" },
+                  ]}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Choose whether worker starts on day shift or night shift
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="scheduleStart">Schedule Start Date</Label>

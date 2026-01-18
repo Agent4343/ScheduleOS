@@ -230,7 +230,8 @@ async function generateSchedules(
     },
     new Date(validatedData.startDate),
     new Date(validatedData.endDate),
-    validatedData.startPhase ?? 0
+    validatedData.startPhase ?? 0,
+    validatedData.startingShift
   )
 
   // Create schedules for all users
