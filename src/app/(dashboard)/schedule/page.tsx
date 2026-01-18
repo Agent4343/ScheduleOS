@@ -522,7 +522,7 @@ function SchedulePageContent() {
                   {sortedWorkers.map((worker) => (
                     <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-10"
+                        className="border p-2 sticky left-0 bg-white cursor-pointer hover:bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => openEditModal(worker)}
                       >
                         <div className="flex items-center gap-2">
