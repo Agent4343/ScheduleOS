@@ -588,14 +588,24 @@ function SchedulePageContent() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_STYLES).map(([type, style]) => (
+        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
           <div
             key={type}
             className="flex items-center gap-1 px-2 py-1 rounded text-xs"
             style={{ backgroundColor: style.bg, color: style.text }}
           >
             <span className="font-bold">{style.label}</span>
-            <span>= {type}</span>
+            <span>= {type.replace("_", " ")}</span>
+          </div>
+        ))}
+        {customShiftTypes.filter(t => t.isActive).map((t) => (
+          <div
+            key={t.code}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: t.color, color: t.textColor }}
+          >
+            <span className="font-bold">{t.code}</span>
+            <span>= {t.name}</span>
           </div>
         ))}
       </div>
