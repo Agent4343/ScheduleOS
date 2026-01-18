@@ -211,7 +211,7 @@ describe('RATE_LIMITS configurations', () => {
   })
 
   it('all rate limits have reasonable values', () => {
-    Object.entries(RATE_LIMITS).forEach(([name, config]) => {
+    Object.entries(RATE_LIMITS).forEach(([_name, config]) => {
       expect(config.windowMs).toBeGreaterThan(0)
       expect(config.maxRequests).toBeGreaterThan(0)
       // Windows should be at least 1 second

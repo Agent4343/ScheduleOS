@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { randomBytes } from "crypto"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -84,11 +85,10 @@ export function generateSlug(name: string): string {
 
 export function generateToken(length: number = 32): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  const crypto = require('crypto')
-  const randomBytes = crypto.randomBytes(length)
+  const bytes = randomBytes(length)
   let result = ''
   for (let i = 0; i < length; i++) {
-    result += chars.charAt(randomBytes[i] % chars.length)
+    result += chars.charAt(bytes[i] % chars.length)
   }
   return result
 }
