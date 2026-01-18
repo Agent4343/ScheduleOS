@@ -76,6 +76,7 @@ interface RotationPattern {
   daysOff: number
   includesNights: boolean
   nightDays: number
+  alternatesShifts: boolean
 }
 
 interface CustomShiftType {
@@ -894,7 +895,7 @@ function SchedulePageContent() {
                   { value: "", label: "Select a pattern..." },
                   ...rotationPatterns.map((p) => ({
                     value: p.id,
-                    label: `${p.name} (${p.daysOn}/${p.daysOff}${p.includesNights ? ` + ${p.nightDays}N` : ""})`,
+                    label: `${p.name} (${p.daysOn}/${p.daysOff}${p.includesNights ? (p.alternatesShifts ? " alternates" : ` + ${p.nightDays}N`) : ""})`,
                   })),
                 ]}
               />
