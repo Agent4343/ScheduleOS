@@ -34,22 +34,24 @@ export async function GET(request: NextRequest) {
       where: { organizationId },
       select: { id: true },
     })
-    const orgUserIds = orgUsers.map(u => u.id)
 
-    // Build where clause
-    const whereClause: Prisma.ScheduleWhereInput = {
-      userId: { in: orgUserIds },
-      date: {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      },
+    // If no users in organization, return empty array
+    if (orgUsers.length === 0) {
+      return NextResponse.json({ success: true, data: [] })
     }
 
-    if (userId) whereClause.userId = userId
-    if (crewId) whereClause.crewId = crewId
+    const orgUserIds = orgUsers.map((u: { id: string }) => u.id)
 
+    // Build where clause - simpler approach
     const schedules = await prisma.schedule.findMany({
-      where: whereClause,
+      where: {
+        userId: userId ? userId : { in: orgUserIds },
+        crewId: crewId ? crewId : undefined,
+        date: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
       include: {
         user: {
           select: {
@@ -74,9 +76,11 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching schedules:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json({
       error: "Failed to fetch schedules",
-      details: errorMessage
+      details: errorMessage,
+      stack: errorStack
     }, { status: 500 })
   }
 }
