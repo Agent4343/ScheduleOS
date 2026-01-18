@@ -363,9 +363,20 @@ function SchedulePageContent() {
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
-    const hireDateStr = worker.hireDate
-      ? new Date(worker.hireDate).toISOString().split("T")[0]
-      : ""
+
+    // Safely parse hire date
+    let hireDateStr = ""
+    if (worker.hireDate) {
+      const hireDate = new Date(worker.hireDate)
+      // Check if date is valid and not 1970 (Unix epoch)
+      if (!isNaN(hireDate.getTime()) && hireDate.getFullYear() > 1970) {
+        hireDateStr = hireDate.toISOString().split("T")[0]
+      }
+    }
+
+    // Always use today's date for schedule generation start
+    const today = new Date().toISOString().split("T")[0]
+
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
@@ -374,9 +385,9 @@ function SchedulePageContent() {
       role: worker.role || "WORKER",
       hireDate: hireDateStr,
     })
-    // Reset schedule generation fields
+    // Reset schedule generation fields - always start from today
     setSelectedPatternId("")
-    setScheduleStartDate(hireDateStr || new Date().toISOString().split("T")[0])
+    setScheduleStartDate(today)
     setStartingShift("DAY")
     setGenerateSuccess(null)
     setSaveError(null)
