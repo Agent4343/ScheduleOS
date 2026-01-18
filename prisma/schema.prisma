@@ -153,6 +153,7 @@ model RotationPattern {
   includesNights    Boolean  @default(false)
   nightsAtStart     Boolean  @default(true)
   nightDays         Int      @default(0)
+  alternatesShifts  Boolean  @default(false)  // When true, work periods alternate between all-DAY and all-NIGHT
   patternDefinition Json     @default("[]")
   isDefault         Boolean  @default(false)
   createdAt         DateTime @default(now())

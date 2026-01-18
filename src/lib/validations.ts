@@ -67,6 +67,7 @@ export const createRotationPatternSchema = z.object({
   includesNights: z.boolean().default(false),
   nightsAtStart: z.boolean().default(true),
   nightDays: z.number().int().min(0).max(60).default(0),
+  alternatesShifts: z.boolean().default(false),  // When true, work periods alternate between all-DAY and all-NIGHT
   isDefault: z.boolean().default(false),
 })
 

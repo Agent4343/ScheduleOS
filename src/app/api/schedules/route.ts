@@ -233,6 +233,7 @@ async function generateSchedules(
       includesNights: pattern.includesNights,
       nightsAtStart: pattern.nightsAtStart,
       nightDays: pattern.nightDays,
+      alternatesShifts: pattern.alternatesShifts,
     },
     new Date(validatedData.startDate),
     new Date(validatedData.endDate),

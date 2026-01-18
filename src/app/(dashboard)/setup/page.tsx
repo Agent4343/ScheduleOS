@@ -48,6 +48,7 @@ interface RotationPattern {
   includesNights: boolean
   nightDays: number
   nightsAtStart: boolean
+  alternatesShifts: boolean
 }
 
 export default function SetupPage() {
@@ -538,7 +539,7 @@ export default function SetupPage() {
                     </span>
                     {pattern.includesNights && (
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                        {pattern.nightDays} nights
+                        {pattern.alternatesShifts ? "alternates" : `${pattern.nightDays} nights`}
                       </span>
                     )}
                   </div>
