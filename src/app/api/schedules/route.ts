@@ -255,14 +255,11 @@ async function generateSchedules(
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
   await prisma.$transaction(async (tx) => {
-    // Delete existing non-override schedules from start date onwards
-    // This ensures old schedules are fully replaced when regenerating
+    // Delete ALL existing non-override schedules for the user(s)
+    // This ensures the old schedule is completely replaced when regenerating
     await tx.schedule.deleteMany({
       where: {
         userId: { in: userIds },
-        date: {
-          gte: new Date(validatedData.startDate),
-        },
         isOverride: false,
       },
     })
