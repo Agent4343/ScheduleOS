@@ -69,9 +69,20 @@ export default function SetupPage() {
     return today.toISOString().split("T")[0]
   })
   const [duration, setDuration] = useState("12") // months
+  const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
+  const [customEndDate, setCustomEndDate] = useState("")
 
-  // Calculate end date from duration
+  // Calculate end date from duration or custom selection
   const getEndDate = () => {
+    if (scheduleType === "ongoing") {
+      // For ongoing, generate 5 years ahead
+      const start = new Date(startDate)
+      start.setFullYear(start.getFullYear() + 5)
+      return start.toISOString().split("T")[0]
+    }
+    if (scheduleType === "endDate" && customEndDate) {
+      return customEndDate
+    }
     const start = new Date(startDate)
     start.setMonth(start.getMonth() + parseInt(duration))
     return start.toISOString().split("T")[0]
@@ -538,29 +549,78 @@ export default function SetupPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="duration">Schedule Duration</Label>
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                  {[
-                    { value: "3", label: "3 mo" },
-                    { value: "6", label: "6 mo" },
-                    { value: "12", label: "1 year" },
-                    { value: "18", label: "18 mo" },
-                    { value: "24", label: "2 years" },
-                    { value: "36", label: "3 years" },
-                  ].map((option) => (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      variant={duration === option.value ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setDuration(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                <Label>Schedule End</Label>
+                <div className="grid grid-cols-3 gap-2 mt-1 mb-3">
+                  <Button
+                    type="button"
+                    variant={scheduleType === "duration" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setScheduleType("duration")}
+                  >
+                    Duration
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={scheduleType === "endDate" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setScheduleType("endDate")}
+                  >
+                    End Date
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={scheduleType === "ongoing" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setScheduleType("ongoing")}
+                  >
+                    Ongoing
+                  </Button>
                 </div>
+
+                {scheduleType === "duration" && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "3", label: "3 mo" },
+                      { value: "6", label: "6 mo" },
+                      { value: "12", label: "1 year" },
+                      { value: "18", label: "18 mo" },
+                      { value: "24", label: "2 years" },
+                      { value: "36", label: "3 years" },
+                    ].map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        variant={duration === option.value ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setDuration(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+
+                {scheduleType === "endDate" && (
+                  <Input
+                    type="date"
+                    value={customEndDate}
+                    min={startDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                  />
+                )}
+
+                {scheduleType === "ongoing" && (
+                  <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                    Schedule will run continuously with no set end date.
+                    (Generates 5 years of schedules, can regenerate later)
+                  </p>
+                )}
+
                 <p className="text-xs text-muted-foreground mt-2">
-                  Schedules will generate until {new Date(getEndDate()).toLocaleDateString()}
+                  {scheduleType === "ongoing"
+                    ? "Schedules will be generated on an ongoing basis"
+                    : `Schedules will generate until ${new Date(getEndDate()).toLocaleDateString()}`
+                  }
                 </p>
               </div>
             </div>
@@ -582,7 +642,11 @@ export default function SetupPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Duration:</span>
                   <span className="font-medium">
-                    {parseInt(duration) >= 12
+                    {scheduleType === "ongoing"
+                      ? "Ongoing (no end date)"
+                      : scheduleType === "endDate"
+                      ? `Until ${customEndDate ? new Date(customEndDate).toLocaleDateString() : "Not set"}`
+                      : parseInt(duration) >= 12
                       ? `${parseInt(duration) / 12} year${parseInt(duration) > 12 ? "s" : ""}`
                       : `${duration} months`}
                   </span>
