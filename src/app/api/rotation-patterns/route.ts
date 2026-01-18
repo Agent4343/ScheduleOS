@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         includesNights: validatedData.includesNights,
         nightsAtStart: validatedData.nightsAtStart,
         nightDays: validatedData.nightDays,
+        alternatesShifts: validatedData.alternatesShifts,
         isDefault: validatedData.isDefault,
         organizationId: session.user.organizationId,
       },
@@ -163,6 +164,7 @@ export async function PATCH(request: NextRequest) {
         includesNights: body.includesNights,
         nightsAtStart: body.nightsAtStart,
         nightDays: body.nightDays,
+        alternatesShifts: body.alternatesShifts,
       },
     })
 
