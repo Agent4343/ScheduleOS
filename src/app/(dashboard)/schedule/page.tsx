@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { Suspense, useEffect, useState, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -162,7 +162,7 @@ function getPositionColor(position: string | null): string {
   return POSITION_COLORS.default
 }
 
-export default function SchedulePage() {
+function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
   const [currentYear, setCurrentYear] = useState(() => {
@@ -872,5 +872,17 @@ export default function SchedulePage() {
         </div>
       </Modal>
     </div>
+  )
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <SchedulePageContent />
+    </Suspense>
   )
 }
