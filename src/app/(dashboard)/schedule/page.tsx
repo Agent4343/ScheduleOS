@@ -403,40 +403,53 @@ function SchedulePageContent() {
     setGenerateSuccess(null)
 
     try {
-      const startDate = new Date(scheduleStartDate)
-      const endDate = new Date(startDate.getFullYear(), 11, 31)
-      const endDateStr = formatDate(endDate.getFullYear(), endDate.getMonth(), endDate.getDate())
+      // Use UTC to avoid timezone issues
+      const startDate = new Date(scheduleStartDate + "T00:00:00.000Z")
+      const endDate = new Date(Date.UTC(startDate.getUTCFullYear(), 11, 31))
+      const endDateStr = formatDate(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate())
+
+      const requestBody = {
+        userId: selectedWorker.id,
+        patternId: selectedPatternId,
+        startDate: scheduleStartDate,
+        endDate: endDateStr,
+        startPhase: 0,
+        startingShift: startingShift,
+      }
+
+      console.log("Generating schedule:", requestBody)
 
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: selectedWorker.id,
-          patternId: selectedPatternId,
-          startDate: scheduleStartDate,
-          endDate: endDateStr,
-          startPhase: 0,
-          startingShift: startingShift,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const result = await response.json()
+      console.log("Generate response:", result)
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to generate schedule")
+        throw new Error(result.error || result.details || "Failed to generate schedule")
       }
 
       setGenerateSuccess(`Generated ${result.data?.daysGenerated || 0} schedule days`)
 
       // Refresh schedules
-      const schedulesResponse = await fetch(
-        `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`
-      )
+      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`
+      console.log("Refreshing schedules from:", refreshUrl)
+
+      const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-      if (schedulesResult.success) {
+
+      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
+
+      if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
+      } else {
+        console.error("Failed to refresh:", schedulesResult)
       }
     } catch (error) {
+      console.error("Generate error:", error)
       setSaveError(error instanceof Error ? error.message : "Failed to generate")
     } finally {
       setGenerating(false)
