@@ -49,6 +49,7 @@ interface RotationPattern {
   includesNights: boolean
   nightDays: number
   nightsAtStart: boolean
+  alternatesShifts: boolean
   isDefault: boolean
   _count: {
     crews: number
@@ -63,6 +64,7 @@ interface NewPattern {
   includesNights: boolean
   nightDays: number
   nightsAtStart: boolean
+  alternatesShifts: boolean
 }
 
 interface CustomShiftType {
@@ -103,6 +105,7 @@ export default function SettingsPage() {
     includesNights: false,
     nightDays: 0,
     nightsAtStart: true,
+    alternatesShifts: false,
   })
 
   // Custom shift type state
@@ -129,6 +132,7 @@ export default function SettingsPage() {
       includesNights: false,
       nightDays: 0,
       nightsAtStart: true,
+      alternatesShifts: false,
     })
     setEditingPattern(null)
     setShowPatternForm(false)
@@ -144,6 +148,7 @@ export default function SettingsPage() {
       includesNights: pattern.includesNights,
       nightDays: pattern.nightDays,
       nightsAtStart: pattern.nightsAtStart,
+      alternatesShifts: pattern.alternatesShifts,
     })
     setShowPatternForm(true)
   }
@@ -612,44 +617,66 @@ export default function SettingsPage() {
                       <Label htmlFor="includesNights">Includes Night Shifts</Label>
                     </div>
                     {newPattern.includesNights && (
-                      <div className="ml-6 grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="nightDays">Number of Night Days</Label>
-                          <Input
-                            id="nightDays"
-                            type="number"
-                            min={1}
-                            max={newPattern.daysOn}
-                            value={newPattern.nightDays}
-                            onChange={(e) => setNewPattern({ ...newPattern, nightDays: parseInt(e.target.value) || 1 })}
+                      <div className="ml-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="alternatesShifts"
+                            checked={newPattern.alternatesShifts}
+                            onChange={(e) => setNewPattern({
+                              ...newPattern,
+                              alternatesShifts: e.target.checked,
+                            })}
+                            className="h-4 w-4"
                           />
+                          <Label htmlFor="alternatesShifts">Alternates Between Day/Night Rotations</Label>
                         </div>
-                        <div className="space-y-2">
-                          <Label>Night Shift Position</Label>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={newPattern.nightsAtStart ? "default" : "outline"}
-                              onClick={() => setNewPattern({ ...newPattern, nightsAtStart: true })}
-                            >
-                              Start
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={!newPattern.nightsAtStart ? "default" : "outline"}
-                              onClick={() => setNewPattern({ ...newPattern, nightsAtStart: false })}
-                            >
-                              End
-                            </Button>
+                        <p className="text-xs text-muted-foreground ml-6">
+                          {newPattern.alternatesShifts
+                            ? `Each work period alternates: ${newPattern.daysOn} days ON → ${newPattern.daysOff} off → ${newPattern.daysOn} nights ON → ${newPattern.daysOff} off → repeat`
+                            : "Split between day and night shifts within each work period"}
+                        </p>
+                        {!newPattern.alternatesShifts && (
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="nightDays">Number of Night Days</Label>
+                              <Input
+                                id="nightDays"
+                                type="number"
+                                min={1}
+                                max={newPattern.daysOn}
+                                value={newPattern.nightDays}
+                                onChange={(e) => setNewPattern({ ...newPattern, nightDays: parseInt(e.target.value) || 1 })}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Night Shift Position</Label>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={newPattern.nightsAtStart ? "default" : "outline"}
+                                  onClick={() => setNewPattern({ ...newPattern, nightsAtStart: true })}
+                                >
+                                  Start
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={!newPattern.nightsAtStart ? "default" : "outline"}
+                                  onClick={() => setNewPattern({ ...newPattern, nightsAtStart: false })}
+                                >
+                                  End
+                                </Button>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {newPattern.nightsAtStart
+                                  ? "Night shifts at the start of the rotation"
+                                  : "Night shifts at the end of the rotation"}
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {newPattern.nightsAtStart
-                              ? "Night shifts at the start of the rotation"
-                              : "Night shifts at the end of the rotation"}
-                          </p>
-                        </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -676,8 +703,9 @@ export default function SettingsPage() {
                     <p className="font-medium">{pattern.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {pattern.daysOn} on / {pattern.daysOff} off
-                      {pattern.includesNights && ` • ${pattern.nightDays} nights`}
-                      {pattern.includesNights && (pattern.nightsAtStart ? " (at start)" : " (at end)")}
+                      {pattern.includesNights && pattern.alternatesShifts && " • alternates day/night"}
+                      {pattern.includesNights && !pattern.alternatesShifts && ` • ${pattern.nightDays} nights`}
+                      {pattern.includesNights && !pattern.alternatesShifts && (pattern.nightsAtStart ? " (at start)" : " (at end)")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
