@@ -475,19 +475,19 @@ function SchedulePageContent() {
               <p>No workers found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
-              <table className="border-collapse text-xs" style={{ minWidth: "max-content" }}>
+            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+              <table className="border-collapse text-sm" style={{ minWidth: "max-content" }}>
                 <thead className="sticky top-0 z-20">
                   {/* Month headers */}
                   <tr className="bg-muted">
-                    <th className="border p-1 text-left font-semibold sticky left-0 bg-muted z-30 min-w-[150px]">
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-30 min-w-[200px]">
                       Worker
                     </th>
                     {yearMonths.map(({ month, days }) => (
                       <th
                         key={month}
                         colSpan={days.length}
-                        className="border p-1 text-center font-semibold bg-muted"
+                        className="border p-2 text-center font-semibold bg-muted text-base"
                       >
                         {MONTH_NAMES[month]}
                       </th>
@@ -506,12 +506,12 @@ function SchedulePageContent() {
                           <th
                             key={`${month}-${day}`}
                             className={cn(
-                              "border p-0 text-center font-normal w-6 min-w-[24px]",
+                              "border p-1 text-center font-normal w-8 min-w-[32px]",
                               isWeekend && "bg-gray-200",
                               isTodayCell && "bg-blue-200 font-bold"
                             )}
                           >
-                            <div className={cn("text-[10px]", isTodayCell && "text-blue-600")}>{day}</div>
+                            <div className={cn("text-xs", isTodayCell && "text-blue-600")}>{day}</div>
                           </th>
                         )
                       })
@@ -522,21 +522,21 @@ function SchedulePageContent() {
                   {sortedWorkers.map((worker) => (
                     <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-1 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-10"
+                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-10"
                         onClick={() => openEditModal(worker)}
                       >
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <div
-                            className="w-1.5 h-6 rounded"
+                            className="w-2 h-8 rounded"
                             style={{ backgroundColor: worker.crew?.color || "#ccc" }}
                           />
-                          <div className="truncate max-w-[120px]">
-                            <div className="font-medium truncate">{worker.name || "Unnamed"}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
+                          <div className="truncate max-w-[160px]">
+                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
+                            <div className="text-xs text-muted-foreground truncate">
                               {worker.crew?.name || "No crew"}
                             </div>
                           </div>
-                          <Pencil className="h-2.5 w-2.5 text-muted-foreground ml-auto flex-shrink-0" />
+                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
                         </div>
                       </td>
                       {yearMonths.map(({ month, days }) =>
@@ -551,9 +551,9 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-6 min-w-[24px] h-6",
+                                "border text-center w-8 min-w-[32px] h-8",
                                 isWeekend && !style && "bg-gray-100",
-                                isTodayCell && "ring-1 ring-blue-400 ring-inset"
+                                isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
                               style={
                                 style
@@ -562,7 +562,7 @@ function SchedulePageContent() {
                               }
                               title={schedule ? `${schedule.shiftType}` : ""}
                             >
-                              <span className="text-[10px] font-bold">
+                              <span className="text-xs font-bold">
                                 {style ? style.label : ""}
                               </span>
                             </td>
