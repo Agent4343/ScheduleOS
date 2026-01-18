@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const organizationId = session.user.organizationId
+
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
@@ -27,22 +29,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Parse dates safely
-    const startDateParsed = new Date(startDate + "T00:00:00.000Z")
-    const endDateParsed = new Date(endDate + "T23:59:59.999Z")
+    // First get all user IDs in this organization
+    const orgUsers = await prisma.user.findMany({
+      where: { organizationId },
+      select: { id: true },
+    })
+    const orgUserIds = orgUsers.map(u => u.id)
 
-    const whereClause: {
-      user: { organizationId: string }
-      date: { gte: Date; lte: Date }
-      userId?: string
-      crewId?: string
-    } = {
-      user: {
-        organizationId: session.user.organizationId,
-      },
+    // Build where clause
+    const whereClause: Prisma.ScheduleWhereInput = {
+      userId: { in: orgUserIds },
       date: {
-        gte: startDateParsed,
-        lte: endDateParsed,
+        gte: new Date(startDate),
+        lte: new Date(endDate),
       },
     }
 
