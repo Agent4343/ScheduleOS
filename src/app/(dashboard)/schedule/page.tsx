@@ -149,6 +149,17 @@ function SchedulePageContent() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
+  // Schedule edit modal state (for updating individual days)
+  const [scheduleEditModalOpen, setScheduleEditModalOpen] = useState(false)
+  const [scheduleEditWorker, setScheduleEditWorker] = useState<Worker | null>(null)
+  const [scheduleEditStartDate, setScheduleEditStartDate] = useState<string>("")
+  const [scheduleEditEndDate, setScheduleEditEndDate] = useState<string>("")
+  const [scheduleEditShiftType, setScheduleEditShiftType] = useState<ShiftType>("SICK")
+  const [scheduleEditReason, setScheduleEditReason] = useState<string>("")
+  const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
+  const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
+  const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
+
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
 
@@ -394,6 +405,91 @@ function SchedulePageContent() {
     return scheduleMap.get(`${workerId}-${dateStr}`)
   }
 
+  // Open schedule edit modal when clicking on a cell
+  function openScheduleEditModal(worker: Worker, month: number, day: number) {
+    const dateStr = formatDate(currentYear, month, day)
+    setScheduleEditWorker(worker)
+    setScheduleEditStartDate(dateStr)
+    setScheduleEditEndDate(dateStr)
+    setScheduleEditShiftType("SICK")
+    setScheduleEditReason("")
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+    setScheduleEditModalOpen(true)
+  }
+
+  function closeScheduleEditModal() {
+    setScheduleEditModalOpen(false)
+    setScheduleEditWorker(null)
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+  }
+
+  async function saveScheduleEdit() {
+    if (!scheduleEditWorker || !scheduleEditStartDate || !scheduleEditEndDate) return
+
+    setScheduleEditSaving(true)
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+
+    try {
+      // Generate all dates in the range
+      const start = new Date(scheduleEditStartDate)
+      const end = new Date(scheduleEditEndDate)
+
+      if (end < start) {
+        throw new Error("End date must be on or after start date")
+      }
+
+      const datesToUpdate: string[] = []
+      const current = new Date(start)
+      while (current <= end) {
+        datesToUpdate.push(formatDate(current.getFullYear(), current.getMonth(), current.getDate()))
+        current.setDate(current.getDate() + 1)
+      }
+
+      // Update each date
+      for (const dateStr of datesToUpdate) {
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: scheduleEditWorker.id,
+            date: dateStr,
+            shiftType: scheduleEditShiftType,
+            isOverride: true,
+            overrideReason: scheduleEditReason || undefined,
+          }),
+        })
+
+        if (!response.ok) {
+          const result = await response.json()
+          throw new Error(result.error || "Failed to update schedule")
+        }
+      }
+
+      setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s) to ${scheduleEditShiftType}`)
+
+      // Refresh schedules
+      const schedulesResponse = await fetch(
+        `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
+      )
+      const schedulesResult = await schedulesResponse.json()
+      if (schedulesResult.success) {
+        setSchedules(schedulesResult.data)
+      }
+
+      // Close modal after short delay to show success message
+      setTimeout(() => {
+        closeScheduleEditModal()
+      }, 1500)
+    } catch (error) {
+      setScheduleEditError(error instanceof Error ? error.message : "Failed to update schedule")
+    } finally {
+      setScheduleEditSaving(false)
+    }
+  }
+
   const today = new Date()
   const isCurrentYear = today.getFullYear() === currentYear
   const todayMonth = today.getMonth()
@@ -551,7 +647,7 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8",
+                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 hover:ring-inset transition-all",
                                 isWeekend && !style && "bg-gray-100",
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
@@ -560,7 +656,8 @@ function SchedulePageContent() {
                                   ? { backgroundColor: style.bg, color: style.text }
                                   : undefined
                               }
-                              title={schedule ? `${schedule.shiftType}` : ""}
+                              title={schedule ? `${schedule.shiftType} - Click to edit` : "Click to add schedule"}
+                              onClick={() => openScheduleEditModal(worker, month, day)}
                             >
                               <span className="text-xs font-bold">
                                 {style ? style.label : ""}
@@ -744,6 +841,137 @@ function SchedulePageContent() {
                   <RotateCcw className="h-4 w-4 mr-2" />
                   Generate Schedule
                 </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Schedule Edit Modal - for updating individual days or ranges */}
+      <Modal
+        isOpen={scheduleEditModalOpen}
+        onClose={closeScheduleEditModal}
+        title="Update Schedule"
+        description={scheduleEditWorker?.name || "Update schedule entry"}
+      >
+        <div className="space-y-4">
+          {scheduleEditError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {scheduleEditError}
+            </div>
+          )}
+
+          {scheduleEditSuccess && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md">
+              {scheduleEditSuccess}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 rounded-md text-sm">
+            <p className="font-medium text-blue-900">Worker: {scheduleEditWorker?.name}</p>
+            <p className="text-blue-700">Select a date range and shift type below</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="scheduleStartDate">Start Date</Label>
+              <Input
+                id="scheduleStartDate"
+                type="date"
+                value={scheduleEditStartDate}
+                onChange={(e) => setScheduleEditStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scheduleEndDate">End Date</Label>
+              <Input
+                id="scheduleEndDate"
+                type="date"
+                value={scheduleEditEndDate}
+                onChange={(e) => setScheduleEditEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="shiftType">Shift Type</Label>
+            <Select
+              id="shiftType"
+              value={scheduleEditShiftType}
+              onChange={(e) => setScheduleEditShiftType(e.target.value as ShiftType)}
+              options={[
+                { value: "SICK", label: "🤒 Sick" },
+                { value: "VACATION", label: "🏖️ Vacation" },
+                { value: "LEAVE", label: "📋 Leave" },
+                { value: "DAY", label: "☀️ Day Shift" },
+                { value: "NIGHT", label: "🌙 Night Shift" },
+                { value: "OFF", label: "🏠 Off" },
+                { value: "PL_DAY", label: "📅 PL Day" },
+                { value: "PL_NIGHT", label: "🌃 PL Night" },
+                { value: "TRAINING", label: "📚 Training" },
+                { value: "SHUTDOWN", label: "🔧 Shutdown" },
+              ]}
+            />
+          </div>
+
+          {/* Quick action buttons */}
+          <div className="space-y-2">
+            <Label>Quick Select</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { type: "SICK", label: "Sick", bg: "#ef4444" },
+                { type: "VACATION", label: "Vacation", bg: "#10b981" },
+                { type: "LEAVE", label: "Leave", bg: "#f97316" },
+                { type: "OFF", label: "Off", bg: "#e5e7eb", text: "#6b7280" },
+                { type: "DAY", label: "Day", bg: "#22c55e" },
+                { type: "NIGHT", label: "Night", bg: "#2563eb" },
+              ].map(({ type, label, bg, text }) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScheduleEditShiftType(type as ShiftType)}
+                  className={cn(
+                    "transition-all",
+                    scheduleEditShiftType === type && "ring-2 ring-offset-2 ring-blue-500"
+                  )}
+                  style={{
+                    backgroundColor: scheduleEditShiftType === type ? bg : undefined,
+                    color: scheduleEditShiftType === type ? (text || "#ffffff") : undefined,
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="scheduleReason">Reason (optional)</Label>
+            <Input
+              id="scheduleReason"
+              value={scheduleEditReason}
+              onChange={(e) => setScheduleEditReason(e.target.value)}
+              placeholder="e.g., Doctor's appointment, Family vacation"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeScheduleEditModal} disabled={scheduleEditSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveScheduleEdit}
+              disabled={scheduleEditSaving || !scheduleEditStartDate || !scheduleEditEndDate}
+            >
+              {scheduleEditSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Schedule"
               )}
             </Button>
           </div>
