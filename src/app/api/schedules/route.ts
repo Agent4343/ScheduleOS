@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [{ date: "asc" }, { user: { name: "asc" } }],
+      orderBy: [{ date: "asc" }],
     })
 
     return NextResponse.json({ success: true, data: schedules })
