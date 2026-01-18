@@ -183,7 +183,9 @@ async function generateSchedules(
   organizationId: string,
   body: unknown
 ) {
+  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
+  console.log("Validated data:", JSON.stringify(validatedData))
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({

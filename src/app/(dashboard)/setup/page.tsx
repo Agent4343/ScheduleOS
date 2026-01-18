@@ -228,37 +228,49 @@ export default function SetupPage() {
       // Generate schedules for each selected worker
       const workerIds = Array.from(selectedWorkers)
       let successCount = 0
+      const errors: string[] = []
 
       // Get the pattern to check if it includes nights
       const pattern = patterns.find((p) => p.id === selectedPattern)
 
+      console.log("Generating schedules:", { workerIds, patternId: selectedPattern, startDate, endDate })
+
       for (const userId of workerIds) {
+        const requestBody = {
+          userId,
+          patternId: selectedPattern,
+          startDate,
+          endDate,
+          startPhase: 0,
+          // Send startingShift if pattern includes nights
+          ...(pattern?.includesNights && {
+            startingShift: startShift === "day" ? "DAY" : "NIGHT",
+          }),
+        }
+
+        console.log("Sending request for user:", userId, requestBody)
+
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            patternId: selectedPattern,
-            startDate,
-            endDate,
-            startPhase: 0,
-            // Send startingShift if pattern includes nights
-            ...(pattern?.includesNights && {
-              startingShift: startShift === "day" ? "DAY" : "NIGHT",
-            }),
-          }),
+          body: JSON.stringify(requestBody),
         })
 
         const data = await response.json()
+        console.log("Response for user:", userId, data)
+
         if (response.ok && data.success) {
           successCount++
         } else {
-          console.error("Failed to generate schedule for user:", userId, data.error)
+          const errorMsg = data.error || data.details || "Unknown error"
+          console.error("Failed to generate schedule for user:", userId, errorMsg)
+          errors.push(errorMsg)
         }
       }
 
       if (successCount === 0) {
-        setError("Failed to generate schedules. Please check that workers and pattern are correctly selected.")
+        const uniqueErrors = [...new Set(errors)]
+        setError(`Failed to generate schedules: ${uniqueErrors.join(", ")}`)
         return
       }
 
