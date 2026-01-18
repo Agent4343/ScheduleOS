@@ -670,62 +670,61 @@ export default function SchedulePage() {
               <p className="text-sm">Add workers to see their schedules</p>
             </div>
           ) : (
-            <div className="relative">
-              {/* Sticky worker info column */}
+            <div className="relative border border-gray-300">
+              {/* Excel-style grid */}
               <div className="flex">
-                {/* Fixed left column for worker info */}
-                <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
-                    <span className="font-semibold text-sm">Worker</span>
+                {/* Fixed left column for worker info - Excel style */}
+                <div className="sticky left-0 z-20 bg-white border-r-2 border-gray-400">
+                  {/* Header for worker column - Excel header style */}
+                  <div className="h-[52px] border-b-2 border-gray-400 flex items-center px-3 bg-gradient-to-b from-gray-100 to-gray-200">
+                    <span className="font-semibold text-xs text-gray-700">Worker</span>
                   </div>
                   {/* Worker rows */}
-                  {sortedWorkers.map((worker) => (
+                  {sortedWorkers.map((worker, index) => (
                     <div
                       key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
+                      className={cn(
+                        "h-6 border-b border-gray-300 flex items-center px-2 min-w-[180px] hover:bg-blue-50 cursor-pointer group",
+                        index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      )}
                       onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
-                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
+                          "w-2 h-4 rounded-sm mr-2 flex-shrink-0",
                           getPositionColor(worker.position)
                         )}
                         title={worker.position || "No position"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">
-                          {worker.position || "No position"}
-                          {worker.crew && ` • ${worker.crew.name}`}
-                        </p>
+                        <p className="font-medium text-[11px] truncate text-gray-800">{worker.name || "Unnamed"}</p>
                       </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                      <Pencil className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
                     </div>
                   ))}
                 </div>
 
-                {/* Scrollable calendar grid */}
+                {/* Scrollable calendar grid - Excel style */}
                 <div
                   ref={scrollRef}
                   className="overflow-x-auto flex-1"
                 >
                   <div className="inline-block min-w-max">
-                    {/* Month headers */}
-                    <div className="flex h-8 border-b bg-muted/30">
+                    {/* Month headers - Excel style */}
+                    <div className="flex h-6 border-b border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200">
                       {monthGroups.map(({ month, days }) => (
                         <div
                           key={month}
-                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 28}px` }}
+                          className="text-center text-[11px] font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center"
+                          style={{ width: `${days.length * 24}px` }}
                         >
                           {getMonthName(month)}
                         </div>
                       ))}
                     </div>
 
-                    {/* Day headers */}
-                    <div className="flex h-8 border-b">
+                    {/* Day headers - Excel style */}
+                    <div className="flex h-[26px] border-b-2 border-gray-400 bg-gradient-to-b from-gray-50 to-gray-100">
                       {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -735,16 +734,16 @@ export default function SchedulePage() {
                           <div
                             key={day.toISOString()}
                             className={cn(
-                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
-                              isWeekend && "bg-muted/50",
-                              isToday && "bg-primary/20 font-bold",
-                              isFirstOfMonth && "border-l border-gray-300"
+                              "w-6 text-center text-[9px] flex flex-col items-center justify-center border-r border-gray-200",
+                              isWeekend && "bg-blue-50",
+                              isToday && "bg-yellow-100",
+                              isFirstOfMonth && "border-l-2 border-l-gray-400"
                             )}
                           >
-                            <span className="text-muted-foreground">
+                            <span className={cn("font-medium", isWeekend ? "text-blue-600" : "text-gray-500")}>
                               {day.toLocaleDateString("en-US", { weekday: "narrow" })}
                             </span>
-                            <span className={cn(isToday && "text-primary")}>
+                            <span className={cn("font-bold", isToday ? "text-orange-600" : "text-gray-700")}>
                               {day.getDate()}
                             </span>
                           </div>
@@ -752,12 +751,12 @@ export default function SchedulePage() {
                       })}
                     </div>
 
-                    {/* Schedule rows */}
-                    {sortedWorkers.map((worker) => {
+                    {/* Schedule rows - Excel style */}
+                    {sortedWorkers.map((worker, rowIndex) => {
                       const userSchedules = schedulesByUser.get(worker.id)
 
                       return (
-                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
+                        <div key={worker.id} className={cn("flex h-6", rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50")}>
                           {yearDays.map((day) => {
                             const dateKey = day.toISOString().split("T")[0]
                             const schedule = userSchedules?.get(dateKey)
@@ -769,23 +768,22 @@ export default function SchedulePage() {
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
+                                  "w-6 h-6 flex items-center justify-center text-[10px] font-bold border-r border-b border-gray-200",
                                   isFirstOfMonth && "border-l-2 border-l-gray-400",
-                                  isToday && "ring-2 ring-primary ring-inset",
+                                  isToday && "ring-1 ring-orange-400 ring-inset",
                                   schedule
                                     ? cn(
                                         SHIFT_COLORS[schedule.shiftType].bg,
-                                        SHIFT_COLORS[schedule.shiftType].text,
-                                        "border-white/20"
+                                        SHIFT_COLORS[schedule.shiftType].text
                                       )
                                     : cn(
-                                        isWeekend ? "bg-gray-100" : "bg-white",
-                                        "text-muted-foreground/30"
+                                        isWeekend ? "bg-blue-50/50" : "",
+                                        "text-gray-300"
                                       )
                                 )}
                                 title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
                               >
-                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
+                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : ""}
                               </div>
                             )
                           })}
