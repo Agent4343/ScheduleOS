@@ -44,8 +44,9 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
       {/* Modal content */}
       <div
         className={cn(
-          "relative z-50 w-full max-w-lg rounded-lg bg-background p-6 shadow-lg",
+          "relative z-50 w-full max-w-lg rounded-lg bg-background shadow-lg",
           "animate-in fade-in-0 zoom-in-95",
+          "max-h-[90vh] flex flex-col",
           className
         )}
         role="dialog"
@@ -56,7 +57,7 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 z-10"
         >
           <X className="h-4 w-4" />
           <span className="sr-only">Close</span>
@@ -64,7 +65,7 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
 
         {/* Header */}
         {(title || description) && (
-          <div className="mb-4">
+          <div className="p-6 pb-0">
             {title && (
               <h2 id="modal-title" className="text-lg font-semibold">
                 {title}
@@ -78,8 +79,10 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
           </div>
         )}
 
-        {/* Content */}
-        {children}
+        {/* Content - scrollable */}
+        <div className="p-6 overflow-y-auto flex-1">
+          {children}
+        </div>
       </div>
     </div>
   )
