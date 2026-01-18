@@ -1,0 +1,639 @@
+openapi: 3.0.3
+info:
+  title: ScheduleOS API
+  description: |
+    REST API for ScheduleOS - A workforce scheduling application.
+
+    ## Authentication
+    Most endpoints require authentication via NextAuth.js session cookies.
+    Use the `/api/auth/signin` page to authenticate.
+
+    ## Rate Limiting
+    API endpoints are rate-limited to prevent abuse:
+    - Auth endpoints: 5 requests per 15 minutes
+    - Registration: 3 requests per hour
+    - General API: 60 requests per minute
+    - Schedule generation: 10 requests per minute
+  version: 1.0.0
+  contact:
+    name: ScheduleOS Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://scheduleos.example.com
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Users
+    description: User management
+  - name: Crews
+    description: Crew management
+  - name: Schedules
+    description: Schedule management
+  - name: Time-Off
+    description: Time-off requests
+  - name: Organization
+    description: Organization settings
+  - name: Health
+    description: Health checks
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns the health status of the application
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset
+      description: |
+        Sends a password reset email to the specified address.
+        Always returns success to prevent email enumeration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+      responses:
+        '200':
+          description: Request processed (email sent if account exists)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      description: Resets the user's password using a valid reset token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  type: string
+                  description: Reset token from email
+                password:
+                  type: string
+                  minLength: 8
+                  description: New password (8+ chars, upper, lower, number)
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid or expired token
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/register:
+    post:
+      tags: [Auth]
+      summary: Register new user
+      description: Creates a new user account with invitation token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterInput'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error or invalid invitation
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List all users
+      description: Returns all users in the organization (Admin/Supervisor only)
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+    patch:
+      tags: [Users]
+      summary: Update user
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserInput'
+      responses:
+        '200':
+          description: User updated
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: User not found
+    delete:
+      tags: [Users]
+      summary: Delete user
+      description: Deletes a user (Admin only, cannot delete self)
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: User not found
+
+  /api/crews:
+    get:
+      tags: [Crews]
+      summary: List all crews
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: List of crews
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Crew'
+    post:
+      tags: [Crews]
+      summary: Create new crew
+      security:
+        - sessionAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCrewInput'
+      responses:
+        '201':
+          description: Crew created
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/schedules:
+    get:
+      tags: [Schedules]
+      summary: Get schedules
+      description: Returns schedules for the specified date range
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: crewId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Schedule'
+    post:
+      tags: [Schedules]
+      summary: Generate schedules
+      description: Generates rotation schedules for the specified period
+      security:
+        - sessionAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startDate, endDate]
+              properties:
+                startDate:
+                  type: string
+                  format: date
+                endDate:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Schedules generated
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/time-off:
+    get:
+      tags: [Time-Off]
+      summary: List time-off requests
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, DENIED, CANCELLED]
+        - name: userId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of time-off requests
+    post:
+      tags: [Time-Off]
+      summary: Create time-off request
+      security:
+        - sessionAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTimeOffInput'
+      responses:
+        '201':
+          description: Request created
+    patch:
+      tags: [Time-Off]
+      summary: Update time-off request status
+      description: Approve or deny a time-off request (Admin/Supervisor only)
+      security:
+        - sessionAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, status]
+              properties:
+                id:
+                  type: string
+                status:
+                  type: string
+                  enum: [APPROVED, DENIED]
+                adminNotes:
+                  type: string
+      responses:
+        '200':
+          description: Request updated
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/organization:
+    get:
+      tags: [Organization]
+      summary: Get organization details
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Organization'
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: NextAuth.js session cookie
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Forbidden
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Too many requests
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, SUPERVISOR, WORKER]
+        position:
+          type: string
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, ON_LEAVE, TERMINATED]
+        hireDate:
+          type: string
+          format: date
+        crew:
+          $ref: '#/components/schemas/Crew'
+
+    RegisterInput:
+      type: object
+      required: [email, password, name, invitationToken]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+        invitationToken:
+          type: string
+
+    UpdateUserInput:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [ADMIN, SUPERVISOR, WORKER]
+        position:
+          type: string
+        phone:
+          type: string
+        crewId:
+          type: string
+        hireDate:
+          type: string
+          format: date
+
+    Crew:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        currentPhase:
+          type: integer
+        rotationPattern:
+          $ref: '#/components/schemas/RotationPattern'
+
+    CreateCrewInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        color:
+          type: string
+        rotationPatternId:
+          type: string
+
+    RotationPattern:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        daysOn:
+          type: integer
+        daysOff:
+          type: integer
+        includesNights:
+          type: boolean
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          format: date
+        shiftType:
+          type: string
+          enum: [DAY, NIGHT, OFF, VACATION, SICK, TRAINING, SHUTDOWN]
+        isOverride:
+          type: boolean
+        notes:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    CreateTimeOffInput:
+      type: object
+      required: [startDate, endDate, type]
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        type:
+          type: string
+          enum: [VACATION, SICK, PERSONAL, BEREAVEMENT, JURY_DUTY, OTHER]
+        reason:
+          type: string
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        settings:
+          type: object

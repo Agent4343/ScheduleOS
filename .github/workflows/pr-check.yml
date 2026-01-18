@@ -1,0 +1,148 @@
+name: PR Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  pr-info:
+    name: PR Info
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR Details
+        run: |
+          echo "PR #${{ github.event.pull_request.number }}"
+          echo "Title: ${{ github.event.pull_request.title }}"
+          echo "Author: ${{ github.event.pull_request.user.login }}"
+          echo "Base: ${{ github.event.pull_request.base.ref }}"
+          echo "Head: ${{ github.event.pull_request.head.ref }}"
+
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type Check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm run test:run
+
+      - name: Test Coverage
+        run: npm run test:coverage
+
+      - name: Check coverage threshold
+        run: |
+          # Extract coverage percentage from coverage report
+          COVERAGE=$(cat coverage/coverage-summary.json | jq '.total.lines.pct')
+          echo "Coverage: $COVERAGE%"
+
+          # Fail if coverage is below threshold (adjust as needed)
+          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
+            echo "Coverage is below 50% threshold"
+            exit 1
+          fi
+        continue-on-error: true
+
+  size-check:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          DATABASE_URL: "postgresql://user:password@localhost:5432/test"
+          NEXTAUTH_URL: "http://localhost:3000"
+          NEXTAUTH_SECRET: "test-secret"
+
+      - name: Check bundle size
+        run: |
+          echo "Checking .next directory size..."
+          du -sh .next/
+          du -sh .next/static/
+        continue-on-error: true
+
+  label-pr:
+    name: Label PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        run: |
+          echo "Fetching changed files..."
+          FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files -q '.files[].path' | tr '\n' ' ')
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add labels based on files
+        run: |
+          FILES="${{ steps.changed-files.outputs.files }}"
+          LABELS=""
+
+          if echo "$FILES" | grep -q "src/app/api/"; then
+            LABELS="$LABELS,api"
+          fi
+
+          if echo "$FILES" | grep -q "src/components/"; then
+            LABELS="$LABELS,frontend"
+          fi
+
+          if echo "$FILES" | grep -q ".test."; then
+            LABELS="$LABELS,tests"
+          fi
+
+          if echo "$FILES" | grep -q "prisma/"; then
+            LABELS="$LABELS,database"
+          fi
+
+          if echo "$FILES" | grep -q ".github/"; then
+            LABELS="$LABELS,ci"
+          fi
+
+          if [ -n "$LABELS" ]; then
+            LABELS="${LABELS:1}"  # Remove leading comma
+            echo "Adding labels: $LABELS"
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "$LABELS" || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
