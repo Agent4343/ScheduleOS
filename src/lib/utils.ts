@@ -84,9 +84,11 @@ export function generateSlug(name: string): string {
 
 export function generateToken(length: number = 32): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const crypto = require('crypto')
+  const randomBytes = crypto.randomBytes(length)
   let result = ''
   for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
+    result += chars.charAt(randomBytes[i] % chars.length)
   }
   return result
 }
