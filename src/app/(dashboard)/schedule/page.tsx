@@ -96,15 +96,22 @@ function formatDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
-// Get days in a month
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate()
+// Get all days in a year grouped by month
+function getYearDays(year: number) {
+  const months: { month: number; days: number[] }[] = []
+  for (let month = 0; month < 12; month++) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+    months.push({ month, days })
+  }
+  return months
 }
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
-  const monthFromUrl = searchParams.get("month")
 
   const [currentYear, setCurrentYear] = useState(() => {
     if (yearFromUrl) {
@@ -112,14 +119,6 @@ function SchedulePageContent() {
       if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2100) return parsed
     }
     return new Date().getFullYear()
-  })
-
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    if (monthFromUrl) {
-      const parsed = parseInt(monthFromUrl)
-      if (!isNaN(parsed) && parsed >= 0 && parsed <= 11) return parsed
-    }
-    return new Date().getMonth()
   })
 
   const [schedules, setSchedules] = useState<Schedule[]>([])
@@ -150,14 +149,8 @@ function SchedulePageContent() {
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
-  // Get days for current month
-  const daysInMonth = getDaysInMonth(currentYear, currentMonth)
-  const monthDays = Array.from({ length: daysInMonth }, (_, i) => i + 1)
-
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ]
+  // Get all days for the year
+  const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
 
   // Fetch crews
   useEffect(() => {
@@ -211,13 +204,13 @@ function SchedulePageContent() {
     fetchWorkers()
   }, [selectedCrew])
 
-  // Fetch schedules for the month
+  // Fetch schedules for the full year
   useEffect(() => {
     async function fetchSchedules() {
       setLoading(true)
       try {
-        const startDate = formatDate(currentYear, currentMonth, 1)
-        const endDate = formatDate(currentYear, currentMonth, daysInMonth)
+        const startDate = `${currentYear}-01-01`
+        const endDate = `${currentYear}-12-31`
 
         let url = `/api/schedules?startDate=${startDate}&endDate=${endDate}`
         if (selectedCrew) {
@@ -238,13 +231,12 @@ function SchedulePageContent() {
       }
     }
     fetchSchedules()
-  }, [currentYear, currentMonth, daysInMonth, selectedCrew])
+  }, [currentYear, selectedCrew])
 
   // Build schedule lookup map
   const scheduleMap = useMemo(() => {
     const map = new Map<string, Schedule>()
     for (const schedule of schedules) {
-      // Extract date part from ISO string
       const dateStr = schedule.date.split("T")[0]
       const key = `${schedule.user.id}-${dateStr}`
       map.set(key, schedule)
@@ -260,28 +252,6 @@ function SchedulePageContent() {
       return (a.name || "").localeCompare(b.name || "")
     })
   }, [workers])
-
-  function navigateMonth(direction: number) {
-    let newMonth = currentMonth + direction
-    let newYear = currentYear
-
-    if (newMonth < 0) {
-      newMonth = 11
-      newYear -= 1
-    } else if (newMonth > 11) {
-      newMonth = 0
-      newYear += 1
-    }
-
-    setCurrentMonth(newMonth)
-    setCurrentYear(newYear)
-  }
-
-  function goToToday() {
-    const today = new Date()
-    setCurrentYear(today.getFullYear())
-    setCurrentMonth(today.getMonth())
-  }
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -402,15 +372,11 @@ function SchedulePageContent() {
         throw new Error(result.error || "Failed to generate schedule")
       }
 
-      setGenerateSuccess(
-        `Generated ${result.data?.daysGenerated || 0} schedule days`
-      )
+      setGenerateSuccess(`Generated ${result.data?.daysGenerated || 0} schedule days`)
 
       // Refresh schedules
-      const fetchStartDate = formatDate(currentYear, currentMonth, 1)
-      const fetchEndDate = formatDate(currentYear, currentMonth, daysInMonth)
       const schedulesResponse = await fetch(
-        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
+        `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`
       )
       const schedulesResult = await schedulesResponse.json()
       if (schedulesResult.success) {
@@ -423,13 +389,14 @@ function SchedulePageContent() {
     }
   }
 
-  function getScheduleForDay(workerId: string, day: number): Schedule | undefined {
-    const dateStr = formatDate(currentYear, currentMonth, day)
+  function getScheduleForDay(workerId: string, month: number, day: number): Schedule | undefined {
+    const dateStr = formatDate(currentYear, month, day)
     return scheduleMap.get(`${workerId}-${dateStr}`)
   }
 
   const today = new Date()
-  const isCurrentMonth = today.getFullYear() === currentYear && today.getMonth() === currentMonth
+  const isCurrentYear = today.getFullYear() === currentYear
+  const todayMonth = today.getMonth()
   const todayDate = today.getDate()
 
   return (
@@ -439,21 +406,19 @@ function SchedulePageContent() {
         <div>
           <h1 className="text-2xl font-bold">Schedule Calendar</h1>
           <p className="text-muted-foreground">
-            {monthNames[currentMonth]} {currentYear} - {sortedWorkers.length} Workers
+            {currentYear} - Full Year View - {sortedWorkers.length} Workers
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToToday}>
-            Today
+          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+            This Year
           </Button>
-          <Button variant="outline" size="icon" onClick={() => navigateMonth(-1)}>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-semibold px-2 min-w-[140px] text-center">
-            {monthNames[currentMonth]} {currentYear}
-          </span>
-          <Button variant="outline" size="icon" onClick={() => navigateMonth(1)}>
+          <span className="font-semibold px-4 text-lg">{currentYear}</span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -492,7 +457,7 @@ function SchedulePageContent() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            {monthNames[currentMonth]} {currentYear}
+            {currentYear} Schedule
             <Badge variant="secondary" className="ml-2">
               <Users className="h-3 w-3 mr-1" />
               {sortedWorkers.length} workers
@@ -510,82 +475,100 @@ function SchedulePageContent() {
               <p>No workers found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="bg-muted/50">
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted/50 min-w-[180px]">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+              <table className="border-collapse text-xs" style={{ minWidth: "max-content" }}>
+                <thead className="sticky top-0 z-20">
+                  {/* Month headers */}
+                  <tr className="bg-muted">
+                    <th className="border p-1 text-left font-semibold sticky left-0 bg-muted z-30 min-w-[150px]">
                       Worker
                     </th>
-                    {monthDays.map((day) => {
-                      const date = new Date(currentYear, currentMonth, day)
-                      const dayName = date.toLocaleDateString("en-US", { weekday: "short" })
-                      const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                      const isTodayCell = isCurrentMonth && day === todayDate
+                    {yearMonths.map(({ month, days }) => (
+                      <th
+                        key={month}
+                        colSpan={days.length}
+                        className="border p-1 text-center font-semibold bg-muted"
+                      >
+                        {MONTH_NAMES[month]}
+                      </th>
+                    ))}
+                  </tr>
+                  {/* Day headers */}
+                  <tr className="bg-muted/50">
+                    <th className="border p-1 sticky left-0 bg-muted/50 z-30"></th>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const date = new Date(currentYear, month, day)
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                        const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
 
-                      return (
-                        <th
-                          key={day}
-                          className={cn(
-                            "border p-1 text-center min-w-[36px] font-normal",
-                            isWeekend && "bg-gray-100",
-                            isTodayCell && "bg-blue-100 font-bold"
-                          )}
-                        >
-                          <div className="text-xs text-muted-foreground">{dayName.charAt(0)}</div>
-                          <div className={cn(isTodayCell && "text-blue-600")}>{day}</div>
-                        </th>
-                      )
-                    })}
+                        return (
+                          <th
+                            key={`${month}-${day}`}
+                            className={cn(
+                              "border p-0 text-center font-normal w-6 min-w-[24px]",
+                              isWeekend && "bg-gray-200",
+                              isTodayCell && "bg-blue-200 font-bold"
+                            )}
+                          >
+                            <div className={cn("text-[10px]", isTodayCell && "text-blue-600")}>{day}</div>
+                          </th>
+                        )
+                      })
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {sortedWorkers.map((worker) => (
-                    <tr key={worker.id} className="hover:bg-muted/30">
+                    <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50"
+                        className="border p-1 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-10"
                         onClick={() => openEditModal(worker)}
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <div
-                            className="w-2 h-8 rounded"
-                            style={{ backgroundColor: worker.crew?.color || "#gray" }}
+                            className="w-1.5 h-6 rounded"
+                            style={{ backgroundColor: worker.crew?.color || "#ccc" }}
                           />
-                          <div>
-                            <div className="font-medium">{worker.name || "Unnamed"}</div>
-                            <div className="text-xs text-muted-foreground">
+                          <div className="truncate max-w-[120px]">
+                            <div className="font-medium truncate">{worker.name || "Unnamed"}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">
                               {worker.crew?.name || "No crew"}
                             </div>
                           </div>
-                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto" />
+                          <Pencil className="h-2.5 w-2.5 text-muted-foreground ml-auto flex-shrink-0" />
                         </div>
                       </td>
-                      {monthDays.map((day) => {
-                        const schedule = getScheduleForDay(worker.id, day)
-                        const date = new Date(currentYear, currentMonth, day)
-                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                        const isTodayCell = isCurrentMonth && day === todayDate
-                        const style = schedule ? SHIFT_STYLES[schedule.shiftType] : null
+                      {yearMonths.map(({ month, days }) =>
+                        days.map((day) => {
+                          const schedule = getScheduleForDay(worker.id, month, day)
+                          const date = new Date(currentYear, month, day)
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                          const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+                          const style = schedule ? SHIFT_STYLES[schedule.shiftType] : null
 
-                        return (
-                          <td
-                            key={day}
-                            className={cn(
-                              "border text-center font-bold",
-                              isWeekend && !style && "bg-gray-50",
-                              isTodayCell && "ring-2 ring-blue-400 ring-inset"
-                            )}
-                            style={
-                              style
-                                ? { backgroundColor: style.bg, color: style.text }
-                                : undefined
-                            }
-                            title={schedule ? `${schedule.shiftType}` : "No schedule"}
-                          >
-                            {style ? style.label : "-"}
-                          </td>
-                        )
-                      })}
+                          return (
+                            <td
+                              key={`${month}-${day}`}
+                              className={cn(
+                                "border text-center w-6 min-w-[24px] h-6",
+                                isWeekend && !style && "bg-gray-100",
+                                isTodayCell && "ring-1 ring-blue-400 ring-inset"
+                              )}
+                              style={
+                                style
+                                  ? { backgroundColor: style.bg, color: style.text }
+                                  : undefined
+                              }
+                              title={schedule ? `${schedule.shiftType}` : ""}
+                            >
+                              <span className="text-[10px] font-bold">
+                                {style ? style.label : ""}
+                              </span>
+                            </td>
+                          )
+                        })
+                      )}
                     </tr>
                   ))}
                 </tbody>
