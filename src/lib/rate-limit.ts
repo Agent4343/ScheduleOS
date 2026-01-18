@@ -23,11 +23,11 @@ function cleanupExpiredEntries(): void {
   if (now - lastCleanup < CLEANUP_INTERVAL) return
 
   lastCleanup = now
-  for (const [key, entry] of rateLimitStore.entries()) {
+  rateLimitStore.forEach((entry, key) => {
     if (now > entry.resetTime) {
       rateLimitStore.delete(key)
     }
-  }
+  })
 }
 
 // Get client identifier from request
