@@ -199,6 +199,8 @@ enum ShiftType {
   NIGHT
   OFF
   LEAVE
+  PL_DAY
+  PL_NIGHT
   VACATION
   SICK
   TRAINING
