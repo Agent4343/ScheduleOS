@@ -1,4 +1,4 @@
-import { ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { addDays, isSameDay } from "./utils"
 
 export interface RotationPattern {

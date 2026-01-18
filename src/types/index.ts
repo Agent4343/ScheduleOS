@@ -1,7 +1,64 @@
-import { UserRole, UserStatus, ShiftType, TimeOffType, RequestStatus, NotificationType } from '@prisma/client'
+// Local enum definitions (matching Prisma schema)
+// These are defined locally to avoid build issues when Prisma client isn't generated
 
-// Re-export Prisma enums
-export { UserRole, UserStatus, ShiftType, TimeOffType, RequestStatus, NotificationType }
+export const UserRole = {
+  ADMIN: 'ADMIN',
+  SUPERVISOR: 'SUPERVISOR',
+  WORKER: 'WORKER',
+} as const
+export type UserRole = typeof UserRole[keyof typeof UserRole]
+
+export const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  ON_LEAVE: 'ON_LEAVE',
+  TERMINATED: 'TERMINATED',
+} as const
+export type UserStatus = typeof UserStatus[keyof typeof UserStatus]
+
+export const ShiftType = {
+  DAY: 'DAY',
+  NIGHT: 'NIGHT',
+  OFF: 'OFF',
+  LEAVE: 'LEAVE',
+  PL_DAY: 'PL_DAY',
+  PL_NIGHT: 'PL_NIGHT',
+  VACATION: 'VACATION',
+  SICK: 'SICK',
+  TRAINING: 'TRAINING',
+  SHUTDOWN: 'SHUTDOWN',
+  CUSTOM: 'CUSTOM',
+} as const
+export type ShiftType = typeof ShiftType[keyof typeof ShiftType]
+
+export const TimeOffType = {
+  VACATION: 'VACATION',
+  SICK: 'SICK',
+  PERSONAL: 'PERSONAL',
+  BEREAVEMENT: 'BEREAVEMENT',
+  JURY_DUTY: 'JURY_DUTY',
+  OTHER: 'OTHER',
+} as const
+export type TimeOffType = typeof TimeOffType[keyof typeof TimeOffType]
+
+export const RequestStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  DENIED: 'DENIED',
+  CANCELLED: 'CANCELLED',
+} as const
+export type RequestStatus = typeof RequestStatus[keyof typeof RequestStatus]
+
+export const NotificationType = {
+  SCHEDULE_CHANGE: 'SCHEDULE_CHANGE',
+  TIME_OFF_REQUEST: 'TIME_OFF_REQUEST',
+  TIME_OFF_APPROVED: 'TIME_OFF_APPROVED',
+  TIME_OFF_DENIED: 'TIME_OFF_DENIED',
+  STAFFING_ALERT: 'STAFFING_ALERT',
+  SHIFT_SWAP: 'SHIFT_SWAP',
+  SYSTEM: 'SYSTEM',
+} as const
+export type NotificationType = typeof NotificationType[keyof typeof NotificationType]
 
 // Extended types for frontend use
 export interface OrganizationSettings {

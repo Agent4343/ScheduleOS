@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { addDays, startOfWeek, endOfWeek } from "@/lib/utils"
 
 export async function GET() {

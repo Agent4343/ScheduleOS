@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { Prisma, ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Build the where clause explicitly to avoid Prisma issues
-    const whereClause: Prisma.ScheduleWhereInput = {
+    const whereClause: Record<string, unknown> = {
       user: {
         organizationId: organizationId,
       },
@@ -237,7 +237,13 @@ async function generateSchedules(
   )
 
   // Create schedules for all users
-  const scheduleData: Prisma.ScheduleCreateManyInput[] = []
+  const scheduleData: Array<{
+    userId: string
+    date: Date
+    shiftType: string
+    crewId: string | null
+    isOverride: boolean
+  }> = []
   for (const userId of userIds) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -256,7 +262,8 @@ async function generateSchedules(
   }
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
-  await prisma.$transaction(async (tx) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await prisma.$transaction(async (tx: any) => {
     // Delete ALL existing non-override schedules for the user(s)
     // This ensures the old schedule is completely replaced when regenerating
     await tx.schedule.deleteMany({

@@ -1,12 +1,8 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  fallback: ["system-ui", "arial"],
-})
+// Use system fonts to avoid network dependency on Google Fonts
+const fontClassName = "font-sans"
 
 export const metadata: Metadata = {
   title: {
@@ -101,7 +97,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={fontClassName}>{children}</body>
     </html>
   )
 }
