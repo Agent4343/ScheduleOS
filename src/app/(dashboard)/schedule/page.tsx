@@ -477,25 +477,25 @@ function SchedulePageContent() {
           ) : (
             <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
               <table className="border-collapse text-sm" style={{ minWidth: "max-content" }}>
-                <thead className="sticky top-0 z-20">
+                <thead className="sticky top-0 z-30 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
                   {/* Month headers */}
-                  <tr className="bg-muted">
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-30 min-w-[200px]">
+                  <tr>
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-gray-100 z-40 min-w-[200px]">
                       Worker
                     </th>
                     {yearMonths.map(({ month, days }) => (
                       <th
                         key={month}
                         colSpan={days.length}
-                        className="border p-2 text-center font-semibold bg-muted text-base"
+                        className="border p-2 text-center font-semibold bg-gray-100 text-base"
                       >
                         {MONTH_NAMES[month]}
                       </th>
                     ))}
                   </tr>
                   {/* Day headers */}
-                  <tr className="bg-muted/50">
-                    <th className="border p-1 sticky left-0 bg-muted/50 z-30"></th>
+                  <tr>
+                    <th className="border p-1 sticky left-0 bg-gray-50 z-40"></th>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
                         const date = new Date(currentYear, month, day)
@@ -507,7 +507,7 @@ function SchedulePageContent() {
                             key={`${month}-${day}`}
                             className={cn(
                               "border p-1 text-center font-normal w-8 min-w-[32px]",
-                              isWeekend && "bg-gray-200",
+                              isWeekend ? "bg-gray-200" : "bg-gray-50",
                               isTodayCell && "bg-blue-200 font-bold"
                             )}
                           >
