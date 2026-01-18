@@ -4,8 +4,22 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
 import { generateRotationSchedule } from "@/lib/scheduling"
+import { logger } from "@/lib/logger"
+import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
+
+// Maximum date range allowed (365 days)
+const MAX_DATE_RANGE_DAYS = 365
 
 export async function GET(request: NextRequest) {
+  // Rate limit API requests
+  const rateLimitResult = checkRateLimit(request, RATE_LIMITS.api)
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      { status: 429, headers: createRateLimitHeaders(rateLimitResult) }
+    )
+  }
+
   try {
     const session = await getServerSession(authOptions)
 
@@ -26,14 +40,33 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Validate date range to prevent excessive queries
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (daysDiff > MAX_DATE_RANGE_DAYS) {
+      return NextResponse.json(
+        { error: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days` },
+        { status: 400 }
+      )
+    }
+
+    if (daysDiff < 0) {
+      return NextResponse.json(
+        { error: "endDate must be after startDate" },
+        { status: 400 }
+      )
+    }
+
     const schedules = await prisma.schedule.findMany({
       where: {
         user: {
           organizationId: session.user.organizationId,
         },
         date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate),
+          gte: start,
+          lte: end,
         },
         ...(userId && { userId }),
         ...(crewId && { crewId }),
@@ -60,7 +93,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
-    console.error("Error fetching schedules:", error)
+    logger.error("Error fetching schedules", error)
     return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 })
   }
 }
@@ -81,6 +114,14 @@ export async function POST(request: NextRequest) {
 
     // Check if this is a generate request or single schedule create
     if (body.patternId) {
+      // Rate limit schedule generation more strictly
+      const rateLimitResult = checkRateLimit(request, RATE_LIMITS.scheduleGeneration)
+      if (!rateLimitResult.success) {
+        return NextResponse.json(
+          { error: "Too many schedule generation requests" },
+          { status: 429, headers: createRateLimitHeaders(rateLimitResult) }
+        )
+      }
       return generateSchedules(request, session.user.organizationId, body)
     }
 
@@ -134,11 +175,11 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
   } catch (error) {
-    console.error("Error creating schedule:", error)
+    logger.error("Error creating schedule", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }

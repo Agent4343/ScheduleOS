@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
+import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
 
 const sqlStatements = [
   // Create enums
@@ -221,9 +223,29 @@ const sqlStatements = [
 ]
 
 export async function GET(request: NextRequest) {
+  // Rate limit setup endpoint strictly
+  const rateLimitResult = checkRateLimit(request, RATE_LIMITS.setup)
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again later." },
+      { status: 429, headers: createRateLimitHeaders(rateLimitResult) }
+    )
+  }
+
   const setupKey = request.nextUrl.searchParams.get("key")
 
-  if (setupKey !== process.env.SETUP_KEY && setupKey !== "initial-setup-2026") {
+  // SECURITY: Only allow setup with a valid SETUP_KEY environment variable
+  // No fallback keys - if SETUP_KEY is not set, setup is disabled
+  if (!process.env.SETUP_KEY) {
+    logger.warn("Setup attempted but SETUP_KEY not configured")
+    return NextResponse.json(
+      { error: "Setup is not available" },
+      { status: 403 }
+    )
+  }
+
+  if (setupKey !== process.env.SETUP_KEY) {
+    logger.warn("Setup attempted with invalid key")
     return NextResponse.json({ error: "Invalid setup key" }, { status: 401 })
   }
 
@@ -238,6 +260,7 @@ export async function GET(request: NextRequest) {
     const tableNames = tables.map((t: { tablename: string }) => t.tablename)
 
     if (tableNames.includes('User')) {
+      logger.info("Setup check: database already configured")
       return NextResponse.json({
         success: true,
         message: "Database already set up",
@@ -263,6 +286,8 @@ export async function GET(request: NextRequest) {
     `
     const newTableNames = newTables.map((t: { tablename: string }) => t.tablename)
 
+    logger.info("Database setup completed", { tableCount: newTableNames.length })
+
     return NextResponse.json({
       success: true,
       message: "Database tables created successfully",
@@ -271,13 +296,11 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: unknown) {
-    console.error("Setup error:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    logger.error("Setup failed", error)
 
+    // Don't expose internal details in production
     return NextResponse.json({
       error: "Setup failed",
-      details: errorMessage,
-      database_url_set: !!process.env.DATABASE_URL,
     }, { status: 500 })
   }
 }

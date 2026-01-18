@@ -3,8 +3,19 @@ import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/auth"
 import { registerSchema } from "@/lib/validations"
 import { generateSlug } from "@/lib/utils"
+import { logger } from "@/lib/logger"
+import { checkRateLimit, RATE_LIMITS, createRateLimitHeaders } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
+  // Rate limit registration strictly
+  const rateLimitResult = checkRateLimit(request, RATE_LIMITS.register)
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: "Too many registration attempts. Please try again later." },
+      { status: 429, headers: createRateLimitHeaders(rateLimitResult) }
+    )
+  }
+
   try {
     const body = await request.json()
     const validatedData = registerSchema.parse(body)
@@ -178,11 +189,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error("Registration error:", error)
+    logger.error("Registration failed", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
