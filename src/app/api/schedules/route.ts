@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { Prisma, ShiftType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
 import { generateRotationSchedule } from "@/lib/scheduling"
-
-// Type for schedule creation data
-interface ScheduleCreateInput {
-  userId: string
-  date: Date
-  shiftType: string
-  crewId: string | null
-  isOverride: boolean
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -216,7 +208,7 @@ async function generateSchedules(
   )
 
   // Create schedules for all users
-  const scheduleData: ScheduleCreateInput[] = []
+  const scheduleData: Prisma.ScheduleCreateManyInput[] = []
   for (const userId of userIds) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -227,7 +219,7 @@ async function generateSchedules(
       scheduleData.push({
         userId,
         date: schedule.date,
-        shiftType: schedule.shiftType,
+        shiftType: schedule.shiftType as ShiftType,
         crewId: user?.crewId ?? null,
         isOverride: false,
       })
