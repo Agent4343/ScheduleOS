@@ -700,7 +700,7 @@ function SchedulePageContent() {
                               isTodayCell && "bg-blue-200 font-bold"
                             )}
                           >
-                            <div className={cn("text-xs", isTodayCell && "text-blue-600")}>{day}</div>
+                            <div className={cn("text-sm font-semibold text-gray-700", isTodayCell && "text-blue-600")}>{day}</div>
                           </th>
                         )
                       })
