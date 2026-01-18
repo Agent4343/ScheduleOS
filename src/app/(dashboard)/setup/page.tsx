@@ -269,7 +269,7 @@ export default function SetupPage() {
       }
 
       if (successCount === 0) {
-        const uniqueErrors = [...new Set(errors)]
+        const uniqueErrors = Array.from(new Set(errors))
         setError(`Failed to generate schedules: ${uniqueErrors.join(", ")}`)
         return
       }
