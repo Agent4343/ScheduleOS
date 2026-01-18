@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 
 export async function GET() {
   const response: {
     status: string
     timestamp: string
     database?: string
-    error?: string
   } = {
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -18,10 +18,9 @@ export async function GET() {
       await prisma.$queryRaw`SELECT 1`
       response.database = "connected"
     } catch (error) {
-      console.error("Database check failed:", error)
+      logger.error("Database health check failed", error)
       response.database = "disconnected"
-      response.error = error instanceof Error ? error.message : "Unknown error"
-      // Still return 200 - app is running, just database is not ready
+      // Don't expose error details in response
     }
   } else {
     response.database = "not_configured"

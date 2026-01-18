@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateOrganizationSchema } from "@/lib/validations"
+import { logger } from "@/lib/logger"
 
 export async function GET() {
   try {
@@ -31,7 +32,7 @@ export async function GET() {
 
     return NextResponse.json({ success: true, data: organization })
   } catch (error) {
-    console.error("Error fetching organization:", error)
+    logger.error("Error fetching organization", error)
     return NextResponse.json({ error: "Failed to fetch organization" }, { status: 500 })
   }
 }
@@ -65,7 +66,7 @@ export async function PATCH(request: NextRequest) {
       message: "Organization updated successfully",
     })
   } catch (error) {
-    console.error("Error updating organization:", error)
+    logger.error("Error updating organization", error)
     return NextResponse.json({ error: "Failed to update organization" }, { status: 500 })
   }
 }

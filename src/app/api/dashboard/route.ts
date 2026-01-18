@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { ShiftType } from "@prisma/client"
 import { addDays, startOfWeek, endOfWeek } from "@/lib/utils"
+import { logger } from "@/lib/logger"
 
 export async function GET() {
   try {
@@ -190,7 +191,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("Error fetching dashboard data:", error)
+    logger.error("Error fetching dashboard data", error)
     return NextResponse.json({ error: "Failed to fetch dashboard data" }, { status: 500 })
   }
 }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createCrewSchema } from "@/lib/validations"
+import { logger } from "@/lib/logger"
 
 export async function GET(_request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function GET(_request: NextRequest) {
 
     return NextResponse.json({ success: true, data: crews })
   } catch (error) {
-    console.error("Error fetching crews:", error)
+    logger.error("Error fetching crews", error)
     return NextResponse.json({ error: "Failed to fetch crews" }, { status: 500 })
   }
 }
@@ -110,11 +111,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error("Error creating crew:", error)
+    logger.error("Error creating crew", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateUserSchema } from "@/lib/validations"
+import { logger } from "@/lib/logger"
 
 export async function GET(
   request: NextRequest,
@@ -46,7 +47,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, data: user })
   } catch (error) {
-    console.error("Error fetching user:", error)
+    logger.error("Error fetching user", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
   }
 }
@@ -131,11 +132,11 @@ export async function PATCH(
       message: "User updated successfully",
     })
   } catch (error) {
-    console.error("Error updating user:", error)
+    logger.error("Error updating user", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
@@ -186,7 +187,7 @@ export async function DELETE(
       message: "User deleted successfully",
     })
   } catch (error) {
-    console.error("Error deleting user:", error)
+    logger.error("Error deleting user", error)
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
   }
 }

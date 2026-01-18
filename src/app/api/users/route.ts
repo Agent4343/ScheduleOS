@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions, hashPassword } from "@/lib/auth"
 import { createUserSchema } from "@/lib/validations"
+import { logger } from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: users })
   } catch (error) {
-    console.error("Error fetching users:", error)
+    logger.error("Error fetching users", error)
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
   }
 }
@@ -134,11 +135,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error("Error creating user:", error)
+    logger.error("Error creating user", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }

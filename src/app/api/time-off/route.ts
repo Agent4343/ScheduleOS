@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
 import { ShiftType } from "@prisma/client"
 import { getDateRange } from "@/lib/utils"
+import { logger } from "@/lib/logger"
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: requests })
   } catch (error) {
-    console.error("Error fetching time off requests:", error)
+    logger.error("Error fetching time off requests", error)
     return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 })
   }
 }
@@ -204,11 +205,11 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     )
   } catch (error) {
-    console.error("Error creating time off request:", error)
+    logger.error("Error creating time off request", error)
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
@@ -327,7 +328,7 @@ export async function PATCH(request: NextRequest) {
       message: `Request ${validatedData.status.toLowerCase()}`,
     })
   } catch (error) {
-    console.error("Error updating time off request:", error)
+    logger.error("Error updating time off request", error)
     return NextResponse.json({ error: "Failed to update request" }, { status: 500 })
   }
 }
