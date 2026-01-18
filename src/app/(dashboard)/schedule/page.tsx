@@ -45,6 +45,13 @@ interface Crew {
   id: string
   name: string
   color: string
+  rotationPattern?: {
+    id: string
+    name: string
+    daysOn: number
+    daysOff: number
+    includesNights: boolean
+  } | null
 }
 
 interface Worker {
@@ -195,7 +202,6 @@ export default function SchedulePage() {
 
   // Bulk generation modal state
   const [bulkModalOpen, setBulkModalOpen] = useState(false)
-  const [bulkPatternId, setBulkPatternId] = useState<string>("")
   const [bulkStartDate, setBulkStartDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   )
@@ -481,9 +487,9 @@ export default function SchedulePage() {
     }
   }
 
-  // Bulk generate schedules for all workers
+  // Bulk generate schedules for all workers using their crew's rotation pattern
   async function generateAllSchedules() {
-    if (!bulkPatternId || !bulkStartDate) return
+    if (!bulkStartDate) return
 
     setBulkGenerating(true)
     setBulkError(null)
@@ -495,12 +501,29 @@ export default function SchedulePage() {
 
       let successCount = 0
       let failCount = 0
-      const workersToProcess = sortedWorkers.filter(w => w.crew) // Only workers with crews
+      let skippedCount = 0
+
+      // Only workers with crews that have rotation patterns
+      const workersToProcess = sortedWorkers.filter(w => {
+        if (!w.crew) return false
+        const crew = crews.find(c => c.id === w.crew?.id)
+        return crew?.rotationPattern?.id
+      })
+
+      const workersSkipped = sortedWorkers.filter(w => {
+        if (!w.crew) return true
+        const crew = crews.find(c => c.id === w.crew?.id)
+        return !crew?.rotationPattern?.id
+      })
+      skippedCount = workersSkipped.length
 
       for (let i = 0; i < workersToProcess.length; i++) {
         const worker = workersToProcess[i]
+        const crew = crews.find(c => c.id === worker.crew?.id)
+        const patternId = crew?.rotationPattern?.id
+
         setBulkProgress(
-          `Generating schedule for ${worker.name || "worker"} (${i + 1}/${workersToProcess.length})...`
+          `Generating schedule for ${worker.name || "worker"} (${crew?.name || "crew"}) - ${i + 1}/${workersToProcess.length}...`
         )
 
         try {
@@ -509,7 +532,7 @@ export default function SchedulePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               userId: worker.id,
-              patternId: bulkPatternId,
+              patternId: patternId,
               startDate: bulkStartDate,
               endDate: endDate.toISOString().split("T")[0],
               startPhase: 0,
@@ -526,9 +549,10 @@ export default function SchedulePage() {
         }
       }
 
-      setBulkProgress(
-        `Completed! Generated schedules for ${successCount} workers${failCount > 0 ? ` (${failCount} failed)` : ""}`
-      )
+      let message = `Completed! Generated schedules for ${successCount} workers`
+      if (failCount > 0) message += ` (${failCount} failed)`
+      if (skippedCount > 0) message += `. ${skippedCount} workers skipped (no crew or no pattern).`
+      setBulkProgress(message)
 
       // Refresh schedules
       const fetchStartDate = `${currentYear}-01-01`
@@ -548,12 +572,18 @@ export default function SchedulePage() {
   }
 
   function openBulkModal() {
-    setBulkPatternId("")
     setBulkStartDate(new Date().toISOString().split("T")[0])
     setBulkProgress(null)
     setBulkError(null)
     setBulkModalOpen(true)
   }
+
+  // Count workers that can be processed (have crew with pattern)
+  const workersWithPatterns = sortedWorkers.filter(w => {
+    if (!w.crew) return false
+    const crew = crews.find(c => c.id === w.crew?.id)
+    return crew?.rotationPattern?.id
+  }).length
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -954,7 +984,7 @@ export default function SchedulePage() {
         isOpen={bulkModalOpen}
         onClose={() => !bulkGenerating && setBulkModalOpen(false)}
         title="Generate All Schedules"
-        description={`Generate schedules for all ${sortedWorkers.filter(w => w.crew).length} workers with crews`}
+        description="Generate schedules using each crew's assigned rotation pattern"
       >
         <div className="space-y-4">
           {bulkError && (
@@ -975,21 +1005,29 @@ export default function SchedulePage() {
             </div>
           )}
 
+          {/* Show crews and their patterns */}
           <div className="space-y-2">
-            <Label htmlFor="bulkPattern">Rotation Pattern</Label>
-            <Select
-              id="bulkPattern"
-              value={bulkPatternId}
-              onChange={(e) => setBulkPatternId(e.target.value)}
-              options={[
-                { value: "", label: "Select a pattern..." },
-                ...rotationPatterns.map((p) => ({
-                  value: p.id,
-                  label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? `, ${p.nightDays} nights` : ""})`,
-                })),
-              ]}
-              disabled={bulkGenerating}
-            />
+            <Label>Crews & Rotation Patterns</Label>
+            <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+              {crews.map((crew) => (
+                <div key={crew.id} className="px-3 py-2 flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: crew.color }}
+                    />
+                    <span className="font-medium">{crew.name}</span>
+                  </div>
+                  {crew.rotationPattern ? (
+                    <Badge variant="secondary">
+                      {crew.rotationPattern.daysOn}/{crew.rotationPattern.daysOff}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">No pattern</span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -1006,9 +1044,13 @@ export default function SchedulePage() {
             </p>
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-800">
-            <strong>Note:</strong> This will generate schedules for {sortedWorkers.filter(w => w.crew).length} workers
-            who are assigned to crews. Workers without a crew will be skipped.
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
+            <strong>Ready to generate:</strong> {workersWithPatterns} workers have crews with rotation patterns assigned.
+            {sortedWorkers.length - workersWithPatterns > 0 && (
+              <span className="block mt-1 text-amber-700">
+                {sortedWorkers.length - workersWithPatterns} workers will be skipped (no crew or crew has no pattern).
+              </span>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -1022,7 +1064,7 @@ export default function SchedulePage() {
             {!bulkProgress?.includes("Completed") && (
               <Button
                 onClick={generateAllSchedules}
-                disabled={bulkGenerating || !bulkPatternId || !bulkStartDate}
+                disabled={bulkGenerating || !bulkStartDate || workersWithPatterns === 0}
               >
                 {bulkGenerating ? (
                   <>
@@ -1032,7 +1074,7 @@ export default function SchedulePage() {
                 ) : (
                   <>
                     <CalendarPlus className="h-4 w-4 mr-2" />
-                    Generate All Schedules
+                    Generate {workersWithPatterns} Schedules
                   </>
                 )}
               </Button>
