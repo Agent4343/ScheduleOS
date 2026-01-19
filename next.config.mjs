@@ -1,3 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs"
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Output standalone for optimal Railway/Docker deployment
@@ -76,4 +78,19 @@ const nextConfig = {
   }),
 }
 
-export default nextConfig
+const sentryConfig = {
+  // Suppresses source map uploading logs during build
+  silent: true,
+
+  // Upload source maps only in production
+  disableServerWebpackPlugin: process.env.NODE_ENV !== "production",
+  disableClientWebpackPlugin: process.env.NODE_ENV !== "production",
+
+  // Hides source maps from users
+  hideSourceMaps: true,
+
+  // Disable Sentry telemetry
+  telemetry: false,
+}
+
+export default withSentryConfig(nextConfig, sentryConfig)
