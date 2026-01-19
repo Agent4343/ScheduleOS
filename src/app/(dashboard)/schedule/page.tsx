@@ -45,6 +45,13 @@ interface Crew {
   id: string
   name: string
   color: string
+  rotationPattern?: {
+    id: string
+    name: string
+    daysOn: number
+    daysOff: number
+    includesNights: boolean
+  } | null
 }
 
 interface Worker {
@@ -192,6 +199,15 @@ export default function SchedulePage() {
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
+
+  // Bulk generation modal state
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
+  const [bulkStartDate, setBulkStartDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  )
+  const [bulkGenerating, setBulkGenerating] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<string | null>(null)
+  const [bulkError, setBulkError] = useState<string | null>(null)
 
   const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
 
@@ -471,6 +487,104 @@ export default function SchedulePage() {
     }
   }
 
+  // Bulk generate schedules for all workers using their crew's rotation pattern
+  async function generateAllSchedules() {
+    if (!bulkStartDate) return
+
+    setBulkGenerating(true)
+    setBulkError(null)
+    setBulkProgress("Starting bulk generation...")
+
+    try {
+      const startDate = new Date(bulkStartDate)
+      const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
+
+      let successCount = 0
+      let failCount = 0
+      let skippedCount = 0
+
+      // Only workers with crews that have rotation patterns
+      const workersToProcess = sortedWorkers.filter(w => {
+        if (!w.crew) return false
+        const crew = crews.find(c => c.id === w.crew?.id)
+        return crew?.rotationPattern?.id
+      })
+
+      const workersSkipped = sortedWorkers.filter(w => {
+        if (!w.crew) return true
+        const crew = crews.find(c => c.id === w.crew?.id)
+        return !crew?.rotationPattern?.id
+      })
+      skippedCount = workersSkipped.length
+
+      for (let i = 0; i < workersToProcess.length; i++) {
+        const worker = workersToProcess[i]
+        const crew = crews.find(c => c.id === worker.crew?.id)
+        const patternId = crew?.rotationPattern?.id
+
+        setBulkProgress(
+          `Generating schedule for ${worker.name || "worker"} (${crew?.name || "crew"}) - ${i + 1}/${workersToProcess.length}...`
+        )
+
+        try {
+          const response = await fetch("/api/schedules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: worker.id,
+              patternId: patternId,
+              startDate: bulkStartDate,
+              endDate: endDate.toISOString().split("T")[0],
+              startPhase: 0,
+            }),
+          })
+
+          if (response.ok) {
+            successCount++
+          } else {
+            failCount++
+          }
+        } catch {
+          failCount++
+        }
+      }
+
+      let message = `Completed! Generated schedules for ${successCount} workers`
+      if (failCount > 0) message += ` (${failCount} failed)`
+      if (skippedCount > 0) message += `. ${skippedCount} workers skipped (no crew or no pattern).`
+      setBulkProgress(message)
+
+      // Refresh schedules
+      const fetchStartDate = `${currentYear}-01-01`
+      const fetchEndDate = `${currentYear}-12-31`
+      const schedulesResponse = await fetch(
+        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
+      )
+      const schedulesResult = await schedulesResponse.json()
+      if (schedulesResult.success) {
+        setSchedules(schedulesResult.data)
+      }
+    } catch (error) {
+      setBulkError(error instanceof Error ? error.message : "Failed to generate schedules")
+    } finally {
+      setBulkGenerating(false)
+    }
+  }
+
+  function openBulkModal() {
+    setBulkStartDate(new Date().toISOString().split("T")[0])
+    setBulkProgress(null)
+    setBulkError(null)
+    setBulkModalOpen(true)
+  }
+
+  // Count workers that can be processed (have crew with pattern)
+  const workersWithPatterns = sortedWorkers.filter(w => {
+    if (!w.crew) return false
+    const crew = crews.find(c => c.id === w.crew?.id)
+    return crew?.rotationPattern?.id
+  }).length
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -486,6 +600,10 @@ export default function SchedulePage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button onClick={openBulkModal} size="sm">
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Generate All
+          </Button>
           <Button variant="outline" size="sm" onClick={goToCurrentYear}>
             Today
           </Button>
@@ -552,62 +670,61 @@ export default function SchedulePage() {
               <p className="text-sm">Add workers to see their schedules</p>
             </div>
           ) : (
-            <div className="relative">
-              {/* Sticky worker info column */}
+            <div className="relative border border-gray-300">
+              {/* Excel-style grid */}
               <div className="flex">
-                {/* Fixed left column for worker info */}
-                <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
-                    <span className="font-semibold text-sm">Worker</span>
+                {/* Fixed left column for worker info - Excel style */}
+                <div className="sticky left-0 z-20 bg-white border-r-2 border-gray-400">
+                  {/* Header for worker column - Excel header style */}
+                  <div className="h-[52px] border-b-2 border-gray-400 flex items-center px-3 bg-gradient-to-b from-gray-100 to-gray-200">
+                    <span className="font-semibold text-xs text-gray-700">Worker</span>
                   </div>
                   {/* Worker rows */}
-                  {sortedWorkers.map((worker) => (
+                  {sortedWorkers.map((worker, index) => (
                     <div
                       key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
+                      className={cn(
+                        "h-6 border-b border-gray-300 flex items-center px-2 min-w-[180px] hover:bg-blue-50 cursor-pointer group",
+                        index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      )}
                       onClick={() => openEditModal(worker)}
                     >
                       <div
                         className={cn(
-                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
+                          "w-2 h-4 rounded-sm mr-2 flex-shrink-0",
                           getPositionColor(worker.position)
                         )}
                         title={worker.position || "No position"}
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">
-                          {worker.position || "No position"}
-                          {worker.crew && ` • ${worker.crew.name}`}
-                        </p>
+                        <p className="font-medium text-[11px] truncate text-gray-800">{worker.name || "Unnamed"}</p>
                       </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
+                      <Pencil className="h-3 w-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
                     </div>
                   ))}
                 </div>
 
-                {/* Scrollable calendar grid */}
+                {/* Scrollable calendar grid - Excel style */}
                 <div
                   ref={scrollRef}
                   className="overflow-x-auto flex-1"
                 >
                   <div className="inline-block min-w-max">
-                    {/* Month headers */}
-                    <div className="flex h-8 border-b bg-muted/30">
+                    {/* Month headers - Excel style */}
+                    <div className="flex h-6 border-b border-gray-300 bg-gradient-to-b from-gray-100 to-gray-200">
                       {monthGroups.map(({ month, days }) => (
                         <div
                           key={month}
-                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 28}px` }}
+                          className="text-center text-[11px] font-bold text-gray-700 border-r border-gray-300 flex items-center justify-center"
+                          style={{ width: `${days.length * 24}px` }}
                         >
                           {getMonthName(month)}
                         </div>
                       ))}
                     </div>
 
-                    {/* Day headers */}
-                    <div className="flex h-8 border-b">
+                    {/* Day headers - Excel style */}
+                    <div className="flex h-[26px] border-b-2 border-gray-400 bg-gradient-to-b from-gray-50 to-gray-100">
                       {yearDays.map((day) => {
                         const isToday = day.getTime() === today.getTime()
                         const isWeekend = day.getDay() === 0 || day.getDay() === 6
@@ -617,16 +734,16 @@ export default function SchedulePage() {
                           <div
                             key={day.toISOString()}
                             className={cn(
-                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
-                              isWeekend && "bg-muted/50",
-                              isToday && "bg-primary/20 font-bold",
-                              isFirstOfMonth && "border-l border-gray-300"
+                              "w-6 text-center text-[9px] flex flex-col items-center justify-center border-r border-gray-200",
+                              isWeekend && "bg-blue-50",
+                              isToday && "bg-yellow-100",
+                              isFirstOfMonth && "border-l-2 border-l-gray-400"
                             )}
                           >
-                            <span className="text-muted-foreground">
+                            <span className={cn("font-medium", isWeekend ? "text-blue-600" : "text-gray-500")}>
                               {day.toLocaleDateString("en-US", { weekday: "narrow" })}
                             </span>
-                            <span className={cn(isToday && "text-primary")}>
+                            <span className={cn("font-bold", isToday ? "text-orange-600" : "text-gray-700")}>
                               {day.getDate()}
                             </span>
                           </div>
@@ -634,12 +751,12 @@ export default function SchedulePage() {
                       })}
                     </div>
 
-                    {/* Schedule rows */}
-                    {sortedWorkers.map((worker) => {
+                    {/* Schedule rows - Excel style */}
+                    {sortedWorkers.map((worker, rowIndex) => {
                       const userSchedules = schedulesByUser.get(worker.id)
 
                       return (
-                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
+                        <div key={worker.id} className={cn("flex h-6", rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50")}>
                           {yearDays.map((day) => {
                             const dateKey = day.toISOString().split("T")[0]
                             const schedule = userSchedules?.get(dateKey)
@@ -651,23 +768,22 @@ export default function SchedulePage() {
                               <div
                                 key={dateKey}
                                 className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
+                                  "w-6 h-6 flex items-center justify-center text-[10px] font-bold border-r border-b border-gray-200",
                                   isFirstOfMonth && "border-l-2 border-l-gray-400",
-                                  isToday && "ring-2 ring-primary ring-inset",
+                                  isToday && "ring-1 ring-orange-400 ring-inset",
                                   schedule
                                     ? cn(
                                         SHIFT_COLORS[schedule.shiftType].bg,
-                                        SHIFT_COLORS[schedule.shiftType].text,
-                                        "border-white/20"
+                                        SHIFT_COLORS[schedule.shiftType].text
                                       )
                                     : cn(
-                                        isWeekend ? "bg-gray-100" : "bg-white",
-                                        "text-muted-foreground/30"
+                                        isWeekend ? "bg-blue-50/50" : "",
+                                        "text-gray-300"
                                       )
                                 )}
                                 title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
                               >
-                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
+                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : ""}
                               </div>
                             )
                           })}
@@ -857,6 +973,110 @@ export default function SchedulePage() {
                 </>
               )}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Generate Modal */}
+      <Modal
+        isOpen={bulkModalOpen}
+        onClose={() => !bulkGenerating && setBulkModalOpen(false)}
+        title="Generate All Schedules"
+        description="Generate schedules using each crew's assigned rotation pattern"
+      >
+        <div className="space-y-4">
+          {bulkError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {bulkError}
+            </div>
+          )}
+
+          {bulkProgress && (
+            <div className={cn(
+              "p-3 text-sm rounded-md",
+              bulkProgress.includes("Completed")
+                ? "text-green-600 bg-green-50"
+                : "text-blue-600 bg-blue-50"
+            )}>
+              {bulkGenerating && <Loader2 className="h-4 w-4 inline mr-2 animate-spin" />}
+              {bulkProgress}
+            </div>
+          )}
+
+          {/* Show crews and their patterns */}
+          <div className="space-y-2">
+            <Label>Crews & Rotation Patterns</Label>
+            <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+              {crews.map((crew) => (
+                <div key={crew.id} className="px-3 py-2 flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: crew.color }}
+                    />
+                    <span className="font-medium">{crew.name}</span>
+                  </div>
+                  {crew.rotationPattern ? (
+                    <Badge variant="secondary">
+                      {crew.rotationPattern.daysOn}/{crew.rotationPattern.daysOff}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">No pattern</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulkStartDate">Start Date</Label>
+            <Input
+              id="bulkStartDate"
+              type="date"
+              value={bulkStartDate}
+              onChange={(e) => setBulkStartDate(e.target.value)}
+              disabled={bulkGenerating}
+            />
+            <p className="text-xs text-muted-foreground">
+              Schedules will be generated from this date to Dec 31, {new Date(bulkStartDate || Date.now()).getFullYear()}
+            </p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-800">
+            <strong>Ready to generate:</strong> {workersWithPatterns} workers have crews with rotation patterns assigned.
+            {sortedWorkers.length - workersWithPatterns > 0 && (
+              <span className="block mt-1 text-amber-700">
+                {sortedWorkers.length - workersWithPatterns} workers will be skipped (no crew or crew has no pattern).
+              </span>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setBulkModalOpen(false)}
+              disabled={bulkGenerating}
+            >
+              {bulkProgress?.includes("Completed") ? "Close" : "Cancel"}
+            </Button>
+            {!bulkProgress?.includes("Completed") && (
+              <Button
+                onClick={generateAllSchedules}
+                disabled={bulkGenerating || !bulkStartDate || workersWithPatterns === 0}
+              >
+                {bulkGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <CalendarPlus className="h-4 w-4 mr-2" />
+                    Generate {workersWithPatterns} Schedules
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </Modal>

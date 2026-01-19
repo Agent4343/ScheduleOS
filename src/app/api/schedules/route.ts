@@ -30,13 +30,13 @@ export async function GET(request: NextRequest) {
       where: {
         user: {
           organizationId: session.user.organizationId,
+          ...(crewId && { crewId }), // Filter by user's current crew
         },
         date: {
           gte: new Date(startDate),
           lte: new Date(endDate),
         },
         ...(userId && { userId }),
-        ...(crewId && { crewId }),
       },
       include: {
         user: {
