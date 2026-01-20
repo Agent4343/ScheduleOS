@@ -198,6 +198,7 @@ model Schedule {
 
   @@unique([userId, date])
   @@index([userId])
+  @@index([userId, isOverride])
   @@index([date])
   @@index([crewId, date])
 }

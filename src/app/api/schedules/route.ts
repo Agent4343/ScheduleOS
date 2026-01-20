@@ -309,12 +309,15 @@ async function generateSchedules(
   let deletedCount = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await prisma.$transaction(async (tx: any) => {
-    // Delete existing schedules for the user(s)
+    // Delete existing schedules for the user(s) ONLY within the date range being generated
     // If clearOverrides is true, delete ALL schedules including manual edits
     // Otherwise, only delete non-override schedules (preserve manual edits)
+    const startDate = new Date(validatedData.startDate)
+    const endDate = new Date(validatedData.endDate)
+
     const deleteWhere = validatedData.clearOverrides
-      ? { userId: { in: userIds } }
-      : { userId: { in: userIds }, isOverride: false }
+      ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }
+      : { userId: { in: userIds }, isOverride: false, date: { gte: startDate, lte: endDate } }
 
     const deleteResult = await tx.schedule.deleteMany({
       where: deleteWhere,
