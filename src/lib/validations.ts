@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { UserRole, TimeOffType, ShiftType } from "@prisma/client"
+import { UserRole, UserStatus, TimeOffType, ShiftType } from "@prisma/client"
 
 // Auth validations
 export const loginSchema = z.object({
@@ -39,6 +39,7 @@ export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(2, "Name must be at least 2 characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string().optional(),
   phone: z.string().optional(),
   crewId: z.string().optional(),
@@ -47,7 +48,7 @@ export const createUserSchema = z.object({
   password: z.string().min(8).optional(),
 })
 
-export const updateUserSchema = createUserSchema.partial().omit({ email: true })
+export const updateUserSchema = createUserSchema.partial()
 
 // Crew validations
 export const createCrewSchema = z.object({
