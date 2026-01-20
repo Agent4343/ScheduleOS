@@ -105,7 +105,7 @@ interface Holiday {
   id: string
   name: string
   date: string
-  recurring: boolean
+  isRecurring: boolean
 }
 
 const DEFAULT_SHIFT_COLORS = {
@@ -1024,7 +1024,7 @@ export default function SettingsPage() {
                     <p className="font-medium text-sm">{holiday.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(holiday.date).toLocaleDateString()}
-                      {holiday.recurring && " (yearly)"}
+                      {holiday.isRecurring && " (yearly)"}
                     </p>
                   </div>
                   {isAdmin && (

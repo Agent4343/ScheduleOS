@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: body.name,
         date: new Date(body.date),
-        recurring: body.recurring ?? true,
+        isRecurring: body.recurring ?? true,
         organizationId: session.user.organizationId,
       },
     })
