@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       // Batch create all crews in a single query (faster than sequential creates)
       await prisma.crew.createMany({
         data: defaultCrews.map((crewLetter, i) => ({
-          organizationId,
+          organizationId: organizationId!,
           name: `Crew ${crewLetter}`,
           color: colors[i],
           currentPhase: i * 3, // Offset each crew for rotation
