@@ -67,6 +67,7 @@ export const createRotationPatternSchema = z.object({
   includesNights: z.boolean().default(false),
   nightsAtStart: z.boolean().default(true),
   nightDays: z.number().int().min(0).max(60).default(0),
+  alternatesShifts: z.boolean().default(false),
   isDefault: z.boolean().default(false),
 })
 
@@ -77,6 +78,7 @@ export const createScheduleSchema = z.object({
   userId: z.string(),
   date: z.coerce.date(),
   shiftType: z.nativeEnum(ShiftType),
+  customShiftCode: z.string().optional(),
   isOverride: z.boolean().default(false),
   overrideReason: z.string().optional(),
   notes: z.string().optional(),
@@ -91,6 +93,8 @@ export const generateScheduleSchema = z.object({
   endDate: z.coerce.date(),
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
+  startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  clearOverrides: z.boolean().default(false),
 })
 
 // Time off request validations
