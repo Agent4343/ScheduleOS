@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,8 @@ import {
   Settings,
   MoreVertical,
   RefreshCw,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 
 interface Crew {
@@ -59,11 +61,22 @@ export default function CrewsPage() {
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingCrew, setEditingCrew] = useState<Crew | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     color: "#3B82F6",
     rotationPatternId: "",
+  })
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
+    color: "#3B82F6",
+    rotationPatternId: "",
+    currentPhase: 0,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -88,6 +101,91 @@ export default function CrewsPage() {
     }
     fetchData()
   }, [])
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  function openEditModal(crew: Crew) {
+    setEditingCrew(crew)
+    setEditFormData({
+      name: crew.name,
+      description: crew.description || "",
+      color: crew.color,
+      rotationPatternId: crew.rotationPattern?.id || "",
+      currentPhase: crew.currentPhase,
+    })
+    setIsEditModalOpen(true)
+    setOpenMenuId(null)
+  }
+
+  async function handleUpdateCrew(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingCrew) return
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/crews/${editingCrew.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name,
+          description: editFormData.description || null,
+          color: editFormData.color,
+          rotationPatternId: editFormData.rotationPatternId || null,
+          currentPhase: editFormData.currentPhase,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCrews((prev) =>
+          prev.map((c) => (c.id === editingCrew.id ? data.data : c))
+        )
+        setIsEditModalOpen(false)
+        setEditingCrew(null)
+      } else {
+        alert(data.error || "Failed to update crew")
+      }
+    } catch (error) {
+      console.error("Failed to update crew:", error)
+      alert("Failed to update crew")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteCrew(crewId: string) {
+    if (!confirm("Are you sure you want to delete this crew? This action cannot be undone.")) {
+      return
+    }
+    setOpenMenuId(null)
+
+    try {
+      const response = await fetch(`/api/crews/${crewId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setCrews((prev) => prev.filter((c) => c.id !== crewId))
+      } else {
+        alert(data.error || "Failed to delete crew")
+      }
+    } catch (error) {
+      console.error("Failed to delete crew:", error)
+      alert("Failed to delete crew")
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -228,9 +326,42 @@ export default function CrewsPage() {
                       <CardDescription>{crew.description || "No description"}</CardDescription>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
+                  <div className="relative" ref={openMenuId === crew.id ? menuRef : null}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setOpenMenuId(openMenuId === crew.id ? null : crew.id)}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                    {openMenuId === crew.id && (
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-background border rounded-md shadow-lg z-10">
+                        <button
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                          onClick={() => openEditModal(crew)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </button>
+                        <button
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                          onClick={() => {
+                            openEditModal(crew)
+                          }}
+                        >
+                          <Settings className="h-4 w-4" />
+                          Configure
+                        </button>
+                        <button
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-red-600"
+                          onClick={() => handleDeleteCrew(crew.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -275,7 +406,12 @@ export default function CrewsPage() {
                     <RefreshCw className="h-3 w-3 mr-1" />
                     Generate
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => openEditModal(crew)}
+                  >
                     <Settings className="h-3 w-3 mr-1" />
                     Configure
                   </Button>
@@ -356,6 +492,101 @@ export default function CrewsPage() {
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Creating..." : "Create Crew"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Crew Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setEditingCrew(null)
+        }}
+        title="Edit Crew"
+        description="Update crew settings and configuration"
+      >
+        <form onSubmit={handleUpdateCrew} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-name">Crew Name *</Label>
+            <Input
+              id="edit-name"
+              value={editFormData.name}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="e.g., Crew A, Night Shift"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-description">Description</Label>
+            <Input
+              id="edit-description"
+              value={editFormData.description}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Optional description"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Crew Color</Label>
+            <div className="flex gap-2 flex-wrap">
+              {COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  onClick={() => setEditFormData((prev) => ({ ...prev, color: color.value }))}
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                    editFormData.color === color.value
+                      ? "border-foreground scale-110"
+                      : "border-transparent hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.label}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-pattern">Rotation Pattern</Label>
+            <Select
+              value={editFormData.rotationPatternId}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, rotationPatternId: e.target.value }))}
+              options={[
+                { value: "", label: "No pattern" },
+                ...patterns.map((p) => ({
+                  value: p.id,
+                  label: `${p.name} (${p.daysOn} on / ${p.daysOff} off)`,
+                })),
+              ]}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="edit-phase">Current Phase (Day in rotation)</Label>
+            <Input
+              id="edit-phase"
+              type="number"
+              min="0"
+              value={editFormData.currentPhase}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, currentPhase: parseInt(e.target.value) || 0 }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Day 0 = first day of rotation cycle
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => {
+              setIsEditModalOpen(false)
+              setEditingCrew(null)
+            }}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </form>
