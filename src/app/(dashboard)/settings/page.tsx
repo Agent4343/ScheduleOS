@@ -1,13 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useSession } from "next-auth/react"
+import { useEffect, useState, useCallback } from "react"
+import { useSession, signOut } from "next-auth/react"
+import { useTheme } from "next-themes"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Modal } from "@/components/ui/modal"
+import { Select } from "@/components/ui/select"
 import {
   Building2,
   Calendar,
@@ -20,6 +23,16 @@ import {
   Trash2,
   X,
   Palette,
+  Download,
+  Moon,
+  Sun,
+  Key,
+  UserPlus,
+  CalendarDays,
+  Users,
+  AlertTriangle,
+  FileText,
+  Loader2,
 } from "lucide-react"
 
 interface Organization {
@@ -29,9 +42,12 @@ interface Organization {
   settings: {
     timezone?: string
     weekStartsOn?: number
+    dateFormat?: string
     minStaffingAlertEnabled?: boolean
     emailNotificationsEnabled?: boolean
     smsNotificationsEnabled?: boolean
+    minStaffingPerCrew?: number
+    shiftColors?: Record<string, { bg: string; text: string }>
   }
   _count: {
     users: number
@@ -85,8 +101,48 @@ interface NewShiftType {
   description: string
 }
 
+interface Holiday {
+  id: string
+  name: string
+  date: string
+  recurring: boolean
+}
+
+const DEFAULT_SHIFT_COLORS = {
+  DAY: { bg: "#22c55e", text: "#ffffff" },
+  NIGHT: { bg: "#3b82f6", text: "#ffffff" },
+  OFF: { bg: "#6b7280", text: "#ffffff" },
+  LEAVE: { bg: "#f59e0b", text: "#ffffff" },
+  VACATION: { bg: "#8b5cf6", text: "#ffffff" },
+  SICK: { bg: "#ef4444", text: "#ffffff" },
+  TRAINING: { bg: "#06b6d4", text: "#ffffff" },
+  SHUTDOWN: { bg: "#78716c", text: "#ffffff" },
+}
+
+const DATE_FORMATS = [
+  { value: "MM/DD/YYYY", label: "MM/DD/YYYY (US)" },
+  { value: "DD/MM/YYYY", label: "DD/MM/YYYY (EU)" },
+  { value: "YYYY-MM-DD", label: "YYYY-MM-DD (ISO)" },
+  { value: "DD-MMM-YYYY", label: "DD-MMM-YYYY" },
+]
+
+const TIMEZONES = [
+  { value: "America/St_Johns", label: "Newfoundland (NST)" },
+  { value: "America/Halifax", label: "Atlantic (AST)" },
+  { value: "America/New_York", label: "Eastern (EST)" },
+  { value: "America/Chicago", label: "Central (CST)" },
+  { value: "America/Denver", label: "Mountain (MST)" },
+  { value: "America/Los_Angeles", label: "Pacific (PST)" },
+  { value: "Europe/London", label: "London (GMT)" },
+  { value: "Europe/Paris", label: "Paris (CET)" },
+  { value: "Asia/Dubai", label: "Dubai (GST)" },
+  { value: "Asia/Singapore", label: "Singapore (SGT)" },
+  { value: "Australia/Sydney", label: "Sydney (AEST)" },
+]
+
 export default function SettingsPage() {
-  const { data: session } = useSession()
+  const { data: session, update: updateSession } = useSession()
+  const { theme, setTheme } = useTheme()
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,8 +177,101 @@ export default function SettingsPage() {
     description: "",
   })
 
+  // Password change state
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  })
+  const [changingPassword, setChangingPassword] = useState(false)
+
+  // Holiday state
+  const [holidays, setHolidays] = useState<Holiday[]>([])
+  const [showHolidayForm, setShowHolidayForm] = useState(false)
+  const [newHoliday, setNewHoliday] = useState({ name: "", date: "", recurring: true })
+  const [savingHoliday, setSavingHoliday] = useState(false)
+
+  // User invite state
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER" })
+  const [sendingInvite, setSendingInvite] = useState(false)
+
+  // Export state
+  const [exporting, setExporting] = useState(false)
+
+  // Shift colors state
+  const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
+  const [showColorEditor, setShowColorEditor] = useState(false)
+
   const isAdmin = session?.user?.role === "ADMIN"
 
+  const fetchData = useCallback(async () => {
+    try {
+      const [orgRes, patternsRes, shiftTypesRes, holidaysRes] = await Promise.all([
+        fetch("/api/organization"),
+        fetch("/api/rotation-patterns"),
+        fetch("/api/custom-shift-types"),
+        fetch("/api/holidays"),
+      ])
+
+      const orgData = await orgRes.json()
+      const patternsData = await patternsRes.json()
+      const shiftTypesData = await shiftTypesRes.json()
+      const holidaysData = await holidaysRes.json()
+
+      if (orgData.success) {
+        setOrganization(orgData.data)
+        if (orgData.data.settings?.shiftColors) {
+          setShiftColors({ ...DEFAULT_SHIFT_COLORS, ...orgData.data.settings.shiftColors })
+        }
+      }
+      if (patternsData.success) setPatterns(patternsData.data)
+      if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
+      if (holidaysData.success) setHolidays(holidaysData.data)
+    } catch (error) {
+      console.error("Failed to fetch data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const showMessage = (msg: string) => {
+    setMessage(msg)
+    setTimeout(() => setMessage(""), 3000)
+  }
+
+  // Toggle functions
+  const toggleSetting = async (key: string, value: boolean) => {
+    if (!organization || !isAdmin) return
+
+    const newSettings = { ...organization.settings, [key]: value }
+    setOrganization({ ...organization, settings: newSettings })
+
+    try {
+      const response = await fetch("/api/organization", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: newSettings }),
+      })
+
+      const data = await response.json()
+      if (!data.success) {
+        // Revert on failure
+        setOrganization({ ...organization, settings: { ...organization.settings, [key]: !value } })
+        showMessage("Failed to update setting")
+      }
+    } catch {
+      setOrganization({ ...organization, settings: { ...organization.settings, [key]: !value } })
+      showMessage("Failed to update setting")
+    }
+  }
+
+  // Pattern handlers
   const resetPatternForm = () => {
     setNewPattern({
       name: "",
@@ -155,12 +304,11 @@ export default function SettingsPage() {
 
   const handleSavePattern = async () => {
     if (!newPattern.name.trim()) {
-      setMessage("Pattern name is required")
+      showMessage("Pattern name is required")
       return
     }
 
     setSavingPattern(true)
-    setMessage("")
 
     try {
       const url = editingPattern
@@ -176,59 +324,43 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Refresh patterns list
         const patternsRes = await fetch("/api/rotation-patterns")
         const patternsData = await patternsRes.json()
         if (patternsData.success) setPatterns(patternsData.data)
 
-        setMessage(editingPattern ? "Pattern updated successfully" : "Pattern created successfully")
+        showMessage(editingPattern ? "Pattern updated successfully" : "Pattern created successfully")
         resetPatternForm()
-        setTimeout(() => setMessage(""), 3000)
       } else {
-        setMessage(data.error || "Failed to save pattern")
+        showMessage(data.error || "Failed to save pattern")
       }
-    } catch (error) {
-      console.error("Failed to save pattern:", error)
-      setMessage("Failed to save pattern")
+    } catch {
+      showMessage("Failed to save pattern")
     } finally {
       setSavingPattern(false)
     }
   }
 
   const handleDeletePattern = async (patternId: string) => {
-    if (!confirm("Are you sure you want to delete this pattern? Crews using it will need to be reassigned.")) {
-      return
-    }
+    if (!confirm("Are you sure you want to delete this pattern?")) return
 
     try {
-      const response = await fetch(`/api/rotation-patterns?id=${patternId}`, {
-        method: "DELETE",
-      })
-
+      const response = await fetch(`/api/rotation-patterns?id=${patternId}`, { method: "DELETE" })
       const data = await response.json()
 
       if (data.success) {
         setPatterns(patterns.filter(p => p.id !== patternId))
-        setMessage("Pattern deleted successfully")
-        setTimeout(() => setMessage(""), 3000)
+        showMessage("Pattern deleted successfully")
       } else {
-        setMessage(data.error || "Failed to delete pattern")
+        showMessage(data.error || "Failed to delete pattern")
       }
-    } catch (error) {
-      console.error("Failed to delete pattern:", error)
-      setMessage("Failed to delete pattern")
+    } catch {
+      showMessage("Failed to delete pattern")
     }
   }
 
   // Custom shift type handlers
   const resetShiftTypeForm = () => {
-    setNewShiftType({
-      code: "",
-      name: "",
-      color: "#6b7280",
-      textColor: "#ffffff",
-      description: "",
-    })
+    setNewShiftType({ code: "", name: "", color: "#6b7280", textColor: "#ffffff", description: "" })
     setEditingShiftType(null)
     setShowShiftTypeForm(false)
   }
@@ -247,12 +379,11 @@ export default function SettingsPage() {
 
   const handleSaveShiftType = async () => {
     if (!newShiftType.code.trim() || !newShiftType.name.trim()) {
-      setMessage("Code and name are required")
+      showMessage("Code and name are required")
       return
     }
 
     setSavingShiftType(true)
-    setMessage("")
 
     try {
       const url = editingShiftType
@@ -268,80 +399,193 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Refresh shift types list
         const shiftTypesRes = await fetch("/api/custom-shift-types")
         const shiftTypesData = await shiftTypesRes.json()
         if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
 
-        setMessage(editingShiftType ? "Shift type updated successfully" : "Shift type created successfully")
+        showMessage(editingShiftType ? "Shift type updated" : "Shift type created")
         resetShiftTypeForm()
-        setTimeout(() => setMessage(""), 3000)
       } else {
-        setMessage(data.error || "Failed to save shift type")
+        showMessage(data.error || "Failed to save shift type")
       }
-    } catch (error) {
-      console.error("Failed to save shift type:", error)
-      setMessage("Failed to save shift type")
+    } catch {
+      showMessage("Failed to save shift type")
     } finally {
       setSavingShiftType(false)
     }
   }
 
   const handleDeleteShiftType = async (shiftTypeId: string) => {
-    if (!confirm("Are you sure you want to delete this shift type?")) {
+    if (!confirm("Delete this shift type?")) return
+
+    try {
+      const response = await fetch(`/api/custom-shift-types/${shiftTypeId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setCustomShiftTypes(customShiftTypes.filter(st => st.id !== shiftTypeId))
+        showMessage("Shift type deleted")
+      } else {
+        showMessage(data.error || "Failed to delete")
+      }
+    } catch {
+      showMessage("Failed to delete")
+    }
+  }
+
+  // Password change handler
+  const handlePasswordChange = async () => {
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      showMessage("Passwords do not match")
+      return
+    }
+    if (passwordForm.newPassword.length < 8) {
+      showMessage("Password must be at least 8 characters")
       return
     }
 
+    setChangingPassword(true)
+
     try {
-      const response = await fetch(`/api/custom-shift-types/${shiftTypeId}`, {
-        method: "DELETE",
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setCustomShiftTypes(customShiftTypes.filter(st => st.id !== shiftTypeId))
-        setMessage("Shift type deleted successfully")
-        setTimeout(() => setMessage(""), 3000)
+        showMessage("Password changed successfully")
+        setShowPasswordModal(false)
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
       } else {
-        setMessage(data.error || "Failed to delete shift type")
+        showMessage(data.error || "Failed to change password")
       }
-    } catch (error) {
-      console.error("Failed to delete shift type:", error)
-      setMessage("Failed to delete shift type")
+    } catch {
+      showMessage("Failed to change password")
+    } finally {
+      setChangingPassword(false)
     }
   }
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [orgRes, patternsRes, shiftTypesRes] = await Promise.all([
-          fetch("/api/organization"),
-          fetch("/api/rotation-patterns"),
-          fetch("/api/custom-shift-types"),
-        ])
-
-        const orgData = await orgRes.json()
-        const patternsData = await patternsRes.json()
-        const shiftTypesData = await shiftTypesRes.json()
-
-        if (orgData.success) setOrganization(orgData.data)
-        if (patternsData.success) setPatterns(patternsData.data)
-        if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
-      } catch (error) {
-        console.error("Failed to fetch data:", error)
-      } finally {
-        setLoading(false)
-      }
+  // Holiday handlers
+  const handleSaveHoliday = async () => {
+    if (!newHoliday.name.trim() || !newHoliday.date) {
+      showMessage("Name and date are required")
+      return
     }
-    fetchData()
-  }, [])
 
-  async function handleSave() {
+    setSavingHoliday(true)
+
+    try {
+      const response = await fetch("/api/holidays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newHoliday),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setHolidays([...holidays, data.data])
+        setNewHoliday({ name: "", date: "", recurring: true })
+        setShowHolidayForm(false)
+        showMessage("Holiday added")
+      } else {
+        showMessage(data.error || "Failed to add holiday")
+      }
+    } catch {
+      showMessage("Failed to add holiday")
+    } finally {
+      setSavingHoliday(false)
+    }
+  }
+
+  const handleDeleteHoliday = async (holidayId: string) => {
+    try {
+      const response = await fetch(`/api/holidays/${holidayId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setHolidays(holidays.filter(h => h.id !== holidayId))
+        showMessage("Holiday deleted")
+      }
+    } catch {
+      showMessage("Failed to delete holiday")
+    }
+  }
+
+  // User invite handler
+  const handleSendInvite = async () => {
+    if (!inviteForm.email.trim() || !inviteForm.name.trim()) {
+      showMessage("Email and name are required")
+      return
+    }
+
+    setSendingInvite(true)
+
+    try {
+      const response = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteForm.email,
+          name: inviteForm.name,
+          role: inviteForm.role,
+          status: "ACTIVE",
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showMessage(`User ${inviteForm.name} created successfully`)
+        setShowInviteModal(false)
+        setInviteForm({ email: "", name: "", role: "WORKER" })
+      } else {
+        showMessage(data.error || "Failed to create user")
+      }
+    } catch {
+      showMessage("Failed to create user")
+    } finally {
+      setSendingInvite(false)
+    }
+  }
+
+  // Export handler
+  const handleExport = async (type: "schedules" | "workers" | "all") => {
+    setExporting(true)
+
+    try {
+      const response = await fetch(`/api/export?type=${type}`)
+      const blob = await response.blob()
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `schedule-export-${type}-${new Date().toISOString().split("T")[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+
+      showMessage("Export downloaded successfully")
+    } catch {
+      showMessage("Failed to export data")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Save organization settings
+  const handleSave = async () => {
     if (!organization) return
 
     setSaving(true)
-    setMessage("")
 
     try {
       const response = await fetch("/api/organization", {
@@ -349,42 +593,53 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: organization.name,
-          settings: organization.settings,
+          settings: { ...organization.settings, shiftColors },
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setMessage("Settings saved successfully")
-        setTimeout(() => setMessage(""), 3000)
+        showMessage("Settings saved successfully")
       } else {
-        setMessage(data.error || "Failed to save settings")
+        showMessage(data.error || "Failed to save settings")
       }
-    } catch (error) {
-      console.error("Failed to save:", error)
-      setMessage("Failed to save settings")
+    } catch {
+      showMessage("Failed to save settings")
     } finally {
       setSaving(false)
     }
   }
 
+  // Delete account handler
+  const handleDeleteAccount = async () => {
+    const confirm1 = confirm("Are you sure you want to delete your account? This cannot be undone.")
+    if (!confirm1) return
+
+    const confirm2 = prompt("Type DELETE to confirm account deletion:")
+    if (confirm2 !== "DELETE") {
+      showMessage("Account deletion cancelled")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/auth/delete-account", { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        await signOut({ callbackUrl: "/" })
+      } else {
+        showMessage(data.error || "Failed to delete account")
+      }
+    } catch {
+      showMessage("Failed to delete account")
+    }
+  }
+
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="h-8 w-48 bg-muted rounded animate-pulse" />
-        <div className="grid gap-6 md:grid-cols-2">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse">
-              <CardHeader>
-                <div className="h-6 w-32 bg-muted rounded" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-20 bg-muted rounded" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -392,15 +647,23 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your organization settings and preferences
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your organization settings and preferences
+          </p>
+        </div>
+        {isAdmin && (
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" />
+            {saving ? "Saving..." : "Save All"}
+          </Button>
+        )}
       </div>
 
       {message && (
-        <Alert variant={message.includes("success") ? "success" : "destructive"}>
+        <Alert variant={message.includes("success") ? "default" : "destructive"}>
           <AlertDescription>{message}</AlertDescription>
         </Alert>
       )}
@@ -444,47 +707,120 @@ export default function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Patterns</p>
               </div>
             </div>
+
+            {isAdmin && (
+              <Button variant="outline" className="w-full" onClick={() => setShowInviteModal(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Invite User
+              </Button>
+            )}
           </CardContent>
         </Card>
 
-        {/* Schedule Settings */}
+        {/* Schedule & Display Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5" />
-              Schedule Settings
+              Schedule & Display
             </CardTitle>
             <CardDescription>Configure scheduling preferences</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
-              <Input
-                id="timezone"
+              <Select
                 value={organization?.settings?.timezone || "America/St_Johns"}
                 onChange={(e) =>
                   setOrganization((prev) =>
-                    prev
-                      ? { ...prev, settings: { ...prev.settings, timezone: e.target.value } }
-                      : null
+                    prev ? { ...prev, settings: { ...prev.settings, timezone: e.target.value } } : null
                   )
                 }
+                options={TIMEZONES.map(tz => ({ value: tz.value, label: tz.label }))}
                 disabled={!isAdmin}
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-sm">Minimum Staffing Alerts</p>
-                <p className="text-xs text-muted-foreground">
-                  Get notified when staffing drops below minimum
-                </p>
+            <div className="space-y-2">
+              <Label htmlFor="dateFormat">Date Format</Label>
+              <Select
+                value={organization?.settings?.dateFormat || "MM/DD/YYYY"}
+                onChange={(e) =>
+                  setOrganization((prev) =>
+                    prev ? { ...prev, settings: { ...prev.settings, dateFormat: e.target.value } } : null
+                  )
+                }
+                options={DATE_FORMATS.map(f => ({ value: f.value, label: f.label }))}
+                disabled={!isAdmin}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Week Starts On</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={organization?.settings?.weekStartsOn === 0 ? "default" : "outline"}
+                  onClick={() => {
+                    if (isAdmin) {
+                      setOrganization((prev) =>
+                        prev ? { ...prev, settings: { ...prev.settings, weekStartsOn: 0 } } : null
+                      )
+                    }
+                  }}
+                  disabled={!isAdmin}
+                >
+                  Sunday
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={organization?.settings?.weekStartsOn === 1 ? "default" : "outline"}
+                  onClick={() => {
+                    if (isAdmin) {
+                      setOrganization((prev) =>
+                        prev ? { ...prev, settings: { ...prev.settings, weekStartsOn: 1 } } : null
+                      )
+                    }
+                  }}
+                  disabled={!isAdmin}
+                >
+                  Monday
+                </Button>
               </div>
-              <Badge
-                variant={organization?.settings?.minStaffingAlertEnabled ? "success" : "secondary"}
-              >
-                {organization?.settings?.minStaffingAlertEnabled ? "Enabled" : "Disabled"}
-              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Theme</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={theme === "light" ? "default" : "outline"}
+                  onClick={() => setTheme("light")}
+                >
+                  <Sun className="h-4 w-4 mr-1" />
+                  Light
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={theme === "dark" ? "default" : "outline"}
+                  onClick={() => setTheme("dark")}
+                >
+                  <Moon className="h-4 w-4 mr-1" />
+                  Dark
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={theme === "system" ? "default" : "outline"}
+                  onClick={() => setTheme("system")}
+                >
+                  System
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -502,29 +838,205 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">Email Notifications</p>
-                <p className="text-xs text-muted-foreground">
-                  Receive updates via email
-                </p>
+                <p className="text-xs text-muted-foreground">Receive updates via email</p>
               </div>
-              <Badge
-                variant={organization?.settings?.emailNotificationsEnabled ? "success" : "secondary"}
+              <button
+                type="button"
+                onClick={() => toggleSetting("emailNotificationsEnabled", !organization?.settings?.emailNotificationsEnabled)}
+                disabled={!isAdmin}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  organization?.settings?.emailNotificationsEnabled ? "bg-primary" : "bg-muted"
+                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                {organization?.settings?.emailNotificationsEnabled ? "Enabled" : "Disabled"}
-              </Badge>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.emailNotificationsEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium text-sm">SMS Notifications</p>
-                <p className="text-xs text-muted-foreground">
-                  Receive urgent updates via SMS
-                </p>
+                <p className="text-xs text-muted-foreground">Receive urgent updates via SMS</p>
               </div>
-              <Badge
-                variant={organization?.settings?.smsNotificationsEnabled ? "success" : "secondary"}
+              <button
+                type="button"
+                onClick={() => toggleSetting("smsNotificationsEnabled", !organization?.settings?.smsNotificationsEnabled)}
+                disabled={!isAdmin}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  organization?.settings?.smsNotificationsEnabled ? "bg-primary" : "bg-muted"
+                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                {organization?.settings?.smsNotificationsEnabled ? "Enabled" : "Disabled"}
-              </Badge>
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.smsNotificationsEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">Minimum Staffing Alerts</p>
+                <p className="text-xs text-muted-foreground">Get notified when staffing drops below minimum</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting("minStaffingAlertEnabled", !organization?.settings?.minStaffingAlertEnabled)}
+                disabled={!isAdmin}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  organization?.settings?.minStaffingAlertEnabled ? "bg-primary" : "bg-muted"
+                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.minStaffingAlertEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {organization?.settings?.minStaffingAlertEnabled && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label htmlFor="minStaff">Minimum Staff Per Crew</Label>
+                <Input
+                  id="minStaff"
+                  type="number"
+                  min={1}
+                  value={organization?.settings?.minStaffingPerCrew || 1}
+                  onChange={(e) =>
+                    setOrganization((prev) =>
+                      prev ? { ...prev, settings: { ...prev.settings, minStaffingPerCrew: parseInt(e.target.value) || 1 } } : null
+                    )
+                  }
+                  disabled={!isAdmin}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Data Export */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Data Export
+            </CardTitle>
+            <CardDescription>Export your data to CSV files</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => handleExport("schedules")}
+              disabled={exporting}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Export Schedules
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => handleExport("workers")}
+              disabled={exporting}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Export Workers
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => handleExport("all")}
+              disabled={exporting}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export All Data
+            </Button>
+            {exporting && (
+              <p className="text-sm text-muted-foreground text-center">
+                <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                Preparing export...
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Holidays */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" />
+                  Holidays
+                </CardTitle>
+                <CardDescription>Company holidays and special days</CardDescription>
+              </div>
+              {isAdmin && !showHolidayForm && (
+                <Button size="sm" onClick={() => setShowHolidayForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {showHolidayForm && (
+              <div className="mb-4 p-3 border rounded-lg bg-muted/50 space-y-3">
+                <Input
+                  placeholder="Holiday name"
+                  value={newHoliday.name}
+                  onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
+                />
+                <Input
+                  type="date"
+                  value={newHoliday.date}
+                  onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="recurring"
+                    checked={newHoliday.recurring}
+                    onChange={(e) => setNewHoliday({ ...newHoliday, recurring: e.target.checked })}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor="recurring" className="text-sm">Recurring yearly</Label>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleSaveHoliday} disabled={savingHoliday}>
+                    {savingHoliday ? "Saving..." : "Save"}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowHolidayForm(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {holidays.map((holiday) => (
+                <div key={holiday.id} className="flex items-center justify-between p-2 border rounded">
+                  <div>
+                    <p className="font-medium text-sm">{holiday.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(holiday.date).toLocaleDateString()}
+                      {holiday.recurring && " (yearly)"}
+                    </p>
+                  </div>
+                  {isAdmin && (
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteHoliday(holiday.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {holidays.length === 0 && (
+                <p className="text-center text-muted-foreground py-4 text-sm">No holidays configured</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -549,13 +1061,10 @@ export default function SettingsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {/* Pattern Form */}
             {showPatternForm && (
               <div className="mb-4 p-4 border rounded-lg bg-muted/50">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">
-                    {editingPattern ? "Edit Pattern" : "New Pattern"}
-                  </h4>
+                  <h4 className="font-medium">{editingPattern ? "Edit Pattern" : "New Pattern"}</h4>
                   <Button variant="ghost" size="sm" onClick={resetPatternForm}>
                     <X className="h-4 w-4" />
                   </Button>
@@ -571,7 +1080,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="patternDesc">Description (optional)</Label>
+                    <Label htmlFor="patternDesc">Description</Label>
                     <Input
                       id="patternDesc"
                       placeholder="e.g., Standard offshore rotation"
@@ -617,25 +1126,17 @@ export default function SettingsPage() {
                       <Label htmlFor="includesNights">Includes Night Shifts</Label>
                     </div>
                     {newPattern.includesNights && (
-                      <div className="ml-6 space-y-4">
+                      <div className="ml-6 space-y-3">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             id="alternatesShifts"
                             checked={newPattern.alternatesShifts}
-                            onChange={(e) => setNewPattern({
-                              ...newPattern,
-                              alternatesShifts: e.target.checked,
-                            })}
+                            onChange={(e) => setNewPattern({ ...newPattern, alternatesShifts: e.target.checked })}
                             className="h-4 w-4"
                           />
                           <Label htmlFor="alternatesShifts">Alternates Between Day/Night Rotations</Label>
                         </div>
-                        <p className="text-xs text-muted-foreground ml-6">
-                          {newPattern.alternatesShifts
-                            ? `Each work period alternates: ${newPattern.daysOn} days ON → ${newPattern.daysOff} off → ${newPattern.daysOn} nights ON → ${newPattern.daysOff} off → repeat`
-                            : "Split between day and night shifts within each work period"}
-                        </p>
                         {!newPattern.alternatesShifts && (
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
@@ -669,11 +1170,6 @@ export default function SettingsPage() {
                                   End
                                 </Button>
                               </div>
-                              <p className="text-xs text-muted-foreground">
-                                {newPattern.nightsAtStart
-                                  ? "Night shifts at the start of the rotation"
-                                  : "Night shifts at the end of the rotation"}
-                              </p>
                             </div>
                           </div>
                         )}
@@ -682,30 +1178,23 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={resetPatternForm}>
-                    Cancel
-                  </Button>
+                  <Button variant="outline" onClick={resetPatternForm}>Cancel</Button>
                   <Button onClick={handleSavePattern} disabled={savingPattern}>
-                    {savingPattern ? "Saving..." : editingPattern ? "Update Pattern" : "Create Pattern"}
+                    {savingPattern ? "Saving..." : editingPattern ? "Update" : "Create"}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Patterns List */}
             <div className="space-y-2">
               {patterns.map((pattern) => (
-                <div
-                  key={pattern.id}
-                  className="flex items-center justify-between p-3 rounded border"
-                >
+                <div key={pattern.id} className="flex items-center justify-between p-3 rounded border">
                   <div>
                     <p className="font-medium">{pattern.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {pattern.daysOn} on / {pattern.daysOff} off
-                      {pattern.includesNights && pattern.alternatesShifts && " • alternates day/night"}
+                      {pattern.includesNights && pattern.alternatesShifts && " • alternates"}
                       {pattern.includesNights && !pattern.alternatesShifts && ` • ${pattern.nightDays} nights`}
-                      {pattern.includesNights && !pattern.alternatesShifts && (pattern.nightsAtStart ? " (at start)" : " (at end)")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -713,11 +1202,7 @@ export default function SettingsPage() {
                     <Badge variant="outline">{pattern._count.crews} crews</Badge>
                     {isAdmin && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEditPattern(pattern)}
-                        >
+                        <Button variant="ghost" size="sm" onClick={() => startEditPattern(pattern)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
@@ -725,7 +1210,6 @@ export default function SettingsPage() {
                           size="sm"
                           onClick={() => handleDeletePattern(pattern.id)}
                           disabled={pattern._count.crews > 0}
-                          title={pattern._count.crews > 0 ? "Cannot delete - pattern is in use" : "Delete pattern"}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -735,9 +1219,7 @@ export default function SettingsPage() {
                 </div>
               ))}
               {patterns.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">
-                  No rotation patterns configured
-                </p>
+                <p className="text-center text-muted-foreground py-4">No rotation patterns configured</p>
               )}
             </div>
           </CardContent>
@@ -754,216 +1236,314 @@ export default function SettingsPage() {
                 </CardTitle>
                 <CardDescription>Create custom shift types for your organization</CardDescription>
               </div>
-              {isAdmin && !showShiftTypeForm && (
-                <Button size="sm" onClick={() => setShowShiftTypeForm(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Shift Type
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {isAdmin && (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setShowColorEditor(!showColorEditor)}>
+                      <Palette className="h-4 w-4 mr-1" />
+                      Colors
+                    </Button>
+                    {!showShiftTypeForm && (
+                      <Button size="sm" onClick={() => setShowShiftTypeForm(true)}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            {/* Built-in types info */}
+            {/* Built-in colors editor */}
+            {showColorEditor && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <h4 className="font-medium mb-3">Built-in Shift Colors</h4>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {Object.entries(shiftColors).map(([type, colors]) => (
+                    <div key={type} className="flex items-center gap-2">
+                      <div
+                        className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold"
+                        style={{ backgroundColor: colors.bg, color: colors.text }}
+                      >
+                        {type.charAt(0)}
+                      </div>
+                      <span className="text-sm">{type}</span>
+                      <input
+                        type="color"
+                        value={colors.bg}
+                        onChange={(e) => setShiftColors({ ...shiftColors, [type]: { ...colors, bg: e.target.value } })}
+                        className="w-6 h-6 rounded cursor-pointer"
+                        disabled={!isAdmin}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <Button size="sm" className="mt-3" onClick={() => setShowColorEditor(false)}>Done</Button>
+              </div>
+            )}
+
             <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-2">
-                <strong>Built-in shift types:</strong> Day, Night, Off, Leave, Vacation, Sick, Training, Shutdown, PL Day, PL Night
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Create custom shift types below for additional needs like Bereavement, Jury Duty, Medical Leave, etc.
+              <p className="text-sm text-muted-foreground">
+                <strong>Built-in:</strong> Day, Night, Off, Leave, Vacation, Sick, Training, Shutdown
               </p>
             </div>
 
-            {/* Shift Type Form */}
             {showShiftTypeForm && (
               <div className="mb-4 p-4 border rounded-lg bg-muted/50">
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">
-                    {editingShiftType ? "Edit Shift Type" : "New Shift Type"}
-                  </h4>
+                  <h4 className="font-medium">{editingShiftType ? "Edit" : "New"} Shift Type</h4>
                   <Button variant="ghost" size="sm" onClick={resetShiftTypeForm}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="shiftCode">Code (1-10 chars)</Label>
+                    <Label>Code</Label>
                     <Input
-                      id="shiftCode"
-                      placeholder="e.g., BRV, JD, MED"
+                      placeholder="e.g., BRV"
                       value={newShiftType.code}
                       onChange={(e) => setNewShiftType({ ...newShiftType, code: e.target.value.toUpperCase() })}
                       maxLength={10}
                     />
-                    <p className="text-xs text-muted-foreground">Short code shown in calendar cells</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="shiftName">Name</Label>
+                    <Label>Name</Label>
                     <Input
-                      id="shiftName"
                       placeholder="e.g., Bereavement"
                       value={newShiftType.name}
                       onChange={(e) => setNewShiftType({ ...newShiftType, name: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="shiftColor">Background Color</Label>
+                    <Label>Background Color</Label>
                     <div className="flex gap-2">
-                      <Input
-                        id="shiftColor"
+                      <input
                         type="color"
                         value={newShiftType.color}
                         onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
-                        className="w-16 h-10 p-1"
+                        className="w-10 h-10 rounded cursor-pointer"
                       />
                       <Input
                         value={newShiftType.color}
                         onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
-                        placeholder="#6b7280"
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="shiftTextColor">Text Color</Label>
+                    <Label>Text Color</Label>
                     <div className="flex gap-2">
-                      <Input
-                        id="shiftTextColor"
+                      <input
                         type="color"
                         value={newShiftType.textColor}
                         onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
-                        className="w-16 h-10 p-1"
+                        className="w-10 h-10 rounded cursor-pointer"
                       />
                       <Input
                         value={newShiftType.textColor}
                         onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
-                        placeholder="#ffffff"
                       />
                     </div>
                   </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label htmlFor="shiftDesc">Description (optional)</Label>
-                    <Input
-                      id="shiftDesc"
-                      placeholder="e.g., For family bereavement leave"
-                      value={newShiftType.description}
-                      onChange={(e) => setNewShiftType({ ...newShiftType, description: e.target.value })}
-                    />
-                  </div>
                   <div className="md:col-span-2">
                     <Label>Preview</Label>
-                    <div className="mt-2 flex items-center gap-4">
-                      <div
-                        className="px-3 py-2 rounded text-sm font-bold"
+                    <div className="mt-2">
+                      <span
+                        className="px-3 py-1 rounded text-sm font-bold"
                         style={{ backgroundColor: newShiftType.color, color: newShiftType.textColor }}
                       >
                         {newShiftType.code || "CODE"}
-                      </div>
-                      <span className="text-sm text-muted-foreground">
-                        {newShiftType.name || "Shift Name"}
                       </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={resetShiftTypeForm}>
-                    Cancel
-                  </Button>
+                  <Button variant="outline" onClick={resetShiftTypeForm}>Cancel</Button>
                   <Button onClick={handleSaveShiftType} disabled={savingShiftType}>
-                    {savingShiftType ? "Saving..." : editingShiftType ? "Update Shift Type" : "Create Shift Type"}
+                    {savingShiftType ? "Saving..." : editingShiftType ? "Update" : "Create"}
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Shift Types List */}
             <div className="space-y-2">
-              {customShiftTypes.map((shiftType) => (
-                <div
-                  key={shiftType.id}
-                  className="flex items-center justify-between p-3 rounded border"
-                >
+              {customShiftTypes.map((st) => (
+                <div key={st.id} className="flex items-center justify-between p-3 rounded border">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="px-2 py-1 rounded text-xs font-bold min-w-[40px] text-center"
-                      style={{ backgroundColor: shiftType.color, color: shiftType.textColor }}
+                    <span
+                      className="px-2 py-1 rounded text-xs font-bold"
+                      style={{ backgroundColor: st.color, color: st.textColor }}
                     >
-                      {shiftType.code}
-                    </div>
+                      {st.code}
+                    </span>
                     <div>
-                      <p className="font-medium">{shiftType.name}</p>
-                      {shiftType.description && (
-                        <p className="text-sm text-muted-foreground">{shiftType.description}</p>
-                      )}
+                      <p className="font-medium">{st.name}</p>
+                      {st.description && <p className="text-sm text-muted-foreground">{st.description}</p>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!shiftType.isActive && <Badge variant="secondary">Inactive</Badge>}
-                    {isAdmin && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEditShiftType(shiftType)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteShiftType(shiftType.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditShiftType(st)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteShiftType(st.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
               {customShiftTypes.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">
-                  No custom shift types created yet
-                </p>
+                <p className="text-center text-muted-foreground py-4">No custom shift types</p>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Your Account */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Your Account
+            </CardTitle>
+            <CardDescription>Manage your personal account settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid md:grid-cols-4 gap-4">
+              <div>
+                <Label className="text-muted-foreground text-xs">Name</Label>
+                <p className="font-medium">{session?.user?.name || "Not set"}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">Email</Label>
+                <p className="font-medium">{session?.user?.email}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">Role</Label>
+                <Badge>{session?.user?.role}</Badge>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">Organization</Label>
+                <p className="font-medium">{organization?.name}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
+                <Key className="h-4 w-4 mr-2" />
+                Change Password
+              </Button>
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={handleDeleteAccount}
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Delete Account
+              </Button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Save button */}
-      {isAdmin && (
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            <Save className="h-4 w-4 mr-2" />
-            {saving ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-      )}
-
-      {/* Account section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Your Account
-          </CardTitle>
-          <CardDescription>Manage your personal account settings</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-muted-foreground text-xs">Name</Label>
-              <p className="font-medium">{session?.user?.name || "Not set"}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Email</Label>
-              <p className="font-medium">{session?.user?.email}</p>
-            </div>
-            <div>
-              <Label className="text-muted-foreground text-xs">Role</Label>
-              <Badge>{session?.user?.role}</Badge>
-            </div>
+      {/* Password Change Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => {
+          setShowPasswordModal(false)
+          setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
+        }}
+        title="Change Password"
+        description="Enter your current password and choose a new one"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">Current Password</Label>
+            <Input
+              id="currentPassword"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-2">
+            <Label htmlFor="newPassword">New Password</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowPasswordModal(false)}>Cancel</Button>
+            <Button onClick={handlePasswordChange} disabled={changingPassword}>
+              {changingPassword ? "Changing..." : "Change Password"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* User Invite Modal */}
+      <Modal
+        isOpen={showInviteModal}
+        onClose={() => {
+          setShowInviteModal(false)
+          setInviteForm({ email: "", name: "", role: "WORKER" })
+        }}
+        title="Invite User"
+        description="Add a new user to your organization"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="inviteName">Name</Label>
+            <Input
+              id="inviteName"
+              value={inviteForm.name}
+              onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+              placeholder="John Doe"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="inviteEmail">Email</Label>
+            <Input
+              id="inviteEmail"
+              type="email"
+              value={inviteForm.email}
+              onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+              placeholder="john@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="inviteRole">Role</Label>
+            <Select
+              value={inviteForm.role}
+              onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+              options={[
+                { value: "WORKER", label: "Worker" },
+                { value: "SUPERVISOR", label: "Supervisor" },
+                { value: "ADMIN", label: "Admin" },
+              ]}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowInviteModal(false)}>Cancel</Button>
+            <Button onClick={handleSendInvite} disabled={sendingInvite}>
+              {sendingInvite ? "Creating..." : "Create User"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
