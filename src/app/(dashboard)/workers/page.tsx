@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +24,8 @@ import {
   Mail,
   Filter,
   MoreVertical,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 import { UserRole, UserStatus } from "@/types"
 
@@ -70,6 +72,10 @@ export default function WorkersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("")
   const [crewFilter, setCrewFilter] = useState<string>("")
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -79,6 +85,16 @@ export default function WorkersPage() {
     crewId: "",
     hireDate: "",
     password: "",
+  })
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    email: "",
+    role: "WORKER" as UserRole,
+    position: "",
+    phone: "",
+    crewId: "",
+    hireDate: "",
+    status: "ACTIVE" as UserStatus,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -104,6 +120,17 @@ export default function WorkersPage() {
     fetchData()
   }, [])
 
+  // Close menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
   const filteredUsers = users.filter((user) => {
     const matchesSearch =
       !searchQuery ||
@@ -115,6 +142,22 @@ export default function WorkersPage() {
 
     return matchesSearch && matchesStatus && matchesCrew
   })
+
+  function openEditModal(user: User) {
+    setEditingUser(user)
+    setEditFormData({
+      name: user.name || "",
+      email: user.email,
+      role: user.role,
+      position: user.position || "",
+      phone: user.phone || "",
+      crewId: user.crew?.id || "",
+      hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
+      status: user.status,
+    })
+    setIsEditModalOpen(true)
+    setOpenMenuId(null)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -155,6 +198,70 @@ export default function WorkersPage() {
       alert("Failed to create worker")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleUpdate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingUser) return
+    setSubmitting(true)
+
+    try {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editFormData.name,
+          email: editFormData.email,
+          role: editFormData.role,
+          position: editFormData.position || null,
+          phone: editFormData.phone || null,
+          crewId: editFormData.crewId || null,
+          hireDate: editFormData.hireDate || null,
+          status: editFormData.status,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === editingUser.id ? data.data : u))
+        )
+        setIsEditModalOpen(false)
+        setEditingUser(null)
+      } else {
+        alert(data.error || "Failed to update worker")
+      }
+    } catch (error) {
+      console.error("Failed to update worker:", error)
+      alert("Failed to update worker")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDelete(userId: string) {
+    if (!confirm("Are you sure you want to delete this worker? This action cannot be undone.")) {
+      return
+    }
+    setOpenMenuId(null)
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setUsers((prev) => prev.filter((u) => u.id !== userId))
+      } else {
+        alert(data.error || "Failed to delete worker")
+      }
+    } catch (error) {
+      console.error("Failed to delete worker:", error)
+      alert("Failed to delete worker")
     }
   }
 
@@ -278,9 +385,33 @@ export default function WorkersPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      <div className="relative" ref={openMenuId === user.id ? menuRef : null}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                        {openMenuId === user.id && (
+                          <div className="absolute right-0 top-full mt-1 w-36 bg-background border rounded-md shadow-lg z-10">
+                            <button
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                              onClick={() => openEditModal(user)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </button>
+                            <button
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive"
+                              onClick={() => handleDelete(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -395,6 +526,125 @@ export default function WorkersPage() {
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting ? "Adding..." : "Add Worker"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Worker Modal */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setEditingUser(null)
+        }}
+        title="Edit Worker"
+        description="Update worker information"
+      >
+        <form onSubmit={handleUpdate} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Full Name *</Label>
+              <Input
+                id="edit-name"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">Email *</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, email: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Role</Label>
+              <Select
+                value={editFormData.role}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
+                options={[
+                  { value: "WORKER", label: "Worker" },
+                  { value: "SUPERVISOR", label: "Supervisor" },
+                  { value: "ADMIN", label: "Administrator" },
+                ]}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-status">Status</Label>
+              <Select
+                value={editFormData.status}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, status: e.target.value as UserStatus }))}
+                options={[
+                  { value: "ACTIVE", label: "Active" },
+                  { value: "INACTIVE", label: "Inactive" },
+                  { value: "ON_LEAVE", label: "On Leave" },
+                  { value: "TERMINATED", label: "Terminated" },
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-crewId">Crew</Label>
+              <Select
+                value={editFormData.crewId}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, crewId: e.target.value }))}
+                options={[
+                  { value: "", label: "No Crew" },
+                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+                ]}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-position">Position</Label>
+              <Input
+                id="edit-position"
+                value={editFormData.position}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, position: e.target.value }))}
+                placeholder="e.g., Operator, Supervisor"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-hireDate">Hire Date</Label>
+              <Input
+                id="edit-hireDate"
+                type="date"
+                value={editFormData.hireDate}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="outline" onClick={() => {
+              setIsEditModalOpen(false)
+              setEditingUser(null)
+            }}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </form>

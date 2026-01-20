@@ -101,12 +101,14 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         name: validatedData.name,
+        email: validatedData.email,
         role: validatedData.role,
         position: validatedData.position,
         phone: validatedData.phone,
         crewId: validatedData.crewId,
         hireDate: validatedData.hireDate,
         sortOrder: validatedData.sortOrder,
+        status: validatedData.status,
       },
       select: {
         id: true,
