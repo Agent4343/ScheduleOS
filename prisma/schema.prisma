@@ -139,8 +139,9 @@ model Crew {
   rotationPattern   RotationPattern? @relation(fields: [rotationPatternId], references: [id])
 
   // Relations
-  workers   User[]
-  schedules Schedule[]
+  workers       User[]
+  schedules     Schedule[]
+  staffingRules StaffingRule[]
 
   @@unique([organizationId, name])
 }
@@ -274,18 +275,25 @@ enum RequestStatus {
 // =====================
 
 model StaffingRule {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   name        String
+  description String?
   shiftType   ShiftType
   minWorkers  Int
-  maxVacation Int       @default(1)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  maxVacation Int        @default(1)
+  role        UserRole?  // If set, rule applies only to this role
+  priority    Int        @default(0) // Higher priority rules take precedence
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   // Organization
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Optional crew-specific rule
+  crewId String?
+  crew   Crew?   @relation(fields: [crewId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, name])
 }
