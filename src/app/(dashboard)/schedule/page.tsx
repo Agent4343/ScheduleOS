@@ -680,14 +680,14 @@ function SchedulePageContent() {
                 <thead className="sticky top-0 z-30 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
                   {/* Month headers */}
                   <tr>
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-gray-100 z-40 min-w-[200px]">
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
                       Worker
                     </th>
                     {yearMonths.map(({ month, days }) => (
                       <th
                         key={month}
                         colSpan={days.length}
-                        className="border p-2 text-center font-semibold bg-gray-100 text-base"
+                        className="border p-2 text-center font-semibold bg-muted text-base"
                       >
                         {MONTH_NAMES[month]}
                       </th>
@@ -695,7 +695,7 @@ function SchedulePageContent() {
                   </tr>
                   {/* Day headers */}
                   <tr>
-                    <th className="border p-1 sticky left-0 bg-gray-50 z-40"></th>
+                    <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
                         const date = new Date(currentYear, month, day)
@@ -707,11 +707,11 @@ function SchedulePageContent() {
                             key={`${month}-${day}`}
                             className={cn(
                               "border p-1 text-center font-normal w-8 min-w-[32px]",
-                              isWeekend ? "bg-gray-200" : "bg-gray-50",
-                              isTodayCell && "bg-blue-200 font-bold"
+                              isWeekend ? "bg-muted" : "bg-muted/50",
+                              isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
                             )}
                           >
-                            <div className={cn("text-sm font-semibold text-gray-700", isTodayCell && "text-blue-600")}>{day}</div>
+                            <div className={cn("text-sm font-semibold text-foreground", isTodayCell && "text-blue-600 dark:text-blue-300")}>{day}</div>
                           </th>
                         )
                       })
@@ -722,7 +722,7 @@ function SchedulePageContent() {
                   {sortedWorkers.map((worker) => (
                     <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-2 sticky left-0 bg-white cursor-pointer hover:bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
                         onClick={() => openEditModal(worker)}
                       >
                         <div className="flex items-center gap-2">
@@ -758,7 +758,7 @@ function SchedulePageContent() {
                               key={`${month}-${day}`}
                               className={cn(
                                 "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 hover:ring-inset transition-all",
-                                isWeekend && !style && "bg-gray-100",
+                                isWeekend && !style && "bg-muted/50",
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
                               style={
