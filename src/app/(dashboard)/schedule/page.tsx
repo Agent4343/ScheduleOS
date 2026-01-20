@@ -53,6 +53,7 @@ interface Worker {
   phone?: string | null
   role?: UserRole
   hireDate?: string | null
+  sortOrder?: number
   crew: {
     id: string
     name: string
@@ -303,11 +304,17 @@ function SchedulePageContent() {
     return map
   }, [schedules])
 
-  // Sort workers
+  // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
     return [...workers].sort((a, b) => {
+      // First sort by custom sortOrder (lower numbers first)
+      const sortOrderA = a.sortOrder ?? 999999
+      const sortOrderB = b.sortOrder ?? 999999
+      if (sortOrderA !== sortOrderB) return sortOrderA - sortOrderB
+      // Then by crew name
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
+      // Finally by worker name
       return (a.name || "").localeCompare(b.name || "")
     })
   }, [workers])

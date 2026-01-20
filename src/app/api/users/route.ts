@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         phone: true,
         status: true,
         hireDate: true,
+        sortOrder: true,
         createdAt: true,
         crew: {
           select: {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     })
 
     return NextResponse.json({ success: true, data: users })
