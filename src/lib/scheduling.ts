@@ -7,6 +7,7 @@ export interface RotationPattern {
   includesNights: boolean
   nightsAtStart: boolean
   nightDays: number
+  alternatesShifts?: boolean
 }
 
 export interface GeneratedSchedule {
@@ -21,13 +22,15 @@ export interface GeneratedSchedule {
  * @param startDate - The start date for schedule generation
  * @param endDate - The end date for schedule generation
  * @param startPhase - The starting phase offset (0 = beginning of rotation)
+ * @param startingShift - Optional starting shift type for alternating patterns ("DAY" or "NIGHT")
  * @returns Array of generated schedules
  */
 export function generateRotationSchedule(
   pattern: RotationPattern,
   startDate: Date,
   endDate: Date,
-  startPhase: number = 0
+  startPhase: number = 0,
+  startingShift?: "DAY" | "NIGHT"
 ): GeneratedSchedule[] {
   const schedules: GeneratedSchedule[] = []
   const totalCycleDays = pattern.daysOn + pattern.daysOff
@@ -35,12 +38,19 @@ export function generateRotationSchedule(
   let currentDate = new Date(startDate)
   let dayInCycle = startPhase % totalCycleDays
 
+  // Track which shift to start with for alternating patterns
+  let currentShiftIsDay = startingShift !== "NIGHT"
+  let cycleCount = 0
+
   while (currentDate <= endDate) {
     let shiftType: ShiftType
 
     if (dayInCycle < pattern.daysOn) {
       // Working days
-      if (pattern.includesNights) {
+      if (pattern.alternatesShifts) {
+        // Alternating shifts pattern - whole rotation is either DAY or NIGHT
+        shiftType = currentShiftIsDay ? ShiftType.DAY : ShiftType.NIGHT
+      } else if (pattern.includesNights) {
         if (pattern.nightsAtStart) {
           // Night shifts first, then day shifts
           shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
@@ -64,6 +74,12 @@ export function generateRotationSchedule(
 
     currentDate = addDays(currentDate, 1)
     dayInCycle = (dayInCycle + 1) % totalCycleDays
+
+    // When a cycle completes, alternate the shift for next cycle
+    if (dayInCycle === 0 && pattern.alternatesShifts) {
+      cycleCount++
+      currentShiftIsDay = !currentShiftIsDay
+    }
   }
 
   return schedules
