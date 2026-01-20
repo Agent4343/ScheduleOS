@@ -41,10 +41,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Build the where clause explicitly to avoid Prisma issues
+    // Filter by user's current crewId (not schedule's crewId) for accurate crew filtering
+    const userFilter: Record<string, unknown> = {
+      organizationId: organizationId,
+    }
+    if (crewIdParam) {
+      userFilter.crewId = crewIdParam
+    }
+
     const whereClause: Record<string, unknown> = {
-      user: {
-        organizationId: organizationId,
-      },
+      user: userFilter,
       date: {
         gte: startDate,
         lte: endDate,
@@ -54,9 +60,6 @@ export async function GET(request: NextRequest) {
     // Add optional filters only if provided
     if (userIdParam) {
       whereClause.userId = userIdParam
-    }
-    if (crewIdParam) {
-      whereClause.crewId = crewIdParam
     }
 
     const schedules = await prisma.schedule.findMany({
