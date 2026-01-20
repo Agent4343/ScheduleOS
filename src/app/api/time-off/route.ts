@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
 import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/utils"
+import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
   try {
@@ -180,13 +181,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Create notification for supervisors
+    // Create notification for supervisors and send email
     const supervisors = await prisma.user.findMany({
       where: {
         organizationId: session.user.organizationId,
         role: { in: ["ADMIN", "SUPERVISOR"] },
       },
-      select: { id: true },
+      select: { id: true, email: true },
     })
 
     await prisma.notification.createMany({
@@ -198,6 +199,23 @@ export async function POST(request: NextRequest) {
         data: { requestId: timeOffRequest.id },
       })),
     })
+
+    // Send email notifications to supervisors
+    const supervisorEmails = supervisors.map((s: { email: string }) => s.email).filter(Boolean)
+    if (supervisorEmails.length > 0) {
+      const emailHtml = timeOffRequestEmail(
+        session.user.name || session.user.email || "A worker",
+        validatedData.type,
+        new Date(validatedData.startDate).toLocaleDateString(),
+        new Date(validatedData.endDate).toLocaleDateString(),
+        validatedData.reason
+      )
+      await sendEmail({
+        to: supervisorEmails,
+        subject: `New Time-Off Request from ${session.user.name || session.user.email}`,
+        html: emailHtml,
+      })
+    }
 
     return NextResponse.json(
       { success: true, data: timeOffRequest, message: "Request submitted successfully" },
@@ -320,6 +338,23 @@ export async function PATCH(request: NextRequest) {
         data: { requestId },
       },
     })
+
+    // Send email notification to worker
+    if (existingRequest.user.email) {
+      const emailHtml = timeOffResponseEmail(
+        existingRequest.user.name || "Worker",
+        validatedData.status,
+        existingRequest.type,
+        existingRequest.startDate.toLocaleDateString(),
+        existingRequest.endDate.toLocaleDateString(),
+        validatedData.adminNotes
+      )
+      await sendEmail({
+        to: existingRequest.user.email,
+        subject: `Your Time-Off Request has been ${validatedData.status === "APPROVED" ? "Approved" : "Denied"}`,
+        html: emailHtml,
+      })
+    }
 
     return NextResponse.json({
       success: true,
