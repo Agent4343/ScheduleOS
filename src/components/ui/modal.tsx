@@ -44,7 +44,7 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
       {/* Modal content */}
       <div
         className={cn(
-          "relative z-50 w-full max-w-lg rounded-lg bg-background p-6 shadow-lg",
+          "relative z-50 w-full max-w-lg max-h-[90vh] flex flex-col rounded-lg bg-background p-6 shadow-lg",
           "animate-in fade-in-0 zoom-in-95",
           className
         )}
@@ -64,7 +64,7 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
 
         {/* Header */}
         {(title || description) && (
-          <div className="mb-4">
+          <div className="mb-4 flex-shrink-0">
             {title && (
               <h2 id="modal-title" className="text-lg font-semibold">
                 {title}
@@ -79,7 +79,9 @@ function Modal({ isOpen, onClose, title, description, children, className }: Mod
         )}
 
         {/* Content */}
-        {children}
+        <div className="overflow-y-auto flex-1">
+          {children}
+        </div>
       </div>
     </div>
   )
