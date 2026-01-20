@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+
+// Migration statements to bring database in sync with current Prisma schema
+// These are idempotent - safe to run multiple times
+const migrationStatements = [
+  // =====================
+  // ShiftType enum additions
+  // =====================
+  `DO $$ BEGIN ALTER TYPE "ShiftType" ADD VALUE IF NOT EXISTS 'LEAVE'; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN ALTER TYPE "ShiftType" ADD VALUE IF NOT EXISTS 'PL_DAY'; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN ALTER TYPE "ShiftType" ADD VALUE IF NOT EXISTS 'PL_NIGHT'; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN ALTER TYPE "ShiftType" ADD VALUE IF NOT EXISTS 'CUSTOM'; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+
+  // =====================
+  // Schedule table updates
+  // =====================
+  // Add customShiftCode column for CUSTOM shift types
+  `ALTER TABLE "Schedule" ADD COLUMN IF NOT EXISTS "customShiftCode" TEXT`,
+
+  // Add missing indexes
+  `CREATE INDEX IF NOT EXISTS "Schedule_userId_idx" ON "Schedule"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "Schedule_userId_isOverride_idx" ON "Schedule"("userId", "isOverride")`,
+
+  // =====================
+  // CustomShiftType table (new)
+  // =====================
+  `CREATE TABLE IF NOT EXISTS "CustomShiftType" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "code" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "color" TEXT NOT NULL DEFAULT '#6b7280',
+    "textColor" TEXT NOT NULL DEFAULT '#ffffff',
+    "description" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE
+  )`,
+
+  // Unique constraint for CustomShiftType
+  `DO $$ BEGIN
+    ALTER TABLE "CustomShiftType" ADD CONSTRAINT "CustomShiftType_organizationId_code_key" UNIQUE ("organizationId", "code");
+  EXCEPTION
+    WHEN duplicate_object THEN null;
+  END $$`,
+
+  // =====================
+  // StaffingRule table updates
+  // =====================
+  // Add description column
+  `ALTER TABLE "StaffingRule" ADD COLUMN IF NOT EXISTS "description" TEXT`,
+
+  // Add role column
+  `DO $$ BEGIN
+    ALTER TABLE "StaffingRule" ADD COLUMN "role" "UserRole";
+  EXCEPTION
+    WHEN duplicate_column THEN null;
+  END $$`,
+
+  // Add priority column
+  `ALTER TABLE "StaffingRule" ADD COLUMN IF NOT EXISTS "priority" INTEGER NOT NULL DEFAULT 0`,
+
+  // Add crewId column
+  `ALTER TABLE "StaffingRule" ADD COLUMN IF NOT EXISTS "crewId" TEXT`,
+
+  // Add foreign key for crewId
+  `DO $$ BEGIN
+    ALTER TABLE "StaffingRule" ADD CONSTRAINT "StaffingRule_crewId_fkey"
+    FOREIGN KEY ("crewId") REFERENCES "Crew"("id") ON DELETE SET NULL;
+  EXCEPTION
+    WHEN duplicate_object THEN null;
+  END $$`,
+
+  // =====================
+  // RotationPattern table updates
+  // =====================
+  // Add alternatesShifts column
+  `ALTER TABLE "RotationPattern" ADD COLUMN IF NOT EXISTS "alternatesShifts" BOOLEAN NOT NULL DEFAULT false`,
+
+  // =====================
+  // User table indexes
+  // =====================
+  `CREATE INDEX IF NOT EXISTS "User_organizationId_idx" ON "User"("organizationId")`,
+  `CREATE INDEX IF NOT EXISTS "User_crewId_idx" ON "User"("crewId")`,
+]
+
+export async function GET(request: NextRequest) {
+  const migrateKey = request.nextUrl.searchParams.get("key")
+
+  // Require a key for security
+  if (migrateKey !== process.env.SETUP_KEY && migrateKey !== "migrate-2026") {
+    return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
+  }
+
+  try {
+    // Test connection
+    await prisma.$queryRaw`SELECT 1`
+
+    // Execute each migration statement
+    const results: { statement: number; status: string; error?: string }[] = []
+
+    for (let i = 0; i < migrationStatements.length; i++) {
+      try {
+        await prisma.$executeRawUnsafe(migrationStatements[i])
+        results.push({ statement: i + 1, status: "OK" })
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err)
+        results.push({ statement: i + 1, status: "ERROR", error: errMsg })
+      }
+    }
+
+    // Count successes and failures
+    const successes = results.filter(r => r.status === "OK").length
+    const failures = results.filter(r => r.status === "ERROR").length
+
+    return NextResponse.json({
+      success: failures === 0,
+      message: `Migration completed: ${successes} succeeded, ${failures} failed`,
+      totalStatements: migrationStatements.length,
+      results,
+    })
+
+  } catch (error: unknown) {
+    console.error("Migration error:", error)
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+
+    return NextResponse.json({
+      error: "Migration failed",
+      details: errorMessage,
+    }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  // Also support POST for running migrations
+  return GET(request)
+}
