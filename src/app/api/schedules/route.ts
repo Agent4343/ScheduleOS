@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { ShiftType } from "@/types"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
@@ -13,31 +14,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const startDate = searchParams.get("startDate")
-    const endDate = searchParams.get("endDate")
-    const userId = searchParams.get("userId")
-    const crewId = searchParams.get("crewId")
+    const organizationId = session.user.organizationId
 
-    if (!startDate || !endDate) {
+    const { searchParams } = new URL(request.url)
+    const startDateParam = searchParams.get("startDate")
+    const endDateParam = searchParams.get("endDate")
+    const userIdParam = searchParams.get("userId")
+    const crewIdParam = searchParams.get("crewId")
+
+    if (!startDateParam || !endDateParam) {
       return NextResponse.json(
         { error: "startDate and endDate are required" },
         { status: 400 }
       )
     }
 
-    const schedules = await prisma.schedule.findMany({
-      where: {
-        user: {
-          organizationId: session.user.organizationId,
-          ...(crewId && { crewId }), // Filter by user's current crew
-        },
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate),
-        },
-        ...(userId && { userId }),
+    // Parse dates - ensure they're valid
+    const startDate = new Date(startDateParam + "T00:00:00.000Z")
+    const endDate = new Date(endDateParam + "T23:59:59.999Z")
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return NextResponse.json(
+        { error: "Invalid date format" },
+        { status: 400 }
+      )
+    }
+
+    // Build the where clause explicitly to avoid Prisma issues
+    const whereClause: Record<string, unknown> = {
+      user: {
+        organizationId: organizationId,
       },
+      date: {
+        gte: startDate,
+        lte: endDate,
+      },
+    }
+
+    // Add optional filters only if provided
+    if (userIdParam) {
+      whereClause.userId = userIdParam
+    }
+    if (crewIdParam) {
+      whereClause.crewId = crewIdParam
+    }
+
+    const schedules = await prisma.schedule.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -55,13 +78,19 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: [{ date: "asc" }, { user: { name: "asc" } }],
+      orderBy: { date: "asc" },
     })
 
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
     console.error("Error fetching schedules:", error)
-    return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    const errorStack = error instanceof Error ? error.stack : undefined
+    return NextResponse.json({
+      error: "Failed to fetch schedules",
+      details: errorMessage,
+      stack: process.env.NODE_ENV === "development" ? errorStack : undefined,
+    }, { status: 500 })
   }
 }
 
@@ -108,6 +137,7 @@ export async function POST(request: NextRequest) {
       },
       update: {
         shiftType: validatedData.shiftType,
+        customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? true,
         overrideReason: validatedData.overrideReason,
         notes: validatedData.notes,
@@ -117,6 +147,7 @@ export async function POST(request: NextRequest) {
         userId: validatedData.userId,
         date: new Date(validatedData.date),
         shiftType: validatedData.shiftType,
+        customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? false,
         overrideReason: validatedData.overrideReason,
         notes: validatedData.notes,
@@ -152,7 +183,9 @@ async function generateSchedules(
   organizationId: string,
   body: unknown
 ) {
+  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
+  console.log("Validated data:", JSON.stringify(validatedData))
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({
@@ -184,7 +217,7 @@ async function generateSchedules(
       where: { crewId: validatedData.crewId, organizationId, status: "ACTIVE" },
       select: { id: true, crewId: true },
     })
-    userIds = crewUsers.map(u => u.id)
+    userIds = crewUsers.map((u: { id: string }) => u.id)
   } else {
     return NextResponse.json(
       { error: "Either userId or crewId is required" },
@@ -200,14 +233,22 @@ async function generateSchedules(
       includesNights: pattern.includesNights,
       nightsAtStart: pattern.nightsAtStart,
       nightDays: pattern.nightDays,
+      alternatesShifts: pattern.alternatesShifts,
     },
     new Date(validatedData.startDate),
     new Date(validatedData.endDate),
-    validatedData.startPhase ?? 0
+    validatedData.startPhase ?? 0,
+    validatedData.startingShift
   )
 
   // Create schedules for all users
-  const scheduleData = []
+  const scheduleData: Array<{
+    userId: string
+    date: Date
+    shiftType: string
+    crewId: string | null
+    isOverride: boolean
+  }> = []
   for (const userId of userIds) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -218,29 +259,36 @@ async function generateSchedules(
       scheduleData.push({
         userId,
         date: schedule.date,
-        shiftType: schedule.shiftType,
-        crewId: user?.crewId,
+        shiftType: schedule.shiftType as ShiftType,
+        crewId: user?.crewId ?? null,
         isOverride: false,
       })
     }
   }
 
-  // Delete existing non-override schedules in range
-  await prisma.schedule.deleteMany({
-    where: {
-      userId: { in: userIds },
-      date: {
-        gte: new Date(validatedData.startDate),
-        lte: new Date(validatedData.endDate),
-      },
-      isOverride: false,
-    },
-  })
+  // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
+  let deletedCount = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await prisma.$transaction(async (tx: any) => {
+    // Delete existing schedules for the user(s)
+    // If clearOverrides is true, delete ALL schedules including manual edits
+    // Otherwise, only delete non-override schedules (preserve manual edits)
+    const deleteWhere = validatedData.clearOverrides
+      ? { userId: { in: userIds } }
+      : { userId: { in: userIds }, isOverride: false }
 
-  // Create new schedules
-  await prisma.schedule.createMany({
-    data: scheduleData,
-    skipDuplicates: true,
+    const deleteResult = await tx.schedule.deleteMany({
+      where: deleteWhere,
+    })
+    deletedCount = deleteResult.count
+    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
+
+    // Create new schedules
+    await tx.schedule.createMany({
+      data: scheduleData,
+      skipDuplicates: true,
+    })
+    console.log(`Created ${scheduleData.length} new schedules`)
   })
 
   return NextResponse.json({
@@ -250,6 +298,7 @@ async function generateSchedules(
       usersProcessed: userIds.length,
       daysGenerated: generatedSchedules.length,
       totalRecords: scheduleData.length,
+      deletedRecords: deletedCount,
     },
   })
 }

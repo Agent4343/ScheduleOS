@@ -70,6 +70,7 @@ model Organization {
   shutdowns        Shutdown[]
   holidays         Holiday[]
   invitations      Invitation[]
+  customShiftTypes CustomShiftType[]
 }
 
 model User {
@@ -152,6 +153,7 @@ model RotationPattern {
   includesNights    Boolean  @default(false)
   nightsAtStart     Boolean  @default(true)
   nightDays         Int      @default(0)
+  alternatesShifts  Boolean  @default(false)  // When true, work periods alternate between all-DAY and all-NIGHT
   patternDefinition Json     @default("[]")
   isDefault         Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -175,6 +177,7 @@ model Schedule {
   id             String      @id @default(cuid())
   date           DateTime    @db.Date
   shiftType      ShiftType
+  customShiftCode String?    // Code of custom shift type when shiftType is CUSTOM
   isOverride     Boolean     @default(false)
   overrideReason String?
   notes          String?
@@ -198,10 +201,33 @@ enum ShiftType {
   DAY
   NIGHT
   OFF
+  LEAVE
+  PL_DAY
+  PL_NIGHT
   VACATION
   SICK
   TRAINING
   SHUTDOWN
+  CUSTOM
+}
+
+// Custom shift types that organizations can create
+model CustomShiftType {
+  id           String   @id @default(cuid())
+  code         String   // Short code like "BRV", "JD", "MED"
+  name         String   // Full name like "Bereavement", "Jury Duty"
+  color        String   @default("#6b7280") // Hex color for display
+  textColor    String   @default("#ffffff") // Text color for contrast
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
 }
 
 model TimeOffRequest {

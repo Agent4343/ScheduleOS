@@ -12,10 +12,12 @@ import {
   Settings,
   CalendarOff,
   BarChart3,
+  Wand2,
 } from "lucide-react"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Setup", href: "/setup", icon: Wand2 },
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
