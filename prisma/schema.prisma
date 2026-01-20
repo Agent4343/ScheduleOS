@@ -84,7 +84,6 @@ model User {
   position       String?
   phone          String?
   hireDate       DateTime?
-  sortOrder      Int       @default(0)  // Custom sort order for schedule display
   status         UserStatus @default(ACTIVE)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

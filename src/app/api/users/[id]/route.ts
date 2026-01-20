@@ -29,7 +29,6 @@ export async function GET(
         phone: true,
         status: true,
         hireDate: true,
-        sortOrder: true,
         createdAt: true,
         crew: {
           select: {
@@ -74,6 +73,7 @@ export async function PATCH(
         id: params.id,
         organizationId: session.user.organizationId,
       },
+      select: { id: true },
     })
 
     if (!existingUser) {
@@ -107,7 +107,6 @@ export async function PATCH(
         phone: validatedData.phone,
         crewId: validatedData.crewId,
         hireDate: validatedData.hireDate,
-        sortOrder: validatedData.sortOrder,
         status: validatedData.status,
       },
       select: {
@@ -119,7 +118,6 @@ export async function PATCH(
         phone: true,
         status: true,
         hireDate: true,
-        sortOrder: true,
         crew: {
           select: {
             id: true,
@@ -176,6 +174,7 @@ export async function DELETE(
         id: params.id,
         organizationId: session.user.organizationId,
       },
+      select: { id: true },
     })
 
     if (!existingUser) {

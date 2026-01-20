@@ -133,6 +133,10 @@ export async function POST(request: NextRequest) {
         id: validatedData.userId,
         organizationId: session.user.organizationId,
       },
+      select: {
+        id: true,
+        crewId: true,
+      },
     })
 
     if (!user) {
@@ -222,6 +226,7 @@ async function generateSchedules(
     // Single user
     const user = await prisma.user.findFirst({
       where: { id: validatedData.userId, organizationId },
+      select: { id: true },
     })
     if (!user) {
       return NextResponse.json({ error: "Invalid user" }, { status: 400 })

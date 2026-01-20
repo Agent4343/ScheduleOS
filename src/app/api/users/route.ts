@@ -17,72 +17,35 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const role = searchParams.get("role")
 
-    // Try with sortOrder first, fall back to without if migration hasn't run
-    try {
-      const users = await prisma.user.findMany({
-        where: {
-          organizationId: session.user.organizationId,
-          ...(crewId && { crewId }),
-          ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
-          ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          position: true,
-          phone: true,
-          status: true,
-          hireDate: true,
-          sortOrder: true,
-          createdAt: true,
-          crew: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-            },
+    const users = await prisma.user.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        ...(crewId && { crewId }),
+        ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
+        ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        position: true,
+        phone: true,
+        status: true,
+        hireDate: true,
+        createdAt: true,
+        crew: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      })
+      },
+      orderBy: [{ name: "asc" }],
+    })
 
-      return NextResponse.json({ success: true, data: users })
-    } catch {
-      // Fallback: sortOrder column might not exist yet (migration pending)
-      const users = await prisma.user.findMany({
-        where: {
-          organizationId: session.user.organizationId,
-          ...(crewId && { crewId }),
-          ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
-          ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          position: true,
-          phone: true,
-          status: true,
-          hireDate: true,
-          createdAt: true,
-          crew: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-            },
-          },
-        },
-        orderBy: [{ name: "asc" }],
-      })
-
-      // Add sortOrder: 0 to each user for frontend compatibility
-      const usersWithSortOrder = users.map(u => ({ ...u, sortOrder: 0 }))
-      return NextResponse.json({ success: true, data: usersWithSortOrder })
-    }
+    return NextResponse.json({ success: true, data: users })
   } catch (error) {
     console.error("Error fetching users:", error)
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
