@@ -80,10 +80,10 @@ export const createScheduleSchema = z.object({
   userId: z.string(),
   date: z.coerce.date(),
   shiftType: z.nativeEnum(ShiftType),
-  customShiftCode: z.string().optional(),
+  customShiftCode: z.string().nullish(),
   isOverride: z.boolean().default(false),
-  overrideReason: z.string().optional(),
-  notes: z.string().optional(),
+  overrideReason: z.string().nullish(),
+  notes: z.string().nullish(),
 })
 
 export const updateScheduleSchema = createScheduleSchema.partial().omit({ userId: true, date: true })
