@@ -677,7 +677,7 @@ function SchedulePageContent() {
           ) : (
             <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
               <table className="border-collapse text-sm" style={{ minWidth: "max-content" }}>
-                <thead className="sticky top-0 z-30 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
+                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
                   {/* Month headers */}
                   <tr>
                     <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
