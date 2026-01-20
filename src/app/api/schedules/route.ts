@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { z } from "zod"
 import { ShiftType } from "@/types"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
@@ -118,6 +119,14 @@ export async function POST(request: NextRequest) {
 
     const validatedData = createScheduleSchema.parse(body)
 
+    // Normalize date to UTC midnight to ensure consistent comparison
+    const scheduleDate = new Date(validatedData.date)
+    const normalizedDate = new Date(Date.UTC(
+      scheduleDate.getUTCFullYear(),
+      scheduleDate.getUTCMonth(),
+      scheduleDate.getUTCDate()
+    ))
+
     // Verify user belongs to organization
     const user = await prisma.user.findFirst({
       where: {
@@ -135,25 +144,25 @@ export async function POST(request: NextRequest) {
       where: {
         userId_date: {
           userId: validatedData.userId,
-          date: new Date(validatedData.date),
+          date: normalizedDate,
         },
       },
       update: {
         shiftType: validatedData.shiftType,
         customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? true,
-        overrideReason: validatedData.overrideReason,
-        notes: validatedData.notes,
+        overrideReason: validatedData.overrideReason ?? null,
+        notes: validatedData.notes ?? null,
         crewId: user.crewId,
       },
       create: {
         userId: validatedData.userId,
-        date: new Date(validatedData.date),
+        date: normalizedDate,
         shiftType: validatedData.shiftType,
         customShiftCode: validatedData.customShiftCode || null,
         isOverride: validatedData.isOverride ?? false,
-        overrideReason: validatedData.overrideReason,
-        notes: validatedData.notes,
+        overrideReason: validatedData.overrideReason ?? null,
+        notes: validatedData.notes ?? null,
         crewId: user.crewId,
       },
       include: {
@@ -170,14 +179,18 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating schedule:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data", details: error.issues },
         { status: 400 }
       )
     }
 
-    return NextResponse.json({ error: "Failed to create schedule" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return NextResponse.json({
+      error: "Failed to create schedule",
+      details: errorMessage
+    }, { status: 500 })
   }
 }
 

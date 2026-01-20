@@ -548,7 +548,20 @@ function SchedulePageContent() {
         console.log("Save response:", result)
 
         if (!response.ok) {
-          throw new Error(result.error || result.details || "Failed to update schedule")
+          // Extract detailed error message from validation errors if available
+          let errorMessage = result.error || "Failed to update schedule"
+          if (result.details) {
+            if (Array.isArray(result.details)) {
+              // ZodError issues array
+              const issues = result.details.map((d: { path?: string[]; message?: string }) =>
+                `${d.path?.join('.') || 'field'}: ${d.message || 'invalid'}`
+              ).join('; ')
+              errorMessage = `${errorMessage}: ${issues}`
+            } else if (typeof result.details === 'string') {
+              errorMessage = `${errorMessage}: ${result.details}`
+            }
+          }
+          throw new Error(errorMessage)
         }
       }
 
