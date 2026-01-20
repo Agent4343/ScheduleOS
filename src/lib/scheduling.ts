@@ -40,7 +40,6 @@ export function generateRotationSchedule(
 
   // Track which shift to start with for alternating patterns
   let currentShiftIsDay = startingShift !== "NIGHT"
-  let cycleCount = 0
 
   while (currentDate <= endDate) {
     let shiftType: ShiftType
@@ -77,7 +76,6 @@ export function generateRotationSchedule(
 
     // When a cycle completes, alternate the shift for next cycle
     if (dayInCycle === 0 && pattern.alternatesShifts) {
-      cycleCount++
       currentShiftIsDay = !currentShiftIsDay
     }
   }
