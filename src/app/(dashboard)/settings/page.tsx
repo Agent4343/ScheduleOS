@@ -194,7 +194,7 @@ export default function SettingsPage() {
 
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER" })
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
   const [sendingInvite, setSendingInvite] = useState(false)
 
   // Export state
@@ -526,6 +526,11 @@ export default function SettingsPage() {
       return
     }
 
+    if (!inviteForm.password || inviteForm.password.length < 8) {
+      showMessage("Password must be at least 8 characters")
+      return
+    }
+
     setSendingInvite(true)
 
     try {
@@ -536,6 +541,7 @@ export default function SettingsPage() {
           email: inviteForm.email,
           name: inviteForm.name,
           role: inviteForm.role,
+          password: inviteForm.password,
           status: "ACTIVE",
         }),
       })
@@ -543,9 +549,9 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        showMessage(`User ${inviteForm.name} created successfully`)
+        showMessage(`User ${inviteForm.name} created successfully. They can now log in with their email and password.`)
         setShowInviteModal(false)
-        setInviteForm({ email: "", name: "", role: "WORKER" })
+        setInviteForm({ email: "", name: "", role: "WORKER", password: "" })
       } else {
         showMessage(data.error || "Failed to create user")
       }
@@ -1499,10 +1505,10 @@ export default function SettingsPage() {
         isOpen={showInviteModal}
         onClose={() => {
           setShowInviteModal(false)
-          setInviteForm({ email: "", name: "", role: "WORKER" })
+          setInviteForm({ email: "", name: "", role: "WORKER", password: "" })
         }}
-        title="Invite User"
-        description="Add a new user to your organization"
+        title="Add New User"
+        description="Create a new user account for your organization"
       >
         <div className="space-y-4">
           <div className="space-y-2">
@@ -1525,14 +1531,25 @@ export default function SettingsPage() {
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="invitePassword">Temporary Password</Label>
+            <Input
+              id="invitePassword"
+              type="password"
+              value={inviteForm.password}
+              onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+              placeholder="Min 8 characters"
+            />
+            <p className="text-xs text-muted-foreground">Share this password with the user so they can log in</p>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="inviteRole">Role</Label>
             <Select
               value={inviteForm.role}
               onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
               options={[
-                { value: "WORKER", label: "Worker" },
-                { value: "SUPERVISOR", label: "Supervisor" },
-                { value: "ADMIN", label: "Admin" },
+                { value: "WORKER", label: "Worker - Can view schedule and request time off" },
+                { value: "SUPERVISOR", label: "Supervisor - Can manage crews and schedules" },
+                { value: "ADMIN", label: "Admin - Full access to all features" },
               ]}
             />
           </div>
