@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createStaffingRuleSchema } from "@/lib/validations"
+import { ShiftType } from "@prisma/client"
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       where: {
         organizationId: session.user.organizationId,
         ...(crewId && { crewId }),
-        ...(shiftType && { shiftType: shiftType as "DAY" | "NIGHT" | "OFF" | "VACATION" | "SICK" | "TRAINING" | "HOLIDAY" }),
+        ...(shiftType && { shiftType: shiftType as ShiftType }),
         ...(isActive !== null && { isActive: isActive === "true" }),
       },
       include: {
