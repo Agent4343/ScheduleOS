@@ -141,7 +141,7 @@ const TIMEZONES = [
 ]
 
 export default function SettingsPage() {
-  const { data: session, update: updateSession } = useSession()
+  const { data: session } = useSession()
   const { theme, setTheme } = useTheme()
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
