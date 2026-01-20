@@ -244,6 +244,27 @@ async function generateSchedules(
     validatedData.startingShift
   )
 
+  // Batch size limit to prevent timeouts and memory issues
+  const MAX_SCHEDULE_RECORDS = 50000
+  const estimatedRecords = userIds.length * generatedSchedules.length
+  if (estimatedRecords > MAX_SCHEDULE_RECORDS) {
+    return NextResponse.json(
+      {
+        error: `Request would create ${estimatedRecords} records, which exceeds the limit of ${MAX_SCHEDULE_RECORDS}. Please reduce the date range or number of users.`
+      },
+      { status: 400 }
+    )
+  }
+
+  // Batch fetch all users' crewIds in a single query (fixes N+1 problem)
+  const usersWithCrews = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, crewId: true },
+  })
+  const userCrewMap = new Map<string, string | null>(
+    usersWithCrews.map((u: { id: string; crewId: string | null }) => [u.id, u.crewId])
+  )
+
   // Create schedules for all users
   const scheduleData: Array<{
     userId: string
@@ -253,17 +274,14 @@ async function generateSchedules(
     isOverride: boolean
   }> = []
   for (const userId of userIds) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { crewId: true },
-    })
+    const crewId = userCrewMap.get(userId) ?? null
 
     for (const schedule of generatedSchedules) {
       scheduleData.push({
         userId,
         date: schedule.date,
         shiftType: schedule.shiftType as ShiftType,
-        crewId: user?.crewId ?? null,
+        crewId,
         isOverride: false,
       })
     }
