@@ -150,60 +150,64 @@ async function main() {
   // - Or use SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
 
   // Opt-in demo user creation (disabled by default for security)
-  if (process.env.SEED_DEMO === "true") {
-    if (!process.env.SEED_DEMO_PASSWORD) {
-      console.warn(
-        "⚠️  SEED_DEMO is enabled but SEED_DEMO_PASSWORD is not set. Skipping demo user creation."
-      )
-      console.warn(
-        "   Set SEED_DEMO_PASSWORD to create demo users: SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed"
-      )
-    } else {
-      console.log("Creating demo users (opt-in enabled)...")
-      const passwordHash = await bcrypt.hash(process.env.SEED_DEMO_PASSWORD, 12)
+  if (process.env.SEED_DEMO === "true" && process.env.SEED_DEMO_PASSWORD) {
+    console.log("Creating demo users (opt-in enabled)...")
+    const passwordHash = await bcrypt.hash(process.env.SEED_DEMO_PASSWORD, 12)
 
-      // Create local demo admin
-      const admin = await prisma.user.upsert({
-        where: { email: "admin@local" },
-        update: {},
-        create: {
-          email: "admin@local",
-          name: "Demo Admin",
-          passwordHash,
-          role: "ADMIN",
-          status: "ACTIVE",
-          organizationId: organization.id,
-        },
-      })
+    // Create local demo admin
+    const admin = await prisma.user.upsert({
+      where: { email: "admin@local" },
+      update: {},
+      create: {
+        email: "admin@local",
+        name: "Demo Admin",
+        passwordHash,
+        role: "ADMIN",
+        status: "ACTIVE",
+        organizationId: organization.id,
+      },
+    })
 
-      console.log("Created demo admin user:", admin.email)
+    console.log("Created demo admin user:", admin.email)
 
-      // Create minimal demo workers
-      const workers = [
-        { name: "Worker A1", email: "worker-a1@local", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
-        { name: "Worker A2", email: "worker-a2@local", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-      ]
+    // Create minimal demo workers
+    const workers = [
+      { name: "Worker A1", email: "worker-a1@local", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+      { name: "Worker A2", email: "worker-a2@local", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+    ]
 
-      for (const worker of workers) {
-        await prisma.user.upsert({
-          where: { email: worker.email },
-          update: {},
-          create: {
-            email: worker.email,
-            name: worker.name,
-            passwordHash,
-            role: "WORKER",
-            position: worker.position,
-            positionType: worker.positionType,
-            status: "ACTIVE",
-            organizationId: organization.id,
-            crewId: crews[worker.crew],
-          },
-        })
+    for (const worker of workers) {
+      const crewId = crews[worker.crew]
+      if (!crewId) {
+        console.warn(`⚠️  Crew '${worker.crew}' not found, skipping worker ${worker.name}`)
+        continue
       }
 
-      console.log("Created demo workers")
+      await prisma.user.upsert({
+        where: { email: worker.email },
+        update: {},
+        create: {
+          email: worker.email,
+          name: worker.name,
+          passwordHash,
+          role: "WORKER",
+          position: worker.position,
+          positionType: worker.positionType,
+          status: "ACTIVE",
+          organizationId: organization.id,
+          crewId,
+        },
+      })
     }
+
+    console.log("Created demo workers")
+  } else if (process.env.SEED_DEMO === "true") {
+    console.warn(
+      "⚠️  SEED_DEMO is enabled but SEED_DEMO_PASSWORD is not set. Skipping demo user creation."
+    )
+    console.warn(
+      "   Set SEED_DEMO_PASSWORD to create demo users: SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed"
+    )
   }
 
   console.log("Seeding completed!")
