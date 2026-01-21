@@ -57,6 +57,7 @@ export const createUserSchema = z.object({
   position: z.string().optional(),
   phone: z.string().optional(),
   crewId: z.string().optional(),
+  positionCategoryId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
   password: z.string().min(8).optional(),
 })

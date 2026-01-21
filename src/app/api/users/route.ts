@@ -42,6 +42,14 @@ export async function GET(request: NextRequest) {
             color: true,
           },
         },
+        positionCategory: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isOffshore: true,
+          },
+        },
       },
       orderBy: { name: "asc" },
     })
@@ -95,6 +103,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Verify position category belongs to organization
+    if (validatedData.positionCategoryId) {
+      const positionCategory = await prisma.positionCategory.findFirst({
+        where: {
+          id: validatedData.positionCategoryId,
+          organizationId: session.user.organizationId,
+        },
+      })
+
+      if (!positionCategory) {
+        return NextResponse.json({ error: "Invalid position category" }, { status: 400 })
+      }
+    }
+
     // Hash password if provided
     const passwordHash = validatedData.password
       ? await hashPassword(validatedData.password)
@@ -109,6 +131,7 @@ export async function POST(request: NextRequest) {
         phone: validatedData.phone,
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
+        positionCategoryId: validatedData.positionCategoryId,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -125,6 +148,14 @@ export async function POST(request: NextRequest) {
             id: true,
             name: true,
             color: true,
+          },
+        },
+        positionCategory: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isOffshore: true,
           },
         },
       },

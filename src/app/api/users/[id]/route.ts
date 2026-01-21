@@ -39,6 +39,29 @@ export async function GET(
             color: true,
           },
         },
+        positionCategory: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isOffshore: true,
+          },
+        },
+        certifications: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            certifiedDate: true,
+            expiryDate: true,
+            certification: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+              },
+            },
+          },
+        },
       },
     })
 
@@ -98,6 +121,20 @@ export async function PATCH(
       }
     }
 
+    // Verify position category belongs to organization if provided
+    if (validatedData.positionCategoryId) {
+      const positionCategory = await prisma.positionCategory.findFirst({
+        where: {
+          id: validatedData.positionCategoryId,
+          organizationId: session.user.organizationId,
+        },
+      })
+
+      if (!positionCategory) {
+        return NextResponse.json({ error: "Invalid position category" }, { status: 400 })
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: params.id },
       data: {
@@ -107,6 +144,7 @@ export async function PATCH(
         phone: validatedData.phone,
         crewId: validatedData.crewId,
         hireDate: validatedData.hireDate,
+        positionCategoryId: validatedData.positionCategoryId,
       },
       select: {
         id: true,
@@ -122,6 +160,14 @@ export async function PATCH(
             id: true,
             name: true,
             color: true,
+          },
+        },
+        positionCategory: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isOffshore: true,
           },
         },
       },

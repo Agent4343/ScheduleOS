@@ -63,14 +63,17 @@ model Organization {
   updatedAt DateTime @updatedAt
 
   // Relations
-  users            User[]
-  crews            Crew[]
-  rotationPatterns RotationPattern[]
-  staffingRules    StaffingRule[]
-  shutdowns        Shutdown[]
-  holidays         Holiday[]
-  invitations      Invitation[]
-  customShiftTypes CustomShiftType[]
+  users                 User[]
+  crews                 Crew[]
+  rotationPatterns      RotationPattern[]
+  staffingRules         StaffingRule[]
+  shutdowns             Shutdown[]
+  holidays              Holiday[]
+  invitations           Invitation[]
+  customShiftTypes      CustomShiftType[]
+  positionCategories    PositionCategory[]
+  staffingRequirements  StaffingRequirement[]
+  certifications        Certification[]
 }
 
 model User {
@@ -96,15 +99,20 @@ model User {
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
 
+  // Position Category (for staffing requirements)
+  positionCategoryId String?
+  positionCategory   PositionCategory? @relation(fields: [positionCategoryId], references: [id])
+
   // Relations
-  accounts        Account[]
-  sessions        Session[]
-  schedules       Schedule[]
-  timeOffRequests TimeOffRequest[]
-  approvedRequests TimeOffRequest[] @relation("ApprovedBy")
-  holidayTracking HolidayTracking[]
-  notifications   Notification[]
+  accounts           Account[]
+  sessions           Session[]
+  schedules          Schedule[]
+  timeOffRequests    TimeOffRequest[]
+  approvedRequests   TimeOffRequest[] @relation("ApprovedBy")
+  holidayTracking    HolidayTracking[]
+  notifications      Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
+  certifications     UserCertification[]
 }
 
 enum UserRole {
@@ -271,6 +279,93 @@ enum RequestStatus {
 // =====================
 // Staffing Rules & Alerts
 // =====================
+
+// Position categories for staffing requirements
+model PositionCategory {
+  id           String   @id @default(cuid())
+  name         String   // e.g., "Operator", "Onshore Control Room", "Offshore Control Room"
+  code         String   // Short code like "OP", "OCR", "FCR"
+  description  String?
+  isOffshore   Boolean  @default(false)  // Is this an offshore position?
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Relations
+  users                User[]
+  staffingRequirements StaffingRequirement[]
+
+  @@unique([organizationId, code])
+}
+
+// Staffing requirements per position per shift type
+model StaffingRequirement {
+  id          String    @id @default(cuid())
+  shiftType   ShiftType // DAY or NIGHT typically
+  minRequired Int       // Minimum number of workers needed
+  idealCount  Int?      // Ideal/target number (optional)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Position Category
+  positionCategoryId String
+  positionCategory   PositionCategory @relation(fields: [positionCategoryId], references: [id], onDelete: Cascade)
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, positionCategoryId, shiftType])
+}
+
+// Certifications/Training types
+model Certification {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Control Room Emergency Support", "First Aid"
+  code        String   // Short code like "CRES", "FA"
+  description String?
+  isRequired  Boolean  @default(false)  // Is this required for certain positions?
+  validityDays Int?    // How long is certification valid (null = never expires)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Relations
+  userCertifications UserCertification[]
+
+  @@unique([organizationId, code])
+}
+
+// User certifications - track who has what training
+model UserCertification {
+  id            String    @id @default(cuid())
+  certifiedDate DateTime  @db.Date
+  expiryDate    DateTime? @db.Date  // null = never expires
+  notes         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // User
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Certification
+  certificationId String
+  certification   Certification @relation(fields: [certificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, certificationId])
+}
 
 model StaffingRule {
   id          String    @id @default(cuid())
