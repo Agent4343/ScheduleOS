@@ -448,8 +448,8 @@ function SchedulePageContent() {
 
       setGenerateSuccess(`Generated ${result.data?.daysGenerated || 0} schedule days`)
 
-      // Refresh schedules
-      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`
+      // Refresh schedules - include crew filter to maintain consistent view
+      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
       console.log("Refreshing schedules from:", refreshUrl)
 
       const schedulesResponse = await fetch(refreshUrl)
@@ -461,6 +461,8 @@ function SchedulePageContent() {
         setSchedules(schedulesResult.data)
       } else {
         console.error("Failed to refresh:", schedulesResult)
+        // Show warning that refresh failed - data was saved but display may be stale
+        setGenerateSuccess(`Generated ${result.data?.daysGenerated || 0} days. Note: Display refresh failed - please reload the page to see changes.`)
       }
     } catch (error) {
       console.error("Generate error:", error)
@@ -583,6 +585,8 @@ function SchedulePageContent() {
         setSchedules(schedulesResult.data)
       } else {
         console.error("Failed to refresh schedules:", schedulesResult)
+        // Show warning that refresh failed - data was saved but display may be stale
+        setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s). Note: Display refresh failed - please reload the page to see changes.`)
       }
 
       // Close modal after short delay to show success message
