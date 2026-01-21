@@ -89,18 +89,18 @@ interface CustomShiftType {
   isActive: boolean
 }
 
-// Built-in shift colors for the Excel-like cells
+// Built-in shift colors for the Excel-like cells - distinct colors for visibility
 const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
-  NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
-  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
-  LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
-  PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
-  PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
-  VACATION: { bg: "#10b981", text: "#ffffff", label: "V" },
-  SICK: { bg: "#ef4444", text: "#ffffff", label: "S" },
-  TRAINING: { bg: "#eab308", text: "#000000", label: "T" },
-  SHUTDOWN: { bg: "#64748b", text: "#ffffff", label: "X" },
+  DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },       // Green
+  NIGHT: { bg: "#1d4ed8", text: "#ffffff", label: "N" },     // Dark Blue
+  OFF: { bg: "#d1d5db", text: "#374151", label: "O" },       // Light Gray
+  LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },     // Orange
+  PL_DAY: { bg: "#06b6d4", text: "#ffffff", label: "PD" },   // Cyan
+  PL_NIGHT: { bg: "#7c3aed", text: "#ffffff", label: "PN" }, // Purple
+  VACATION: { bg: "#ec4899", text: "#ffffff", label: "V" },  // Pink
+  SICK: { bg: "#dc2626", text: "#ffffff", label: "S" },      // Red
+  TRAINING: { bg: "#eab308", text: "#000000", label: "T" },  // Yellow
+  SHUTDOWN: { bg: "#1e293b", text: "#ffffff", label: "X" },  // Dark Slate
 }
 
 // Format date as YYYY-MM-DD
