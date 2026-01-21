@@ -6,6 +6,11 @@ import { ShiftType } from "@prisma/client"
 import { addDays, startOfWeek, endOfWeek } from "@/lib/utils"
 import { logger } from "@/lib/logger"
 
+// Helper to create a date-only Date object (no timezone issues)
+function toDateOnly(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -41,11 +46,10 @@ export async function GET() {
       })
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const weekStart = startOfWeek(today)
-    const weekEnd = endOfWeek(today)
+    const now = new Date()
+    const today = toDateOnly(now)
+    const weekStart = toDateOnly(startOfWeek(now))
+    const weekEnd = toDateOnly(endOfWeek(now))
 
     // Get stats in parallel
     const [
@@ -143,11 +147,15 @@ export async function GET() {
       }
     }
 
-    // Get recent activity
+    // Get recent activity (use local time for createdAt comparison)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    sevenDaysAgo.setHours(0, 0, 0, 0)
+
     const recentActivity = await prisma.notification.findMany({
       where: {
         user: { organizationId },
-        createdAt: { gte: addDays(today, -7) },
+        createdAt: { gte: sevenDaysAgo },
       },
       orderBy: { createdAt: "desc" },
       take: 10,
@@ -156,12 +164,13 @@ export async function GET() {
       },
     })
 
-    // Get upcoming time off
+    // Get upcoming time off (startDate is @db.Date so use UTC dates)
+    const twoWeeksFromNow = toDateOnly(addDays(now, 14))
     const upcomingTimeOff = await prisma.timeOffRequest.findMany({
       where: {
         user: { organizationId },
         status: "APPROVED",
-        startDate: { gte: today, lte: addDays(today, 14) },
+        startDate: { gte: today, lte: twoWeeksFromNow },
       },
       include: {
         user: { select: { id: true, name: true, crew: { select: { name: true } } } },
