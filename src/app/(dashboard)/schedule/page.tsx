@@ -689,8 +689,8 @@ function SchedulePageContent() {
             </div>
           ) : (
             <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
-              <table className="border-collapse text-sm" style={{ minWidth: "max-content" }}>
-                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
+              <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
+                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
                   {/* Month headers */}
                   <tr>
                     <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
@@ -735,7 +735,7 @@ function SchedulePageContent() {
                   {sortedWorkers.map((worker) => (
                     <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
                         onClick={() => openEditModal(worker)}
                       >
                         <div className="flex items-center gap-2">
@@ -770,8 +770,8 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 hover:ring-inset transition-all",
-                                isWeekend && !style && "bg-muted/50",
+                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
                               style={
