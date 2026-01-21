@@ -56,9 +56,13 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
    npx prisma db push
    ```
 
-6. **Seed demo data** (optional):
+6. **Create an admin user** using Prisma Studio:
    ```bash
-   npm run db:seed
+   npx prisma studio
+   ```
+   Or use opt-in demo seeding with environment variables:
+   ```bash
+   SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
    ```
 
 ### Railway Environment Variables
@@ -101,10 +105,27 @@ cp .env.example .env
 npm run db:push
 ```
 
-5. Seed demo data (optional):
+5. Create an admin user for local development:
+
+**Option A: Using Prisma Studio (recommended)**
 ```bash
-npm run db:seed
+npx prisma studio
 ```
+Navigate to the User table and create a new record with:
+- Email: admin@localhost (or your preferred email)
+- Name: Admin User
+- Role: ADMIN
+- Status: ACTIVE
+- passwordHash: Use bcrypt to hash your password. Example using Node.js:
+  ```bash
+  node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
+  ```
+
+**Option B: Opt-in demo seeding**
+```bash
+SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+```
+This creates `admin@localhost` with your chosen password. Demo seeding is disabled by default for security.
 
 6. Start development server:
 ```bash
@@ -112,12 +133,6 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Demo Credentials
-
-After seeding:
-- **Email**: admin@demo.com
-- **Password**: demo1234
 
 ## Project Structure
 
