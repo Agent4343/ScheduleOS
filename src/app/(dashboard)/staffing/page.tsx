@@ -56,17 +56,6 @@ interface Certification {
   }
 }
 
-interface Worker {
-  id: string
-  name: string | null
-  position: string | null
-  positionCategory: {
-    id: string
-    name: string
-    code: string
-  } | null
-}
-
 interface StaffingStatus {
   positionCategoryId: string
   positionCategoryName: string
@@ -118,9 +107,6 @@ export default function StaffingPage() {
     validityDays: "",
   })
 
-  // Workers state for assignment
-  const [workers, setWorkers] = useState<Worker[]>([])
-
   // Today's staffing status
   const [staffingStatus, setStaffingStatus] = useState<StaffingStatus[]>([])
 
@@ -139,23 +125,20 @@ export default function StaffingPage() {
 
   async function fetchData() {
     try {
-      const [categoriesRes, certsRes, workersRes, staffingRes] = await Promise.all([
+      const [categoriesRes, certsRes, staffingRes] = await Promise.all([
         fetch("/api/position-categories"),
         fetch("/api/certifications"),
-        fetch("/api/users?status=ACTIVE"),
         fetch(`/api/staffing-requirements?date=${new Date().toISOString().split("T")[0]}`),
       ])
 
-      const [categoriesData, certsData, workersData, staffingData] = await Promise.all([
+      const [categoriesData, certsData, staffingData] = await Promise.all([
         categoriesRes.json(),
         certsRes.json(),
-        workersRes.json(),
         staffingRes.json(),
       ])
 
       if (categoriesData.success) setPositionCategories(categoriesData.data)
       if (certsData.success) setCertifications(certsData.data)
-      if (workersData.success) setWorkers(workersData.data)
       if (staffingData.success && staffingData.staffingStatus) {
         setStaffingStatus(staffingData.staffingStatus)
       }
