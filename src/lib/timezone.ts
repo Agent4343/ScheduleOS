@@ -55,6 +55,19 @@ export function addDaysUTC(date: Date, days: number): Date {
 }
 
 /**
+ * Normalize a Date object to UTC midnight.
+ * This ensures consistent date storage regardless of the input time.
+ */
+export function normalizeToUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0, 0, 0, 0
+  ))
+}
+
+/**
  * Get the start of a year in UTC.
  */
 export function getYearStartUTC(year: number): Date {
@@ -106,4 +119,23 @@ export function getDateRange(startDate: Date, endDate: Date): Date[] {
   }
 
   return dates
+}
+
+/**
+ * Get the start of the week (Sunday) in UTC.
+ */
+export function startOfWeekUTC(date: Date): Date {
+  const utcDate = normalizeToUTCMidnight(date)
+  const day = utcDate.getUTCDay()
+  return addDaysUTC(utcDate, -day)
+}
+
+/**
+ * Get the end of the week (Saturday) in UTC at midnight.
+ * Note: Returns midnight of Saturday (start of day) for consistent date-only comparisons.
+ */
+export function endOfWeekUTC(date: Date): Date {
+  const utcDate = normalizeToUTCMidnight(date)
+  const day = utcDate.getUTCDay()
+  return addDaysUTC(utcDate, 6 - day)
 }

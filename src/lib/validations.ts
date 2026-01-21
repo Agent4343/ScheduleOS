@@ -1,5 +1,6 @@
 import { z } from "zod"
-import { UserRole, TimeOffType, ShiftType } from "@prisma/client"
+import { UserRole, UserStatus, TimeOffType, ShiftType } from "@prisma/client"
+import { PositionType } from "@/types"
 
 // Auth validations
 export const loginSchema = z.object({
@@ -39,14 +40,16 @@ export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(2, "Name must be at least 2 characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string().optional(),
+  positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   phone: z.string().optional(),
   crewId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
   password: z.string().min(8).optional(),
 })
 
-export const updateUserSchema = createUserSchema.partial().omit({ email: true })
+export const updateUserSchema = createUserSchema.partial()
 
 // Crew validations
 export const createCrewSchema = z.object({
@@ -67,6 +70,7 @@ export const createRotationPatternSchema = z.object({
   includesNights: z.boolean().default(false),
   nightsAtStart: z.boolean().default(true),
   nightDays: z.number().int().min(0).max(60).default(0),
+  alternatesShifts: z.boolean().default(false),
   isDefault: z.boolean().default(false),
 })
 
@@ -77,9 +81,10 @@ export const createScheduleSchema = z.object({
   userId: z.string(),
   date: z.coerce.date(),
   shiftType: z.nativeEnum(ShiftType),
+  customShiftCode: z.string().nullish(),
   isOverride: z.boolean().default(false),
-  overrideReason: z.string().optional(),
-  notes: z.string().optional(),
+  overrideReason: z.string().nullish(),
+  notes: z.string().nullish(),
 })
 
 export const updateScheduleSchema = createScheduleSchema.partial().omit({ userId: true, date: true })
@@ -91,6 +96,8 @@ export const generateScheduleSchema = z.object({
   endDate: z.coerce.date(),
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
+  startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  clearOverrides: z.boolean().default(false),
 })
 
 // Time off request validations
@@ -112,9 +119,14 @@ export const updateTimeOffRequestSchema = z.object({
 // Staffing rule validations
 export const createStaffingRuleSchema = z.object({
   name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
   shiftType: z.nativeEnum(ShiftType),
   minWorkers: z.number().int().min(0),
   maxVacation: z.number().int().min(0).default(1),
+  role: z.nativeEnum(UserRole).optional().nullable(),
+  positionType: z.nativeEnum(PositionType).optional().nullable(),
+  crewId: z.string().optional().nullable(),
+  priority: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
 })
 

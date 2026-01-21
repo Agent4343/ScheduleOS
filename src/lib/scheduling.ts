@@ -1,5 +1,6 @@
 import { ShiftType } from "@prisma/client"
-import { addDays, isSameDay } from "./utils"
+import { isSameDay } from "./utils"
+import { addDaysUTC, normalizeToUTCMidnight } from "./timezone"
 
 export interface RotationPattern {
   daysOn: number
@@ -7,6 +8,7 @@ export interface RotationPattern {
   includesNights: boolean
   nightsAtStart: boolean
   nightDays: number
+  alternatesShifts?: boolean
 }
 
 export interface GeneratedSchedule {
@@ -21,26 +23,36 @@ export interface GeneratedSchedule {
  * @param startDate - The start date for schedule generation
  * @param endDate - The end date for schedule generation
  * @param startPhase - The starting phase offset (0 = beginning of rotation)
+ * @param startingShift - Optional starting shift type for alternating patterns ("DAY" or "NIGHT")
  * @returns Array of generated schedules
  */
 export function generateRotationSchedule(
   pattern: RotationPattern,
   startDate: Date,
   endDate: Date,
-  startPhase: number = 0
+  startPhase: number = 0,
+  startingShift?: "DAY" | "NIGHT"
 ): GeneratedSchedule[] {
   const schedules: GeneratedSchedule[] = []
   const totalCycleDays = pattern.daysOn + pattern.daysOff
 
-  let currentDate = new Date(startDate)
+  // Normalize dates to UTC midnight to ensure consistent behavior
+  let currentDate = normalizeToUTCMidnight(startDate)
+  const normalizedEndDate = normalizeToUTCMidnight(endDate)
   let dayInCycle = startPhase % totalCycleDays
 
-  while (currentDate <= endDate) {
+  // Track which shift to start with for alternating patterns
+  let currentShiftIsDay = startingShift !== "NIGHT"
+
+  while (currentDate <= normalizedEndDate) {
     let shiftType: ShiftType
 
     if (dayInCycle < pattern.daysOn) {
       // Working days
-      if (pattern.includesNights) {
+      if (pattern.alternatesShifts) {
+        // Alternating shifts pattern - whole rotation is either DAY or NIGHT
+        shiftType = currentShiftIsDay ? ShiftType.DAY : ShiftType.NIGHT
+      } else if (pattern.includesNights) {
         if (pattern.nightsAtStart) {
           // Night shifts first, then day shifts
           shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
@@ -58,12 +70,17 @@ export function generateRotationSchedule(
     }
 
     schedules.push({
-      date: new Date(currentDate),
+      date: normalizeToUTCMidnight(currentDate),
       shiftType,
     })
 
-    currentDate = addDays(currentDate, 1)
+    currentDate = addDaysUTC(currentDate, 1)
     dayInCycle = (dayInCycle + 1) % totalCycleDays
+
+    // When a cycle completes, alternate the shift for next cycle
+    if (dayInCycle === 0 && pattern.alternatesShifts) {
+      currentShiftIsDay = !currentShiftIsDay
+    }
   }
 
   return schedules
@@ -184,22 +201,23 @@ export function calculateStaffingLevels(
   endDate: Date
 ): StaffingLevel[] {
   const levels: StaffingLevel[] = []
-  let currentDate = new Date(startDate)
+  let currentDate = normalizeToUTCMidnight(startDate)
+  const normalizedEndDate = normalizeToUTCMidnight(endDate)
 
-  while (currentDate <= endDate) {
+  while (currentDate <= normalizedEndDate) {
     const daySchedules = schedules.filter(s => isSameDay(s.date, currentDate))
 
     const dayShift = daySchedules.filter(s => s.shiftType === ShiftType.DAY).length
     const nightShift = daySchedules.filter(s => s.shiftType === ShiftType.NIGHT).length
 
     levels.push({
-      date: new Date(currentDate),
+      date: normalizeToUTCMidnight(currentDate),
       dayShift,
       nightShift,
       total: dayShift + nightShift,
     })
 
-    currentDate = addDays(currentDate, 1)
+    currentDate = addDaysUTC(currentDate, 1)
   }
 
   return levels
@@ -261,7 +279,7 @@ export function calculateOnboardingSync(
   // Find the next day 0 (start of work cycle) from target date
   const daysUntilCycleStart = (totalCycleDays - crewCurrentPhase) % totalCycleDays
 
-  const syncedStartDate = addDays(targetStartDate, daysUntilCycleStart)
+  const syncedStartDate = addDaysUTC(normalizeToUTCMidnight(targetStartDate), daysUntilCycleStart)
 
   return {
     syncedStartDate,

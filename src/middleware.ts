@@ -19,7 +19,7 @@ export default withAuth(
     if (process.env.NODE_ENV === "production") {
       response.headers.set(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io"
       )
     }
 
@@ -63,7 +63,10 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - api/health (health check - must bypass auth for Railway)
+     * - api/setup (database setup - must work before auth is configured)
+     * - api/migrate (database migrations - must work before auth is configured)
      */
-    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/|api/health|api/setup|api/migrate).*)",
   ],
 }

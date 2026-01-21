@@ -5,6 +5,7 @@ const sqlStatements = [
   // Create enums
   `DO $$ BEGIN CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'SUPERVISOR', 'WORKER'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'ON_LEAVE', 'TERMINATED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN CREATE TYPE "PositionType" AS ENUM ('OPERATOR', 'ONSHORE_CONTROL_ROOM', 'OTHER'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "ShiftType" AS ENUM ('DAY', 'NIGHT', 'OFF', 'VACATION', 'SICK', 'TRAINING', 'SHUTDOWN'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "TimeOffType" AS ENUM ('VACATION', 'SICK', 'PERSONAL', 'BEREAVEMENT', 'JURY_DUTY', 'OTHER'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "RequestStatus" AS ENUM ('PENDING', 'APPROVED', 'DENIED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
@@ -30,6 +31,7 @@ const sqlStatements = [
     "image" TEXT,
     "role" "UserRole" NOT NULL DEFAULT 'WORKER',
     "position" TEXT,
+    "positionType" "PositionType" NOT NULL DEFAULT 'OTHER',
     "phone" TEXT,
     "hireDate" TIMESTAMP(3),
     "status" "UserStatus" NOT NULL DEFAULT 'ACTIVE',
@@ -146,13 +148,18 @@ const sqlStatements = [
   `CREATE TABLE IF NOT EXISTS "StaffingRule" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
+    "description" TEXT,
     "shiftType" "ShiftType" NOT NULL,
     "minWorkers" INTEGER NOT NULL,
     "maxVacation" INTEGER NOT NULL DEFAULT 1,
+    "role" "UserRole",
+    "positionType" "PositionType",
+    "priority" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
+    "crewId" TEXT REFERENCES "Crew"("id") ON DELETE SET NULL,
     UNIQUE("organizationId", "name")
   )`,
 

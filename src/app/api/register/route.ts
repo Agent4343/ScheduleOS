@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
             minStaffingAlertEnabled: true,
             emailNotificationsEnabled: true,
             smsNotificationsEnabled: false,
+            minStaffOperators: 2,
+            minStaffOnshoreControlRoom: 1,
           },
         },
       })
@@ -115,17 +117,16 @@ export async function POST(request: NextRequest) {
         where: { organizationId, isDefault: true },
       })
 
-      for (let i = 0; i < defaultCrews.length; i++) {
-        await prisma.crew.create({
-          data: {
-            organizationId,
-            name: `Crew ${defaultCrews[i]}`,
-            color: colors[i],
-            currentPhase: i * 3, // Offset each crew for rotation
-            rotationPatternId: defaultPattern?.id,
-          },
-        })
-      }
+      // Batch create all crews in a single query (faster than sequential creates)
+      await prisma.crew.createMany({
+        data: defaultCrews.map((crewLetter, i) => ({
+          organizationId: organizationId!,
+          name: `Crew ${crewLetter}`,
+          color: colors[i],
+          currentPhase: i * 3, // Offset each crew for rotation
+          rotationPatternId: defaultPattern?.id,
+        })),
+      })
 
       // Create default staffing rules
       await prisma.staffingRule.createMany({

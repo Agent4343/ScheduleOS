@@ -26,6 +26,7 @@ export async function GET(
         name: true,
         role: true,
         position: true,
+        positionType: true,
         phone: true,
         status: true,
         hireDate: true,
@@ -73,6 +74,7 @@ export async function PATCH(
         id: params.id,
         organizationId: session.user.organizationId,
       },
+      select: { id: true },
     })
 
     if (!existingUser) {
@@ -100,11 +102,14 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         name: validatedData.name,
+        email: validatedData.email,
         role: validatedData.role,
         position: validatedData.position,
+        positionType: validatedData.positionType,
         phone: validatedData.phone,
         crewId: validatedData.crewId,
         hireDate: validatedData.hireDate,
+        status: validatedData.status,
       },
       select: {
         id: true,
@@ -112,6 +117,7 @@ export async function PATCH(
         name: true,
         role: true,
         position: true,
+        positionType: true,
         phone: true,
         status: true,
         hireDate: true,
@@ -171,6 +177,7 @@ export async function DELETE(
         id: params.id,
         organizationId: session.user.organizationId,
       },
+      select: { id: true },
     })
 
     if (!existingUser) {

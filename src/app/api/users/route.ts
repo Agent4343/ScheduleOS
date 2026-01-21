@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
         name: true,
         role: true,
         position: true,
+        positionType: true,
         phone: true,
         status: true,
         hireDate: true,
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { name: "asc" },
+      orderBy: [{ name: "asc" }],
     })
 
     return NextResponse.json({ success: true, data: users })
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         role: validatedData.role,
         position: validatedData.position,
+        positionType: validatedData.positionType,
         phone: validatedData.phone,
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
@@ -118,6 +120,7 @@ export async function POST(request: NextRequest) {
         name: true,
         role: true,
         position: true,
+        positionType: true,
         status: true,
         crew: {
           select: {

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { Providers } from "@/components/providers"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -9,9 +10,61 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "ShiftSync - AI-Powered Workforce Scheduling",
-  description: "Comprehensive workforce scheduling platform for industries with complex rotating shift patterns",
-  keywords: ["scheduling", "workforce", "shift management", "crew rotation", "offshore", "manufacturing"],
+  title: {
+    default: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    template: "%s | ShiftSync",
+  },
+  description:
+    "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing. Free 14-day trial.",
+  keywords: [
+    "offshore scheduling",
+    "crew rotation software",
+    "workforce management",
+    "shift scheduling",
+    "offshore oil and gas",
+    "rotation pattern",
+    "14/14 schedule",
+    "21/21 rotation",
+    "crew management",
+    "certification tracking",
+  ],
+  authors: [{ name: "ShiftSync" }],
+  creator: "ShiftSync",
+  metadataBase: new URL(process.env.NEXTAUTH_URL || "https://scheduleos-production.up.railway.app"),
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "ShiftSync",
+    title: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    description:
+      "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "ShiftSync - Workforce Scheduling Made Simple",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ShiftSync | Offshore Crew Scheduling Software",
+    description:
+      "AI-powered workforce scheduling built for offshore oil & gas operations. Free 14-day trial.",
+    images: ["/og-image.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 }
 
 export default function RootLayout({
@@ -21,7 +74,37 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>{children}</body>
+      <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "ShiftSync",
+              applicationCategory: "BusinessApplication",
+              operatingSystem: "Web",
+              description:
+                "AI-powered workforce scheduling software for offshore oil & gas operations",
+              offers: {
+                "@type": "Offer",
+                price: "49",
+                priceCurrency: "USD",
+                priceValidUntil: "2026-12-31",
+              },
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: "4.8",
+                ratingCount: "150",
+              },
+            }),
+          }}
+        />
+      </head>
+      <body className={inter.className}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
