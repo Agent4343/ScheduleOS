@@ -122,6 +122,7 @@ export default function SettingsPage() {
   })
 
   const isAdmin = session?.user?.role === "ADMIN"
+  const canEditShiftTypes = ["ADMIN", "SUPERVISOR"].includes(session?.user?.role || "")
 
   const resetPatternForm = () => {
     setNewPattern({
@@ -754,7 +755,7 @@ export default function SettingsPage() {
                 </CardTitle>
                 <CardDescription>Create custom shift types for your organization</CardDescription>
               </div>
-              {isAdmin && !showShiftTypeForm && (
+              {canEditShiftTypes && !showShiftTypeForm && (
                 <Button size="sm" onClick={() => setShowShiftTypeForm(true)}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Shift Type
@@ -897,23 +898,23 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {!shiftType.isActive && <Badge variant="secondary">Inactive</Badge>}
+                    {canEditShiftTypes && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => startEditShiftType(shiftType)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    )}
                     {isAdmin && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => startEditShiftType(shiftType)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteShiftType(shiftType.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteShiftType(shiftType.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     )}
                   </div>
                 </div>
