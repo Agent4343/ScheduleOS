@@ -74,14 +74,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # Switch to non-root user
 USER nextjs
 
-# Expose the port
+# Expose the port (Railway will provide PORT at runtime)
 EXPOSE 3000
 
-ENV PORT=3000
-
-# Health check
+# Health check using the PORT environment variable
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/api/health || exit 1
 
-# Start the application - set HOSTNAME inline to avoid Railway env conflicts
-CMD ["sh", "-c", "HOSTNAME=0.0.0.0 node server.js"]
+# Start the application - use PORT from environment (Railway provides this)
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node server.js"]
