@@ -198,10 +198,15 @@ enum ShiftType {
   DAY
   NIGHT
   OFF
+  LEAVE
+  PL_DAY
+  PL_NIGHT
   VACATION
   SICK
   TRAINING
   SHUTDOWN
+  BEREAVEMENT
+  OVERTIME
 }
 
 model TimeOffRequest {

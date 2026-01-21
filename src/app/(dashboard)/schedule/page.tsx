@@ -100,32 +100,47 @@ const POSITION_COLORS: Record<string, string> = {
 
 const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
   DAY: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
-  NIGHT: { bg: "bg-blue-600", text: "text-white", border: "border-blue-700" },
+  NIGHT: { bg: "bg-blue-700", text: "text-white", border: "border-blue-800" },
   OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
-  VACATION: { bg: "bg-emerald-400", text: "text-emerald-900", border: "border-emerald-500" },
-  SICK: { bg: "bg-red-400", text: "text-red-900", border: "border-red-500" },
-  TRAINING: { bg: "bg-yellow-300", text: "text-yellow-900", border: "border-yellow-400" },
-  SHUTDOWN: { bg: "bg-slate-500", text: "text-white", border: "border-slate-600" },
+  LEAVE: { bg: "bg-orange-500", text: "text-white", border: "border-orange-600" },
+  PL_DAY: { bg: "bg-teal-500", text: "text-white", border: "border-teal-600" },
+  PL_NIGHT: { bg: "bg-teal-700", text: "text-white", border: "border-teal-800" },
+  VACATION: { bg: "bg-yellow-400", text: "text-yellow-900", border: "border-yellow-500" },
+  SICK: { bg: "bg-red-500", text: "text-white", border: "border-red-600" },
+  TRAINING: { bg: "bg-purple-500", text: "text-white", border: "border-purple-600" },
+  SHUTDOWN: { bg: "bg-gray-500", text: "text-white", border: "border-gray-600" },
+  BEREAVEMENT: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-400" },
+  OVERTIME: { bg: "bg-lime-100", text: "text-lime-700", border: "border-lime-500" },
 }
 
 const SHIFT_ABBREV: Record<ShiftType, string> = {
   DAY: "D",
   NIGHT: "N",
   OFF: "O",
+  LEAVE: "L",
+  PL_DAY: "PD",
+  PL_NIGHT: "PN",
   VACATION: "V",
   SICK: "S",
   TRAINING: "T",
   SHUTDOWN: "X",
+  BEREAVEMENT: "BRV",
+  OVERTIME: "OT",
 }
 
 const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
   DAY: <Sun className="h-3 w-3" />,
   NIGHT: <Moon className="h-3 w-3" />,
   OFF: <Home className="h-3 w-3" />,
+  LEAVE: null,
+  PL_DAY: null,
+  PL_NIGHT: null,
   VACATION: null,
   SICK: null,
   TRAINING: null,
   SHUTDOWN: null,
+  BEREAVEMENT: null,
+  OVERTIME: null,
 }
 
 // Get all days in a year
