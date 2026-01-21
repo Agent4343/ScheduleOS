@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma"
 // These are idempotent - safe to run multiple times
 const migrationStatements = [
   // =====================
+  // PositionType enum (required for User.positionType)
+  // =====================
+  `DO $$ BEGIN CREATE TYPE "PositionType" AS ENUM ('OPERATOR', 'ONSHORE_CONTROL_ROOM', 'OTHER'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+
+  // =====================
   // ShiftType enum additions
   // =====================
   `DO $$ BEGIN ALTER TYPE "ShiftType" ADD VALUE IF NOT EXISTS 'LEAVE'; EXCEPTION WHEN duplicate_object THEN null; END $$`,
@@ -79,10 +84,30 @@ const migrationStatements = [
   `ALTER TABLE "RotationPattern" ADD COLUMN IF NOT EXISTS "alternatesShifts" BOOLEAN NOT NULL DEFAULT false`,
 
   // =====================
+  // User table updates
+  // =====================
+  // Add positionType column (required by dashboard and staffing rules)
+  `DO $$ BEGIN
+    ALTER TABLE "User" ADD COLUMN "positionType" "PositionType" NOT NULL DEFAULT 'OTHER';
+  EXCEPTION
+    WHEN duplicate_column THEN null;
+  END $$`,
+
+  // =====================
   // User table indexes
   // =====================
   `CREATE INDEX IF NOT EXISTS "User_organizationId_idx" ON "User"("organizationId")`,
   `CREATE INDEX IF NOT EXISTS "User_crewId_idx" ON "User"("crewId")`,
+
+  // =====================
+  // StaffingRule table updates (positionType)
+  // =====================
+  // Add positionType column for position-specific staffing rules
+  `DO $$ BEGIN
+    ALTER TABLE "StaffingRule" ADD COLUMN "positionType" "PositionType";
+  EXCEPTION
+    WHEN duplicate_column THEN null;
+  END $$`,
 ]
 
 export async function GET(request: NextRequest) {
