@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
+import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,14 +33,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "schedules" || type === "all") {
-      // Get schedules for the current year
-      const startDate = new Date()
-      startDate.setMonth(0, 1)
-      startDate.setHours(0, 0, 0, 0)
-
-      const endDate = new Date()
-      endDate.setMonth(11, 31)
-      endDate.setHours(23, 59, 59, 999)
+      // Get schedules for the current year using UTC dates
+      const currentYear = new Date().getFullYear()
+      const startDate = getYearStartUTC(currentYear)
+      const endDate = getYearEndUTC(currentYear)
 
       const schedules = await prisma.schedule.findMany({
         where: {

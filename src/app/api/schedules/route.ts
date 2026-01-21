@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
 import { generateRotationSchedule } from "@/lib/scheduling"
+import { normalizeToUTCMidnight } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
@@ -312,8 +313,9 @@ async function generateSchedules(
     // Delete existing schedules for the user(s) ONLY within the date range being generated
     // If clearOverrides is true, delete ALL schedules including manual edits
     // Otherwise, only delete non-override schedules (preserve manual edits)
-    const startDate = new Date(validatedData.startDate)
-    const endDate = new Date(validatedData.endDate)
+    // CRITICAL: Normalize dates to UTC midnight to match database storage format
+    const startDate = normalizeToUTCMidnight(new Date(validatedData.startDate))
+    const endDate = normalizeToUTCMidnight(new Date(validatedData.endDate))
 
     const deleteWhere = validatedData.clearOverrides
       ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }

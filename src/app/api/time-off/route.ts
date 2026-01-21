@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
 import { ShiftType } from "@/types"
-import { getDateRange } from "@/lib/utils"
+import { getDateRange } from "@/lib/timezone"
 import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
