@@ -579,12 +579,9 @@ export default function StaffingPage() {
                     <Select
                       value={newRequirement.positionCategoryId}
                       onChange={(e) => setNewRequirement({ ...newRequirement, positionCategoryId: e.target.value })}
-                    >
-                      <option value="">Select a position...</option>
-                      {positionCategories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </Select>
+                      placeholder="Select a position..."
+                      options={positionCategories.map((cat) => ({ value: cat.id, label: cat.name }))}
+                    />
                   </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
@@ -592,10 +589,11 @@ export default function StaffingPage() {
                       <Select
                         value={newRequirement.shiftType}
                         onChange={(e) => setNewRequirement({ ...newRequirement, shiftType: e.target.value })}
-                      >
-                        <option value="DAY">Day</option>
-                        <option value="NIGHT">Night</option>
-                      </Select>
+                        options={[
+                          { value: "DAY", label: "Day" },
+                          { value: "NIGHT", label: "Night" },
+                        ]}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Min Required</Label>
