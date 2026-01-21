@@ -55,6 +55,19 @@ export function addDaysUTC(date: Date, days: number): Date {
 }
 
 /**
+ * Normalize a Date object to UTC midnight.
+ * This ensures consistent date storage regardless of the input time.
+ */
+export function normalizeToUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    0, 0, 0, 0
+  ))
+}
+
+/**
  * Get the start of a year in UTC.
  */
 export function getYearStartUTC(year: number): Date {
