@@ -106,18 +106,34 @@ npm run db:push
 npm run db:seed
 ```
 
-6. Start development server:
+6. **Create an admin user for local development**:
+
+   Demo user creation is now opt-in for security. Choose one of these methods:
+
+   **Option A: Use Prisma Studio (Recommended)**
+   ```bash
+   npx prisma studio
+   ```
+   - Navigate to the `User` model
+   - Click "Add record"
+   - Fill in: email, name, role (set to "ADMIN"), status (set to "ACTIVE"), organizationId
+   - For `passwordHash`, use a bcrypt hash. Generate one with:
+     ```bash
+     node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('yourpassword', 12).then(console.log)"
+     ```
+
+   **Option B: Seed with environment variables**
+   ```bash
+   SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+   ```
+   This creates a demo admin at `admin@local` and minimal demo workers.
+
+7. Start development server:
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Demo Credentials
-
-After seeding:
-- **Email**: admin@demo.com
-- **Password**: demo1234
 
 ## Project Structure
 
