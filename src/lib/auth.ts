@@ -101,6 +101,17 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.role = user.role
         token.organizationId = user.organizationId
+      } else if (token.id && !token.organizationId) {
+        // Refresh organizationId from database if missing from token
+        // This handles cases where users signed in before organizationId was added to JWT
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { organizationId: true, role: true },
+        })
+        if (dbUser) {
+          token.organizationId = dbUser.organizationId
+          token.role = dbUser.role
+        }
       }
       return token
     },

@@ -251,11 +251,21 @@ function SchedulePageContent() {
         }
         const response = await fetch(url)
         const result = await response.json()
+        if (!response.ok) {
+          console.error("Failed to fetch workers:", response.status, result.error || result)
+          // Clear workers on auth error to prevent stale data
+          setWorkers([])
+          return
+        }
         if (result.success) {
           setWorkers(result.data)
+        } else {
+          console.error("Unexpected response format:", result)
+          setWorkers([])
         }
       } catch (error) {
         console.error("Failed to fetch workers:", error)
+        setWorkers([])
       }
     }
     fetchWorkers()
