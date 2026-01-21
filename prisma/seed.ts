@@ -145,55 +145,71 @@ async function main() {
 
   console.log("Created staffing rules")
 
-  // Create demo admin user
-  const passwordHash = await bcrypt.hash("demo1234", 12)
+  // Optional: Create demo users only if SEED_DEMO environment variable is set to 'true'
+  // This is for development purposes only and should not be used in production
+  if (process.env.SEED_DEMO === "true") {
+    console.log("SEED_DEMO is enabled, creating demo users...")
+    
+    const demoAdminEmail = process.env.SEED_ADMIN_EMAIL || "admin@example.com"
+    const demoAdminPassword = process.env.SEED_ADMIN_PASSWORD || "changeme"
+    
+    const passwordHash = await bcrypt.hash(demoAdminPassword, 12)
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@demo.com" },
-    update: {},
-    create: {
-      email: "admin@demo.com",
-      name: "Admin User",
-      passwordHash,
-      role: "ADMIN",
-      status: "ACTIVE",
-      organizationId: organization.id,
-    },
-  })
-
-  console.log("Created admin user:", admin.email)
-
-  // Create demo workers
-  const workers = [
-    { name: "John Smith", email: "john@demo.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Jane Doe", email: "jane@demo.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Mike Johnson", email: "mike@demo.com", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Sarah Williams", email: "sarah@demo.com", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Tom Brown", email: "tom@demo.com", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Emily Davis", email: "emily@demo.com", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Chris Wilson", email: "chris@demo.com", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Lisa Anderson", email: "lisa@demo.com", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-  ]
-
-  for (const worker of workers) {
-    await prisma.user.upsert({
-      where: { email: worker.email },
+    const admin = await prisma.user.upsert({
+      where: { email: demoAdminEmail },
       update: {},
       create: {
-        email: worker.email,
-        name: worker.name,
+        email: demoAdminEmail,
+        name: "Admin User",
         passwordHash,
-        role: "WORKER",
-        position: worker.position,
-        positionType: worker.positionType,
+        role: "ADMIN",
         status: "ACTIVE",
         organizationId: organization.id,
-        crewId: crews[worker.crew],
       },
     })
-  }
 
-  console.log("Created demo workers")
+    console.log("Created demo admin user:", admin.email)
+
+    // Create demo workers (optional, only if SEED_DEMO is true)
+    if (process.env.SEED_DEMO_WORKERS === "true") {
+      const workers = [
+        { name: "John Smith", email: "john@example.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Jane Doe", email: "jane@example.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Mike Johnson", email: "mike@example.com", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Sarah Williams", email: "sarah@example.com", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Tom Brown", email: "tom@example.com", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Emily Davis", email: "emily@example.com", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Chris Wilson", email: "chris@example.com", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Lisa Anderson", email: "lisa@example.com", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+      ]
+
+      for (const worker of workers) {
+        await prisma.user.upsert({
+          where: { email: worker.email },
+          update: {},
+          create: {
+            email: worker.email,
+            name: worker.name,
+            passwordHash,
+            role: "WORKER",
+            position: worker.position,
+            positionType: worker.positionType,
+            status: "ACTIVE",
+            organizationId: organization.id,
+            crewId: crews[worker.crew],
+          },
+        })
+      }
+
+      console.log("Created demo workers")
+    }
+  } else {
+    console.log("Skipping demo user creation (set SEED_DEMO=true to enable)")
+    console.log("To create an admin user, you can:")
+    console.log("  1. Use Prisma Studio: npx prisma studio")
+    console.log("  2. Set SEED_DEMO=true SEED_ADMIN_EMAIL=your@email.com SEED_ADMIN_PASSWORD=yourpassword and run the seed again")
+    console.log("  3. Create a user directly via database tools or API")
+  }
 
   console.log("Seeding completed!")
 }
