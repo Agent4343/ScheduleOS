@@ -47,6 +47,8 @@ interface Organization {
     emailNotificationsEnabled?: boolean
     smsNotificationsEnabled?: boolean
     minStaffingPerCrew?: number
+    minStaffOperators?: number
+    minStaffOnshoreControlRoom?: number
     shiftColors?: Record<string, { bg: string; text: string }>
   }
   _count: {
@@ -905,20 +907,39 @@ export default function SettingsPage() {
             </div>
 
             {organization?.settings?.minStaffingAlertEnabled && (
-              <div className="space-y-2 pt-2 border-t">
-                <Label htmlFor="minStaff">Minimum Staff Per Crew</Label>
-                <Input
-                  id="minStaff"
-                  type="number"
-                  min={1}
-                  value={organization?.settings?.minStaffingPerCrew || 1}
-                  onChange={(e) =>
-                    setOrganization((prev) =>
-                      prev ? { ...prev, settings: { ...prev.settings, minStaffingPerCrew: parseInt(e.target.value) || 1 } } : null
-                    )
-                  }
-                  disabled={!isAdmin}
-                />
+              <div className="space-y-4 pt-2 border-t">
+                <div className="space-y-2">
+                  <Label htmlFor="minStaffOperators">Minimum Operators</Label>
+                  <Input
+                    id="minStaffOperators"
+                    type="number"
+                    min={0}
+                    value={organization?.settings?.minStaffOperators ?? 1}
+                    onChange={(e) =>
+                      setOrganization((prev) =>
+                        prev ? { ...prev, settings: { ...prev.settings, minStaffOperators: parseInt(e.target.value) || 0 } } : null
+                      )
+                    }
+                    disabled={!isAdmin}
+                  />
+                  <p className="text-xs text-muted-foreground">Minimum number of operators required per shift</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="minStaffOnshore">Minimum Onshore Control Room</Label>
+                  <Input
+                    id="minStaffOnshore"
+                    type="number"
+                    min={0}
+                    value={organization?.settings?.minStaffOnshoreControlRoom ?? 1}
+                    onChange={(e) =>
+                      setOrganization((prev) =>
+                        prev ? { ...prev, settings: { ...prev.settings, minStaffOnshoreControlRoom: parseInt(e.target.value) || 0 } } : null
+                      )
+                    }
+                    disabled={!isAdmin}
+                  />
+                  <p className="text-xs text-muted-foreground">Minimum number of onshore control room staff required per shift</p>
+                </div>
               </div>
             )}
           </CardContent>

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { UserRole, UserStatus, TimeOffType, ShiftType } from "@prisma/client"
+import { PositionType } from "@/types"
 
 // Auth validations
 export const loginSchema = z.object({
@@ -41,6 +42,7 @@ export const createUserSchema = z.object({
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string().optional(),
+  positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   phone: z.string().optional(),
   crewId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
@@ -122,6 +124,7 @@ export const createStaffingRuleSchema = z.object({
   minWorkers: z.number().int().min(0),
   maxVacation: z.number().int().min(0).default(1),
   role: z.nativeEnum(UserRole).optional().nullable(),
+  positionType: z.nativeEnum(PositionType).optional().nullable(),
   crewId: z.string().optional().nullable(),
   priority: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),

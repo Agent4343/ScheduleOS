@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createStaffingRuleSchema } from "@/lib/validations"
 import { ShiftType } from "@prisma/client"
+import { PositionType } from "@/types"
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,6 +17,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const crewId = searchParams.get("crewId")
     const shiftType = searchParams.get("shiftType")
+    const positionType = searchParams.get("positionType")
     const isActive = searchParams.get("isActive")
 
     const rules = await prisma.staffingRule.findMany({
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
         organizationId: session.user.organizationId,
         ...(crewId && { crewId }),
         ...(shiftType && { shiftType: shiftType as ShiftType }),
+        ...(positionType && { positionType: positionType as PositionType }),
         ...(isActive !== null && { isActive: isActive === "true" }),
       },
       include: {
@@ -97,6 +100,7 @@ export async function POST(request: NextRequest) {
         minWorkers: validatedData.minWorkers,
         maxVacation: validatedData.maxVacation,
         role: validatedData.role,
+        positionType: validatedData.positionType,
         crewId: validatedData.crewId,
         priority: validatedData.priority,
         isActive: validatedData.isActive,

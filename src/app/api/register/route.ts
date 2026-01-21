@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
             minStaffingAlertEnabled: true,
             emailNotificationsEnabled: true,
             smsNotificationsEnabled: false,
+            minStaffOperators: 2,
+            minStaffOnshoreControlRoom: 1,
           },
         },
       })

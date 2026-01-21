@@ -3,6 +3,13 @@ import { UserRole, UserStatus, ShiftType, TimeOffType, RequestStatus, Notificati
 // Re-export Prisma enums
 export { UserRole, UserStatus, ShiftType, TimeOffType, RequestStatus, NotificationType }
 
+// Position types for categorizing workers
+export enum PositionType {
+  OPERATOR = 'OPERATOR',
+  ONSHORE_CONTROL_ROOM = 'ONSHORE_CONTROL_ROOM',
+  OTHER = 'OTHER'
+}
+
 // Extended types for frontend use
 export interface OrganizationSettings {
   timezone: string
@@ -11,6 +18,9 @@ export interface OrganizationSettings {
   minStaffingAlertEnabled: boolean
   emailNotificationsEnabled: boolean
   smsNotificationsEnabled: boolean
+  // Minimum staff requirements by position type
+  minStaffOperators?: number
+  minStaffOnshoreControlRoom?: number
 }
 
 export interface PatternDay {
@@ -92,6 +102,7 @@ export interface UserWithCrew {
   name: string | null
   role: UserRole
   position: string | null
+  positionType: PositionType
   status: UserStatus
   hireDate: Date | null
   crew: {
@@ -140,6 +151,7 @@ export interface CreateUserForm {
   name: string
   role: UserRole
   position?: string
+  positionType?: PositionType
   crewId?: string
   hireDate?: Date
 }

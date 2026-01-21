@@ -74,19 +74,20 @@ model Organization {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
+  id             String       @id @default(cuid())
+  email          String       @unique
   emailVerified  DateTime?
   name           String?
   passwordHash   String?
   image          String?
-  role           UserRole  @default(WORKER)
+  role           UserRole     @default(WORKER)
   position       String?
+  positionType   PositionType @default(OTHER)
   phone          String?
   hireDate       DateTime?
-  status         UserStatus @default(ACTIVE)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  status         UserStatus   @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   // Organization
   organizationId String?
@@ -121,6 +122,13 @@ enum UserStatus {
   INACTIVE
   ON_LEAVE
   TERMINATED
+}
+
+// Position types for categorizing workers
+enum PositionType {
+  OPERATOR
+  ONSHORE_CONTROL_ROOM
+  OTHER
 }
 
 model Crew {
@@ -279,17 +287,18 @@ enum RequestStatus {
 // =====================
 
 model StaffingRule {
-  id          String     @id @default(cuid())
-  name        String
-  description String?
-  shiftType   ShiftType
-  minWorkers  Int
-  maxVacation Int        @default(1)
-  role        UserRole?  // If set, rule applies only to this role
-  priority    Int        @default(0) // Higher priority rules take precedence
-  isActive    Boolean    @default(true)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  shiftType    ShiftType
+  minWorkers   Int
+  maxVacation  Int           @default(1)
+  role         UserRole?     // If set, rule applies only to this role
+  positionType PositionType? // If set, rule applies only to this position type
+  priority     Int           @default(0) // Higher priority rules take precedence
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   // Organization
   organizationId String

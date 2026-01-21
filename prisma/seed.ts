@@ -19,6 +19,8 @@ async function main() {
         minStaffingAlertEnabled: true,
         emailNotificationsEnabled: true,
         smsNotificationsEnabled: false,
+        minStaffOperators: 2,
+        minStaffOnshoreControlRoom: 1,
       },
     },
   })
@@ -163,14 +165,14 @@ async function main() {
 
   // Create demo workers
   const workers = [
-    { name: "John Smith", email: "john@demo.com", crew: "Crew A", position: "Operator" },
-    { name: "Jane Doe", email: "jane@demo.com", crew: "Crew A", position: "Technician" },
-    { name: "Mike Johnson", email: "mike@demo.com", crew: "Crew B", position: "Operator" },
-    { name: "Sarah Williams", email: "sarah@demo.com", crew: "Crew B", position: "Supervisor" },
-    { name: "Tom Brown", email: "tom@demo.com", crew: "Crew C", position: "Operator" },
-    { name: "Emily Davis", email: "emily@demo.com", crew: "Crew C", position: "Technician" },
-    { name: "Chris Wilson", email: "chris@demo.com", crew: "Crew D", position: "Operator" },
-    { name: "Lisa Anderson", email: "lisa@demo.com", crew: "Crew D", position: "Technician" },
+    { name: "John Smith", email: "john@demo.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+    { name: "Jane Doe", email: "jane@demo.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+    { name: "Mike Johnson", email: "mike@demo.com", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
+    { name: "Sarah Williams", email: "sarah@demo.com", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+    { name: "Tom Brown", email: "tom@demo.com", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
+    { name: "Emily Davis", email: "emily@demo.com", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+    { name: "Chris Wilson", email: "chris@demo.com", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
+    { name: "Lisa Anderson", email: "lisa@demo.com", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
   ]
 
   for (const worker of workers) {
@@ -183,6 +185,7 @@ async function main() {
         passwordHash,
         role: "WORKER",
         position: worker.position,
+        positionType: worker.positionType,
         status: "ACTIVE",
         organizationId: organization.id,
         crewId: crews[worker.crew],
