@@ -11,7 +11,8 @@ cmds = [
   "npm run build",
   "mkdir -p .next/standalone/.next",
   "cp -r .next/static .next/standalone/.next/",
-  "cp -r public .next/standalone/"
+  "cp -r public .next/standalone/",
+  "cp -r node_modules/.prisma .next/standalone/node_modules/"
 ]
 
 [start]

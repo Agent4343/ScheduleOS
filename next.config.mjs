@@ -5,6 +5,13 @@ const nextConfig = {
   // Output standalone for optimal Railway/Docker deployment
   output: "standalone",
 
+  // Include Prisma client in standalone output
+  // This is required for Prisma to work correctly in containerized deployments
+  outputFileTracingIncludes: {
+    "/api/**/*": ["./node_modules/.prisma/**/*"],
+    "/": ["./node_modules/.prisma/**/*"],
+  },
+
   // Optimize images
   images: {
     remotePatterns: [
