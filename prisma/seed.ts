@@ -183,14 +183,14 @@ async function main() {
       const workerPasswordHash = await bcrypt.hash(demoWorkerPassword, 12)
       
       const workers = [
-        { name: "John Smith", email: "john@example.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
-        { name: "Jane Doe", email: "jane@example.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-        { name: "Mike Johnson", email: "mike@example.com", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
-        { name: "Sarah Williams", email: "sarah@example.com", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-        { name: "Tom Brown", email: "tom@example.com", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
-        { name: "Emily Davis", email: "emily@example.com", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-        { name: "Chris Wilson", email: "chris@example.com", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
-        { name: "Lisa Anderson", email: "lisa@example.com", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "John Smith", email: "john@demo.local", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Jane Doe", email: "jane@demo.local", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Mike Johnson", email: "mike@demo.local", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Sarah Williams", email: "sarah@demo.local", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Tom Brown", email: "tom@demo.local", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Emily Davis", email: "emily@demo.local", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+        { name: "Chris Wilson", email: "chris@demo.local", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Lisa Anderson", email: "lisa@demo.local", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
       ]
 
       for (const worker of workers) {
