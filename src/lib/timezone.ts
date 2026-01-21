@@ -120,3 +120,22 @@ export function getDateRange(startDate: Date, endDate: Date): Date[] {
 
   return dates
 }
+
+/**
+ * Get the start of the week (Sunday) in UTC.
+ */
+export function startOfWeekUTC(date: Date): Date {
+  const utcDate = normalizeToUTCMidnight(date)
+  const day = utcDate.getUTCDay()
+  return addDaysUTC(utcDate, -day)
+}
+
+/**
+ * Get the end of the week (Saturday) in UTC at midnight.
+ * Note: Returns midnight of Saturday (start of day) for consistent date-only comparisons.
+ */
+export function endOfWeekUTC(date: Date): Date {
+  const utcDate = normalizeToUTCMidnight(date)
+  const day = utcDate.getUTCDay()
+  return addDaysUTC(utcDate, 6 - day)
+}

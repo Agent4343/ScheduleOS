@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { ShiftType, PositionType } from "@/types"
-import { addDays, startOfWeek, endOfWeek } from "@/lib/utils"
+import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
 
 interface OrgSettings {
   minStaffOperators?: number
@@ -46,11 +46,10 @@ export async function GET() {
       })
     }
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const today = getTodayUTC()
 
-    const weekStart = startOfWeek(today)
-    const weekEnd = endOfWeek(today)
+    const weekStart = startOfWeekUTC(today)
+    const weekEnd = endOfWeekUTC(today)
 
     // Get stats in parallel
     const [
@@ -143,7 +142,7 @@ export async function GET() {
 
     // Check each day against staffing rules and position-based minimums
     for (let i = 0; i < 7; i++) {
-      const checkDate = addDays(weekStart, i)
+      const checkDate = addDaysUTC(weekStart, i)
       const dateKey = checkDate.toISOString().split("T")[0]
       const daySchedules = schedulesByDate.get(dateKey) || []
 
@@ -227,7 +226,7 @@ export async function GET() {
     const recentActivity = await prisma.notification.findMany({
       where: {
         user: { organizationId },
-        createdAt: { gte: addDays(today, -7) },
+        createdAt: { gte: addDaysUTC(today, -7) },
       },
       orderBy: { createdAt: "desc" },
       take: 10,
@@ -241,7 +240,7 @@ export async function GET() {
       where: {
         user: { organizationId },
         status: "APPROVED",
-        startDate: { gte: today, lte: addDays(today, 14) },
+        startDate: { gte: today, lte: addDaysUTC(today, 14) },
       },
       include: {
         user: { select: { id: true, name: true, crew: { select: { name: true } } } },
