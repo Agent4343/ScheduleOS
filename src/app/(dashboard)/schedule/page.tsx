@@ -635,6 +635,8 @@ function SchedulePageContent() {
       <div className="flex items-center gap-4">
         <span className="text-sm text-muted-foreground">Filter by Crew:</span>
         <Select
+          id="crew-filter"
+          name="crew-filter"
           value={selectedCrew}
           onChange={(e) => setSelectedCrew(e.target.value)}
           options={[

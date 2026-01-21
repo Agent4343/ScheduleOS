@@ -444,6 +444,8 @@ export default function SetupPage() {
                   </div>
                   <div className="space-y-2">
                     <Input
+                      id="worker-name"
+                      name="worker-name"
                       placeholder="Name *"
                       value={newWorker.name}
                       onChange={(e) =>
@@ -451,6 +453,8 @@ export default function SetupPage() {
                       }
                     />
                     <Input
+                      id="worker-email"
+                      name="worker-email"
                       type="email"
                       placeholder="Email *"
                       value={newWorker.email}
@@ -459,6 +463,8 @@ export default function SetupPage() {
                       }
                     />
                     <Input
+                      id="worker-position"
+                      name="worker-position"
                       placeholder="Position (optional)"
                       value={newWorker.position}
                       onChange={(e) =>
@@ -466,6 +472,8 @@ export default function SetupPage() {
                       }
                     />
                     <select
+                      id="worker-crew"
+                      name="worker-crew"
                       className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
                       value={newWorker.crewId}
                       onChange={(e) =>
@@ -660,6 +668,8 @@ export default function SetupPage() {
 
                 {scheduleType === "endDate" && (
                   <Input
+                    id="schedule-end-date"
+                    name="schedule-end-date"
                     type="date"
                     value={customEndDate}
                     min={startDate}

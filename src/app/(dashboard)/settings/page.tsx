@@ -738,6 +738,8 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="timezone">Timezone</Label>
               <Select
+                id="timezone"
+                name="timezone"
                 value={organization?.settings?.timezone || "America/St_Johns"}
                 onChange={(e) =>
                   setOrganization((prev) =>
@@ -752,6 +754,8 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <Label htmlFor="dateFormat">Date Format</Label>
               <Select
+                id="dateFormat"
+                name="dateFormat"
                 value={organization?.settings?.dateFormat || "MM/DD/YYYY"}
                 onChange={(e) =>
                   setOrganization((prev) =>
@@ -1014,11 +1018,15 @@ export default function SettingsPage() {
             {showHolidayForm && (
               <div className="mb-4 p-3 border rounded-lg bg-muted/50 space-y-3">
                 <Input
+                  id="holiday-name"
+                  name="holiday-name"
                   placeholder="Holiday name"
                   value={newHoliday.name}
                   onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
                 />
                 <Input
+                  id="holiday-date"
+                  name="holiday-date"
                   type="date"
                   value={newHoliday.date}
                   onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
@@ -1297,6 +1305,8 @@ export default function SettingsPage() {
                       </div>
                       <span className="text-sm">{type}</span>
                       <input
+                        id={`shift-color-${type.toLowerCase()}`}
+                        name={`shift-color-${type.toLowerCase()}`}
                         type="color"
                         value={colors.bg}
                         onChange={(e) => setShiftColors({ ...shiftColors, [type]: { ...colors, bg: e.target.value } })}
@@ -1326,8 +1336,10 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label>Code</Label>
+                    <Label htmlFor="shift-type-code">Code</Label>
                     <Input
+                      id="shift-type-code"
+                      name="shift-type-code"
                       placeholder="e.g., BRV"
                       value={newShiftType.code}
                       onChange={(e) => setNewShiftType({ ...newShiftType, code: e.target.value.toUpperCase() })}
@@ -1335,38 +1347,48 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Name</Label>
+                    <Label htmlFor="shift-type-name">Name</Label>
                     <Input
+                      id="shift-type-name"
+                      name="shift-type-name"
                       placeholder="e.g., Bereavement"
                       value={newShiftType.name}
                       onChange={(e) => setNewShiftType({ ...newShiftType, name: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Background Color</Label>
+                    <Label htmlFor="shift-type-bg-color">Background Color</Label>
                     <div className="flex gap-2">
                       <input
+                        id="shift-type-bg-color"
+                        name="shift-type-bg-color"
                         type="color"
                         value={newShiftType.color}
                         onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
                         className="w-10 h-10 rounded cursor-pointer"
                       />
                       <Input
+                        id="shift-type-bg-color-hex"
+                        name="shift-type-bg-color-hex"
                         value={newShiftType.color}
                         onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
                       />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Text Color</Label>
+                    <Label htmlFor="shift-type-text-color">Text Color</Label>
                     <div className="flex gap-2">
                       <input
+                        id="shift-type-text-color"
+                        name="shift-type-text-color"
                         type="color"
                         value={newShiftType.textColor}
                         onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
                         className="w-10 h-10 rounded cursor-pointer"
                       />
                       <Input
+                        id="shift-type-text-color-hex"
+                        name="shift-type-text-color-hex"
                         value={newShiftType.textColor}
                         onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
                       />
