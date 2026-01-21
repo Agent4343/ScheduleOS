@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { Suspense, useEffect, useState, useMemo } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,10 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
-  Sun,
-  Moon,
-  Home,
-  Filter,
   Users,
   Pencil,
   Loader2,
@@ -29,6 +26,7 @@ interface Schedule {
   id: string
   date: string
   shiftType: ShiftType
+  customShiftCode: string | null
   user: {
     id: string
     name: string
@@ -78,115 +76,70 @@ interface RotationPattern {
   daysOff: number
   includesNights: boolean
   nightDays: number
+  alternatesShifts: boolean
 }
 
-// Position-based color coding
-const POSITION_COLORS: Record<string, string> = {
-  "Operator": "bg-blue-500",
-  "Senior Operator": "bg-blue-600",
-  "Lead Operator": "bg-blue-700",
-  "Technician": "bg-green-500",
-  "Senior Technician": "bg-green-600",
-  "Lead Technician": "bg-green-700",
-  "Supervisor": "bg-purple-500",
-  "Manager": "bg-purple-700",
-  "Engineer": "bg-orange-500",
-  "Maintenance": "bg-yellow-500",
-  "Safety": "bg-red-500",
-  "Quality": "bg-pink-500",
-  "Logistics": "bg-cyan-500",
-  "default": "bg-gray-500",
+interface CustomShiftType {
+  id: string
+  code: string
+  name: string
+  color: string
+  textColor: string
+  description: string | null
+  isActive: boolean
 }
 
-const SHIFT_COLORS: Record<ShiftType, { bg: string; text: string; border: string }> = {
-  DAY: { bg: "bg-green-500", text: "text-white", border: "border-green-600" },
-  NIGHT: { bg: "bg-blue-700", text: "text-white", border: "border-blue-800" },
-  OFF: { bg: "bg-gray-200", text: "text-gray-600", border: "border-gray-300" },
-  LEAVE: { bg: "bg-orange-500", text: "text-white", border: "border-orange-600" },
-  PL_DAY: { bg: "bg-teal-500", text: "text-white", border: "border-teal-600" },
-  PL_NIGHT: { bg: "bg-teal-700", text: "text-white", border: "border-teal-800" },
-  VACATION: { bg: "bg-yellow-400", text: "text-yellow-900", border: "border-yellow-500" },
-  SICK: { bg: "bg-red-500", text: "text-white", border: "border-red-600" },
-  TRAINING: { bg: "bg-purple-500", text: "text-white", border: "border-purple-600" },
-  SHUTDOWN: { bg: "bg-gray-500", text: "text-white", border: "border-gray-600" },
-  BEREAVEMENT: { bg: "bg-gray-100", text: "text-gray-700", border: "border-gray-400" },
-  OVERTIME: { bg: "bg-lime-100", text: "text-lime-700", border: "border-lime-500" },
+// Built-in shift colors for the Excel-like cells
+const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
+  NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
+  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
+  LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
+  PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
+  PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
+  VACATION: { bg: "#10b981", text: "#ffffff", label: "V" },
+  SICK: { bg: "#ef4444", text: "#ffffff", label: "S" },
+  TRAINING: { bg: "#eab308", text: "#000000", label: "T" },
+  SHUTDOWN: { bg: "#64748b", text: "#ffffff", label: "X" },
 }
 
-const SHIFT_ABBREV: Record<ShiftType, string> = {
-  DAY: "D",
-  NIGHT: "N",
-  OFF: "O",
-  LEAVE: "L",
-  PL_DAY: "PD",
-  PL_NIGHT: "PN",
-  VACATION: "V",
-  SICK: "S",
-  TRAINING: "T",
-  SHUTDOWN: "X",
-  BEREAVEMENT: "BRV",
-  OVERTIME: "OT",
+// Format date as YYYY-MM-DD
+function formatDate(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
-const SHIFT_ICONS: Record<ShiftType, React.ReactNode> = {
-  DAY: <Sun className="h-3 w-3" />,
-  NIGHT: <Moon className="h-3 w-3" />,
-  OFF: <Home className="h-3 w-3" />,
-  LEAVE: null,
-  PL_DAY: null,
-  PL_NIGHT: null,
-  VACATION: null,
-  SICK: null,
-  TRAINING: null,
-  SHUTDOWN: null,
-  BEREAVEMENT: null,
-  OVERTIME: null,
-}
-
-// Get all days in a year
-function getDaysInYear(year: number) {
-  const days: Date[] = []
-  const date = new Date(year, 0, 1)
-  while (date.getFullYear() === year) {
-    days.push(new Date(date))
-    date.setDate(date.getDate() + 1)
+// Get all days in a year grouped by month
+function getYearDays(year: number) {
+  const months: { month: number; days: number[] }[] = []
+  for (let month = 0; month < 12; month++) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+    months.push({ month, days })
   }
-  return days
+  return months
 }
 
-// Get month name
-function getMonthName(month: number) {
-  return new Date(2024, month, 1).toLocaleDateString("en-US", { month: "short" })
-}
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-// Get position color
-function getPositionColor(position: string | null): string {
-  if (!position) return POSITION_COLORS.default
+function SchedulePageContent() {
+  const searchParams = useSearchParams()
+  const yearFromUrl = searchParams.get("year")
 
-  // Check for exact match first
-  if (POSITION_COLORS[position]) return POSITION_COLORS[position]
-
-  // Check for partial match
-  for (const [key, value] of Object.entries(POSITION_COLORS)) {
-    if (position.toLowerCase().includes(key.toLowerCase())) {
-      return value
+  const [currentYear, setCurrentYear] = useState(() => {
+    if (yearFromUrl) {
+      const parsed = parseInt(yearFromUrl)
+      if (!isNaN(parsed) && parsed >= 2020 && parsed <= 2100) return parsed
     }
-  }
+    return new Date().getFullYear()
+  })
 
-  return POSITION_COLORS.default
-}
-
-export default function SchedulePage() {
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [loading, setLoading] = useState(true)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Rotation patterns
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
+  const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -205,33 +158,39 @@ export default function SchedulePage() {
   // Schedule generation state
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
+  const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
+  const [clearOverrides, setClearOverrides] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
 
-  const yearDays = useMemo(() => getDaysInYear(currentYear), [currentYear])
+  // Schedule edit modal state (for updating individual days)
+  const [scheduleEditModalOpen, setScheduleEditModalOpen] = useState(false)
+  const [scheduleEditWorker, setScheduleEditWorker] = useState<Worker | null>(null)
+  const [scheduleEditStartDate, setScheduleEditStartDate] = useState<string>("")
+  const [scheduleEditEndDate, setScheduleEditEndDate] = useState<string>("")
+  const [scheduleEditShiftType, setScheduleEditShiftType] = useState<ShiftType>("SICK")
+  const [scheduleEditReason, setScheduleEditReason] = useState<string>("")
+  const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
+  const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
+  const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
 
-  // Group days by month for header
-  const monthGroups = useMemo(() => {
-    const groups: { month: number; days: Date[] }[] = []
-    let currentMonth = -1
-    let currentGroup: Date[] = []
+  // Get all days for the year
+  const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
 
-    for (const day of yearDays) {
-      if (day.getMonth() !== currentMonth) {
-        if (currentGroup.length > 0) {
-          groups.push({ month: currentMonth, days: currentGroup })
+  // Combine built-in and custom shift styles
+  const SHIFT_STYLES = useMemo(() => {
+    const styles = { ...BUILT_IN_SHIFT_STYLES }
+    for (const customType of customShiftTypes) {
+      if (customType.isActive) {
+        styles[`CUSTOM:${customType.code}`] = {
+          bg: customType.color,
+          text: customType.textColor,
+          label: customType.code,
         }
-        currentMonth = day.getMonth()
-        currentGroup = []
       }
-      currentGroup.push(day)
     }
-    if (currentGroup.length > 0) {
-      groups.push({ month: currentMonth, days: currentGroup })
-    }
-
-    return groups
-  }, [yearDays])
+    return styles
+  }, [customShiftTypes])
 
   // Fetch crews
   useEffect(() => {
@@ -265,6 +224,22 @@ export default function SchedulePage() {
     fetchPatterns()
   }, [])
 
+  // Fetch custom shift types
+  useEffect(() => {
+    async function fetchCustomShiftTypes() {
+      try {
+        const response = await fetch("/api/custom-shift-types")
+        const result = await response.json()
+        if (result.success) {
+          setCustomShiftTypes(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom shift types:", error)
+      }
+    }
+    fetchCustomShiftTypes()
+  }, [])
+
   // Fetch workers
   useEffect(() => {
     async function fetchWorkers() {
@@ -285,7 +260,7 @@ export default function SchedulePage() {
     fetchWorkers()
   }, [selectedCrew])
 
-  // Fetch schedules for the year
+  // Fetch schedules for the full year
   useEffect(() => {
     async function fetchSchedules() {
       setLoading(true)
@@ -298,10 +273,15 @@ export default function SchedulePage() {
           url += `&crewId=${selectedCrew}`
         }
 
+        console.log("Fetching schedules from:", url)
         const response = await fetch(url)
         const result = await response.json()
+        console.log("Fetch schedules response:", response.status, result)
+
         if (result.success) {
           setSchedules(result.data)
+        } else {
+          console.error("Failed to fetch schedules:", result.error, result.details)
         }
       } catch (error) {
         console.error("Failed to fetch schedules:", error)
@@ -312,54 +292,40 @@ export default function SchedulePage() {
     fetchSchedules()
   }, [currentYear, selectedCrew])
 
-  // Group schedules by user
-  const schedulesByUser = useMemo(() => {
-    const map = new Map<string, Map<string, Schedule>>()
-
+  // Build schedule lookup map
+  const scheduleMap = useMemo(() => {
+    const map = new Map<string, Schedule>()
     for (const schedule of schedules) {
-      if (!map.has(schedule.user.id)) {
-        map.set(schedule.user.id, new Map())
-      }
-      const dateKey = schedule.date.split("T")[0]
-      map.get(schedule.user.id)!.set(dateKey, schedule)
+      const dateStr = schedule.date.split("T")[0]
+      const key = `${schedule.user.id}-${dateStr}`
+      map.set(key, schedule)
     }
-
     return map
   }, [schedules])
 
-  // Sort workers by crew name, then position, then name
+  // Sort workers
   const sortedWorkers = useMemo(() => {
     return [...workers].sort((a, b) => {
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
-      const posCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
-      if (posCompare !== 0) return posCompare
       return (a.name || "").localeCompare(b.name || "")
     })
   }, [workers])
 
-  function navigateYear(direction: number) {
-    setCurrentYear(currentYear + direction)
-  }
-
-  function goToCurrentYear() {
-    setCurrentYear(new Date().getFullYear())
-    // Scroll to today
-    setTimeout(() => {
-      const today = new Date()
-      const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000)
-      if (scrollRef.current) {
-        const cellWidth = 28 // approximate width per day
-        scrollRef.current.scrollLeft = Math.max(0, (dayOfYear - 15) * cellWidth)
-      }
-    }, 100)
-  }
-
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
-    const hireDateStr = worker.hireDate
-      ? new Date(worker.hireDate).toISOString().split("T")[0]
-      : ""
+
+    let hireDateStr = ""
+    if (worker.hireDate) {
+      const hireDate = new Date(worker.hireDate)
+      if (!isNaN(hireDate.getTime()) && hireDate.getFullYear() > 1970) {
+        hireDateStr = formatDate(hireDate.getFullYear(), hireDate.getMonth(), hireDate.getDate())
+      }
+    }
+
+    const today = new Date()
+    const todayStr = formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
@@ -368,9 +334,10 @@ export default function SchedulePage() {
       role: worker.role || "WORKER",
       hireDate: hireDateStr,
     })
-    // Reset schedule generation fields
     setSelectedPatternId("")
-    setScheduleStartDate(hireDateStr || new Date().toISOString().split("T")[0])
+    setScheduleStartDate(todayStr)
+    setStartingShift("DAY")
+    setClearOverrides(false)
     setGenerateSuccess(null)
     setSaveError(null)
     setEditModalOpen(true)
@@ -408,7 +375,6 @@ export default function SchedulePage() {
         throw new Error(result.error || "Failed to update worker")
       }
 
-      // Update local state
       setWorkers((prev) =>
         prev.map((w) =>
           w.id === selectedWorker.id
@@ -443,83 +409,207 @@ export default function SchedulePage() {
     setGenerateSuccess(null)
 
     try {
-      // Generate for the full year from start date
-      const startDate = new Date(scheduleStartDate)
-      const endDate = new Date(startDate.getFullYear(), 11, 31) // End of year
+      // Use UTC to avoid timezone issues
+      const startDate = new Date(scheduleStartDate + "T00:00:00.000Z")
+      const endDate = new Date(Date.UTC(startDate.getUTCFullYear(), 11, 31))
+      const endDateStr = formatDate(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate())
+
+      const requestBody = {
+        userId: selectedWorker.id,
+        patternId: selectedPatternId,
+        startDate: scheduleStartDate,
+        endDate: endDateStr,
+        startPhase: 0,
+        startingShift: startingShift,
+        clearOverrides: clearOverrides,
+      }
+
+      console.log("Generating schedule:", requestBody)
 
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: selectedWorker.id,
-          patternId: selectedPatternId,
-          startDate: scheduleStartDate,
-          endDate: endDate.toISOString().split("T")[0],
-          startPhase: 0,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const result = await response.json()
+      console.log("Generate response:", result)
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to generate schedule")
+        throw new Error(result.error || result.details || "Failed to generate schedule")
       }
 
-      setGenerateSuccess(
-        `Generated ${result.data?.daysGenerated || 0} schedule days for ${startDate.getFullYear()}`
-      )
+      setGenerateSuccess(`Generated ${result.data?.daysGenerated || 0} schedule days`)
 
       // Refresh schedules
-      const fetchStartDate = `${currentYear}-01-01`
-      const fetchEndDate = `${currentYear}-12-31`
-      const schedulesResponse = await fetch(
-        `/api/schedules?startDate=${fetchStartDate}&endDate=${fetchEndDate}`
-      )
+      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31`
+      console.log("Refreshing schedules from:", refreshUrl)
+
+      const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-      if (schedulesResult.success) {
+
+      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
+
+      if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
+      } else {
+        console.error("Failed to refresh:", schedulesResult)
       }
     } catch (error) {
+      console.error("Generate error:", error)
       setSaveError(error instanceof Error ? error.message : "Failed to generate")
     } finally {
       setGenerating(false)
     }
   }
 
+  function getScheduleForDay(workerId: string, month: number, day: number): Schedule | undefined {
+    const dateStr = formatDate(currentYear, month, day)
+    return scheduleMap.get(`${workerId}-${dateStr}`)
+  }
+
+  // Open schedule edit modal when clicking on a cell
+  function openScheduleEditModal(worker: Worker, month: number, day: number) {
+    const dateStr = formatDate(currentYear, month, day)
+    setScheduleEditWorker(worker)
+    setScheduleEditStartDate(dateStr)
+    setScheduleEditEndDate(dateStr)
+    setScheduleEditShiftType("SICK")
+    setScheduleEditReason("")
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+    setScheduleEditModalOpen(true)
+  }
+
+  function closeScheduleEditModal() {
+    setScheduleEditModalOpen(false)
+    setScheduleEditWorker(null)
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+  }
+
+  async function saveScheduleEdit() {
+    if (!scheduleEditWorker || !scheduleEditStartDate || !scheduleEditEndDate) return
+
+    setScheduleEditSaving(true)
+    setScheduleEditError(null)
+    setScheduleEditSuccess(null)
+
+    try {
+      // Generate all dates in the range
+      const start = new Date(scheduleEditStartDate)
+      const end = new Date(scheduleEditEndDate)
+
+      if (end < start) {
+        throw new Error("End date must be on or after start date")
+      }
+
+      const datesToUpdate: string[] = []
+      const current = new Date(start)
+      while (current <= end) {
+        // Use UTC methods to avoid timezone issues
+        datesToUpdate.push(formatDate(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate()))
+        current.setUTCDate(current.getUTCDate() + 1)
+      }
+
+      // Determine if this is a custom shift type
+      const shiftTypeStr = String(scheduleEditShiftType)
+      const isCustomType = shiftTypeStr.startsWith("CUSTOM:")
+      const actualShiftType = isCustomType ? "CUSTOM" : shiftTypeStr
+      const customShiftCode = isCustomType ? shiftTypeStr.split(":")[1] : null
+
+      // Update each date
+      for (const dateStr of datesToUpdate) {
+        const requestBody = {
+          userId: scheduleEditWorker.id,
+          date: dateStr,
+          shiftType: actualShiftType,
+          customShiftCode: customShiftCode,
+          isOverride: true,
+          overrideReason: scheduleEditReason || null,
+        }
+
+        console.log("Saving schedule:", requestBody)
+
+        const response = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        })
+
+        const result = await response.json()
+        console.log("Save response:", result)
+
+        if (!response.ok) {
+          throw new Error(result.error || result.details || "Failed to update schedule")
+        }
+      }
+
+      const displayName = isCustomType
+        ? customShiftTypes.find(t => t.code === customShiftCode)?.name || customShiftCode
+        : shiftTypeStr
+      setScheduleEditSuccess(`Updated ${datesToUpdate.length} day(s) to ${displayName}`)
+
+      // Refresh schedules - wait for completion
+      const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
+      console.log("Refreshing schedules from:", refreshUrl)
+
+      const schedulesResponse = await fetch(refreshUrl)
+      const schedulesResult = await schedulesResponse.json()
+
+      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
+
+      if (schedulesResult.success && schedulesResult.data) {
+        setSchedules(schedulesResult.data)
+      } else {
+        console.error("Failed to refresh schedules:", schedulesResult)
+      }
+
+      // Close modal after short delay to show success message
+      setTimeout(() => {
+        closeScheduleEditModal()
+      }, 1500)
+    } catch (error) {
+      console.error("Schedule edit error:", error)
+      setScheduleEditError(error instanceof Error ? error.message : "Failed to update schedule")
+    } finally {
+      setScheduleEditSaving(false)
+    }
+  }
+
   const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const isCurrentYear = today.getFullYear() === currentYear
+  const todayMonth = today.getMonth()
+  const todayDate = today.getDate()
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Yearly Schedule</h1>
+          <h1 className="text-2xl font-bold">Schedule Calendar</h1>
           <p className="text-muted-foreground">
-            {currentYear} Annual View - {sortedWorkers.length} Workers
+            {currentYear} - Full Year View - {sortedWorkers.length} Workers
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={goToCurrentYear}>
-            Today
+          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+            This Year
           </Button>
-          <Button variant="outline" size="icon" onClick={() => navigateYear(-1)}>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-semibold px-2">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => navigateYear(1)}>
+          <span className="font-semibold px-4 text-lg">{currentYear}</span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filter */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Filter:</span>
-        </div>
+        <span className="text-sm text-muted-foreground">Filter by Crew:</span>
         <Select
           value={selectedCrew}
           onChange={(e) => setSelectedCrew(e.target.value)}
@@ -533,15 +623,29 @@ export default function SchedulePage() {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
-        {Object.entries(SHIFT_COLORS).map(([type, colors]) => (
-          <Badge key={type} className={cn(colors.bg, colors.text, colors.border, "border text-xs")}>
-            {SHIFT_ICONS[type as ShiftType]}
-            <span className="ml-1">{type}</span>
-          </Badge>
+        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+          <div
+            key={type}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: style.bg, color: style.text }}
+          >
+            <span className="font-bold">{style.label}</span>
+            <span>= {type.replace("_", " ")}</span>
+          </div>
+        ))}
+        {customShiftTypes.filter(t => t.isActive).map((t) => (
+          <div
+            key={t.code}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+            style={{ backgroundColor: t.color, color: t.textColor }}
+          >
+            <span className="font-bold">{t.code}</span>
+            <span>= {t.name}</span>
+          </div>
         ))}
       </div>
 
-      {/* Schedule grid */}
+      {/* Schedule Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2">
@@ -555,165 +659,122 @@ export default function SchedulePage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="animate-pulse space-y-2 p-4">
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className="h-8 bg-muted rounded" />
-              ))}
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : sortedWorkers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No workers found</p>
-              <p className="text-sm">Add workers to see their schedules</p>
             </div>
           ) : (
-            <div className="relative">
-              {/* Sticky worker info column */}
-              <div className="flex">
-                {/* Fixed left column for worker info */}
-                <div className="sticky left-0 z-20 bg-background border-r shadow-sm">
-                  {/* Header for worker column */}
-                  <div className="h-16 border-b flex items-end p-2 bg-muted/50">
-                    <span className="font-semibold text-sm">Worker</span>
-                  </div>
-                  {/* Worker rows */}
-                  {sortedWorkers.map((worker) => (
-                    <div
-                      key={worker.id}
-                      className="h-8 border-b flex items-center px-2 min-w-[200px] hover:bg-muted/50 cursor-pointer group"
-                      onClick={() => openEditModal(worker)}
-                    >
-                      <div
-                        className={cn(
-                          "w-2 h-6 rounded-full mr-2 flex-shrink-0",
-                          getPositionColor(worker.position)
-                        )}
-                        title={worker.position || "No position"}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-xs truncate">{worker.name || "Unnamed"}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">
-                          {worker.position || "No position"}
-                          {worker.crew && ` • ${worker.crew.name}`}
-                        </p>
-                      </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity ml-1" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Scrollable calendar grid */}
-                <div
-                  ref={scrollRef}
-                  className="overflow-x-auto flex-1"
-                >
-                  <div className="inline-block min-w-max">
-                    {/* Month headers */}
-                    <div className="flex h-8 border-b bg-muted/30">
-                      {monthGroups.map(({ month, days }) => (
-                        <div
-                          key={month}
-                          className="text-center text-xs font-semibold border-r flex items-center justify-center"
-                          style={{ width: `${days.length * 28}px` }}
-                        >
-                          {getMonthName(month)}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Day headers */}
-                    <div className="flex h-8 border-b">
-                      {yearDays.map((day) => {
-                        const isToday = day.getTime() === today.getTime()
-                        const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                        const isFirstOfMonth = day.getDate() === 1
+            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+              <table className="border-collapse text-sm" style={{ minWidth: "max-content" }}>
+                <thead className="sticky top-0 z-30 shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)]">
+                  {/* Month headers */}
+                  <tr>
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-gray-100 z-40 min-w-[200px]">
+                      Worker
+                    </th>
+                    {yearMonths.map(({ month, days }) => (
+                      <th
+                        key={month}
+                        colSpan={days.length}
+                        className="border p-2 text-center font-semibold bg-gray-100 text-base"
+                      >
+                        {MONTH_NAMES[month]}
+                      </th>
+                    ))}
+                  </tr>
+                  {/* Day headers */}
+                  <tr>
+                    <th className="border p-1 sticky left-0 bg-gray-50 z-40"></th>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const date = new Date(currentYear, month, day)
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                        const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
 
                         return (
-                          <div
-                            key={day.toISOString()}
+                          <th
+                            key={`${month}-${day}`}
                             className={cn(
-                              "w-7 text-center text-[10px] flex flex-col items-center justify-center",
-                              isWeekend && "bg-muted/50",
-                              isToday && "bg-primary/20 font-bold",
-                              isFirstOfMonth && "border-l border-gray-300"
+                              "border p-1 text-center font-normal w-8 min-w-[32px]",
+                              isWeekend ? "bg-gray-200" : "bg-gray-50",
+                              isTodayCell && "bg-blue-200 font-bold"
                             )}
                           >
-                            <span className="text-muted-foreground">
-                              {day.toLocaleDateString("en-US", { weekday: "narrow" })}
-                            </span>
-                            <span className={cn(isToday && "text-primary")}>
-                              {day.getDate()}
-                            </span>
-                          </div>
+                            <div className={cn("text-sm font-semibold text-gray-700", isTodayCell && "text-blue-600")}>{day}</div>
+                          </th>
                         )
-                      })}
-                    </div>
-
-                    {/* Schedule rows */}
-                    {sortedWorkers.map((worker) => {
-                      const userSchedules = schedulesByUser.get(worker.id)
-
-                      return (
-                        <div key={worker.id} className="flex h-8 border-b hover:bg-muted/30">
-                          {yearDays.map((day) => {
-                            // Use local date format to avoid timezone issues
-                            const dateKey = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
-                            const schedule = userSchedules?.get(dateKey)
-                            const isToday = day.getTime() === today.getTime()
-                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                            const isFirstOfMonth = day.getDate() === 1
-
-                            return (
-                              <div
-                                key={dateKey}
-                                className={cn(
-                                  "w-7 h-8 flex items-center justify-center text-[10px] font-bold border-r border-b",
-                                  isFirstOfMonth && "border-l-2 border-l-gray-400",
-                                  isToday && "ring-2 ring-primary ring-inset",
-                                  schedule
-                                    ? cn(
-                                        SHIFT_COLORS[schedule.shiftType].bg,
-                                        SHIFT_COLORS[schedule.shiftType].text,
-                                        "border-white/20"
-                                      )
-                                    : cn(
-                                        isWeekend ? "bg-gray-100" : "bg-white",
-                                        "text-muted-foreground/30"
-                                      )
-                                )}
-                                title={schedule ? `${schedule.shiftType} - ${worker.name}` : "No schedule"}
-                              >
-                                {schedule ? SHIFT_ABBREV[schedule.shiftType] : "-"}
-                              </div>
-                            )
-                          })}
+                      })
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedWorkers.map((worker) => (
+                    <tr key={worker.id} className="hover:bg-muted/20">
+                      <td
+                        className="border p-2 sticky left-0 bg-white cursor-pointer hover:bg-gray-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+                        onClick={() => openEditModal(worker)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-8 rounded"
+                            style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                          />
+                          <div className="truncate max-w-[160px]">
+                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {worker.crew?.name || "No crew"}
+                            </div>
+                          </div>
+                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
+                      </td>
+                      {yearMonths.map(({ month, days }) =>
+                        days.map((day) => {
+                          const schedule = getScheduleForDay(worker.id, month, day)
+                          const date = new Date(currentYear, month, day)
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                          const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+                          // Handle custom shift types by building the key
+                          const shiftKey = schedule
+                            ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+                              ? `CUSTOM:${schedule.customShiftCode}`
+                              : schedule.shiftType
+                            : null
+                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+
+                          return (
+                            <td
+                              key={`${month}-${day}`}
+                              className={cn(
+                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 hover:ring-inset transition-all",
+                                isWeekend && !style && "bg-gray-100",
+                                isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                              )}
+                              style={
+                                style
+                                  ? { backgroundColor: style.bg, color: style.text }
+                                  : undefined
+                              }
+                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                              onClick={() => openScheduleEditModal(worker, month, day)}
+                            >
+                              <span className="text-xs font-bold">
+                                {style ? style.label : ""}
+                              </span>
+                            </td>
+                          )
+                        })
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Position Color Legend */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Position Colors</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(POSITION_COLORS)
-              .filter(([key]) => key !== "default")
-              .map(([position, color]) => (
-                <div key={position} className="flex items-center gap-1">
-                  <div className={cn("w-3 h-3 rounded-full", color)} />
-                  <span className="text-xs text-muted-foreground">{position}</span>
-                </div>
-              ))}
-          </div>
         </CardContent>
       </Card>
 
@@ -747,7 +808,7 @@ export default function SchedulePage() {
               id="position"
               value={editForm.position}
               onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
-              placeholder="e.g., Operator, Technician, Supervisor"
+              placeholder="e.g., Operator, Technician"
             />
           </div>
 
@@ -789,7 +850,7 @@ export default function SchedulePage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="hireDate">Hire / Start Date</Label>
+            <Label htmlFor="hireDate">Hire Date</Label>
             <Input
               id="hireDate"
               type="date"
@@ -837,24 +898,54 @@ export default function SchedulePage() {
                   { value: "", label: "Select a pattern..." },
                   ...rotationPatterns.map((p) => ({
                     value: p.id,
-                    label: `${p.name} (${p.daysOn} on / ${p.daysOff} off${p.includesNights ? `, ${p.nightDays} nights` : ""})`,
+                    label: `${p.name} (${p.daysOn}/${p.daysOff}${p.includesNights ? (p.alternatesShifts ? " alternates" : ` + ${p.nightDays}N`) : ""})`,
                   })),
                 ]}
               />
             </div>
 
+            {selectedPatternId && rotationPatterns.find(p => p.id === selectedPatternId)?.includesNights && (
+              <div className="space-y-2">
+                <Label htmlFor="startingShift">Starting Shift</Label>
+                <Select
+                  id="startingShift"
+                  value={startingShift}
+                  onChange={(e) => setStartingShift(e.target.value as "DAY" | "NIGHT")}
+                  options={[
+                    { value: "DAY", label: "Days First" },
+                    { value: "NIGHT", label: "Nights First" },
+                  ]}
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="scheduleStart">Schedule Start Date</Label>
+              <Label htmlFor="scheduleStart">Start Date</Label>
               <Input
                 id="scheduleStart"
                 type="date"
                 value={scheduleStartDate}
                 onChange={(e) => setScheduleStartDate(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Schedule will be generated from this date to end of year
-              </p>
             </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="clearOverrides"
+                checked={clearOverrides}
+                onChange={(e) => setClearOverrides(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="clearOverrides" className="text-sm font-normal">
+                Clear manual edits
+              </Label>
+            </div>
+            {clearOverrides && (
+              <p className="text-xs text-orange-600">
+                Warning: This will delete all manually edited shifts for this worker
+              </p>
+            )}
 
             <Button
               onClick={generateSchedule}
@@ -869,13 +960,170 @@ export default function SchedulePage() {
               ) : (
                 <>
                   <RotateCcw className="h-4 w-4 mr-2" />
-                  Generate Year Schedule
+                  Generate Schedule
                 </>
               )}
             </Button>
           </div>
         </div>
       </Modal>
+
+      {/* Schedule Edit Modal - for updating individual days or ranges */}
+      <Modal
+        isOpen={scheduleEditModalOpen}
+        onClose={closeScheduleEditModal}
+        title="Update Schedule"
+        description={scheduleEditWorker?.name || "Update schedule entry"}
+      >
+        <div className="space-y-4">
+          {scheduleEditError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md">
+              {scheduleEditError}
+            </div>
+          )}
+
+          {scheduleEditSuccess && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 rounded-md">
+              {scheduleEditSuccess}
+            </div>
+          )}
+
+          <div className="p-3 bg-blue-50 rounded-md text-sm">
+            <p className="font-medium text-blue-900">Worker: {scheduleEditWorker?.name}</p>
+            <p className="text-blue-700">Select a date range and shift type below</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="scheduleStartDate">Start Date</Label>
+              <Input
+                id="scheduleStartDate"
+                type="date"
+                value={scheduleEditStartDate}
+                onChange={(e) => setScheduleEditStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scheduleEndDate">End Date</Label>
+              <Input
+                id="scheduleEndDate"
+                type="date"
+                value={scheduleEditEndDate}
+                onChange={(e) => setScheduleEditEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="shiftType">Shift Type</Label>
+            <Select
+              id="shiftType"
+              value={scheduleEditShiftType}
+              onChange={(e) => setScheduleEditShiftType(e.target.value as ShiftType)}
+              options={[
+                { value: "SICK", label: "🤒 Sick" },
+                { value: "VACATION", label: "🏖️ Vacation" },
+                { value: "LEAVE", label: "📋 Leave" },
+                { value: "DAY", label: "☀️ Day Shift" },
+                { value: "NIGHT", label: "🌙 Night Shift" },
+                { value: "OFF", label: "🏠 Off" },
+                { value: "PL_DAY", label: "📅 PL Day" },
+                { value: "PL_NIGHT", label: "🌃 PL Night" },
+                { value: "TRAINING", label: "📚 Training" },
+                { value: "SHUTDOWN", label: "🔧 Shutdown" },
+                // Custom shift types
+                ...customShiftTypes.filter(t => t.isActive).map(t => ({
+                  value: `CUSTOM:${t.code}`,
+                  label: `${t.name} (${t.code})`,
+                })),
+              ]}
+            />
+          </div>
+
+          {/* Quick action buttons */}
+          <div className="space-y-2">
+            <Label>Quick Select</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { type: "SICK", label: "Sick", bg: "#ef4444" },
+                { type: "VACATION", label: "Vacation", bg: "#10b981" },
+                { type: "LEAVE", label: "Leave", bg: "#f97316" },
+                { type: "OFF", label: "Off", bg: "#e5e7eb", text: "#6b7280" },
+                { type: "DAY", label: "Day", bg: "#22c55e" },
+                { type: "NIGHT", label: "Night", bg: "#2563eb" },
+                // Add custom shift types to quick select
+                ...customShiftTypes.filter(t => t.isActive).map(t => ({
+                  type: `CUSTOM:${t.code}`,
+                  label: t.code,
+                  bg: t.color,
+                  text: t.textColor,
+                })),
+              ].map(({ type, label, bg, text }) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScheduleEditShiftType(type as ShiftType)}
+                  className={cn(
+                    "transition-all",
+                    scheduleEditShiftType === type && "ring-2 ring-offset-2 ring-blue-500"
+                  )}
+                  style={{
+                    backgroundColor: scheduleEditShiftType === type ? bg : undefined,
+                    color: scheduleEditShiftType === type ? (text || "#ffffff") : undefined,
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="scheduleReason">Reason (optional)</Label>
+            <Input
+              id="scheduleReason"
+              value={scheduleEditReason}
+              onChange={(e) => setScheduleEditReason(e.target.value)}
+              placeholder="e.g., Doctor's appointment, Family vacation"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeScheduleEditModal} disabled={scheduleEditSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveScheduleEdit}
+              disabled={scheduleEditSaving || !scheduleEditStartDate || !scheduleEditEndDate}
+            >
+              {scheduleEditSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Schedule"
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
+  )
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <SchedulePageContent />
+    </Suspense>
   )
 }

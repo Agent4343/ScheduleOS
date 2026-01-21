@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { UserRole, TimeOffType, ShiftType } from "@prisma/client"
+import { UserRole, TimeOffType, ShiftType } from "@/types"
 
 // Auth validations
 export const loginSchema = z.object({
@@ -53,7 +53,7 @@ export const updateOrganizationSchema = createOrganizationSchema.partial()
 export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(2, "Name must be at least 2 characters"),
-  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  role: z.enum([UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.WORKER]).default(UserRole.WORKER),
   position: z.string().optional(),
   phone: z.string().optional(),
   crewId: z.string().optional(),
@@ -82,6 +82,7 @@ export const createRotationPatternSchema = z.object({
   includesNights: z.boolean().default(false),
   nightsAtStart: z.boolean().default(true),
   nightDays: z.number().int().min(0).max(60).default(0),
+  alternatesShifts: z.boolean().default(false),  // When true, work periods alternate between all-DAY and all-NIGHT
   isDefault: z.boolean().default(false),
 })
 
@@ -91,10 +92,15 @@ export const updateRotationPatternSchema = createRotationPatternSchema.partial()
 export const createScheduleSchema = z.object({
   userId: z.string(),
   date: z.coerce.date(),
-  shiftType: z.nativeEnum(ShiftType),
+  shiftType: z.enum([
+    ShiftType.DAY, ShiftType.NIGHT, ShiftType.OFF, ShiftType.LEAVE,
+    ShiftType.PL_DAY, ShiftType.PL_NIGHT, ShiftType.VACATION, ShiftType.SICK,
+    ShiftType.TRAINING, ShiftType.SHUTDOWN, ShiftType.CUSTOM
+  ]),
+  customShiftCode: z.string().nullish(),
   isOverride: z.boolean().default(false),
-  overrideReason: z.string().optional(),
-  notes: z.string().optional(),
+  overrideReason: z.string().nullish(),
+  notes: z.string().nullish(),
 })
 
 export const updateScheduleSchema = createScheduleSchema.partial().omit({ userId: true, date: true })
@@ -106,13 +112,18 @@ export const generateScheduleSchema = z.object({
   endDate: z.coerce.date(),
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
+  startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  clearOverrides: z.boolean().optional(),  // When true, also delete manually edited schedules
 })
 
 // Time off request validations
 export const createTimeOffRequestSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
-  type: z.nativeEnum(TimeOffType),
+  type: z.enum([
+    TimeOffType.VACATION, TimeOffType.SICK, TimeOffType.PERSONAL,
+    TimeOffType.BEREAVEMENT, TimeOffType.JURY_DUTY, TimeOffType.OTHER
+  ]),
   reason: z.string().max(1000).optional(),
 }).refine(data => data.endDate >= data.startDate, {
   message: "End date must be on or after start date",
@@ -127,7 +138,11 @@ export const updateTimeOffRequestSchema = z.object({
 // Staffing rule validations
 export const createStaffingRuleSchema = z.object({
   name: z.string().min(1).max(100),
-  shiftType: z.nativeEnum(ShiftType),
+  shiftType: z.enum([
+    ShiftType.DAY, ShiftType.NIGHT, ShiftType.OFF, ShiftType.LEAVE,
+    ShiftType.PL_DAY, ShiftType.PL_NIGHT, ShiftType.VACATION, ShiftType.SICK,
+    ShiftType.TRAINING, ShiftType.SHUTDOWN, ShiftType.CUSTOM
+  ]),
   minWorkers: z.number().int().min(0),
   maxVacation: z.number().int().min(0).default(1),
   isActive: z.boolean().default(true),
@@ -163,7 +178,7 @@ export const createHolidaySchema = z.object({
 // Invitation validations
 export const createInvitationSchema = z.object({
   email: z.string().email("Invalid email address"),
-  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  role: z.enum([UserRole.ADMIN, UserRole.SUPERVISOR, UserRole.WORKER]).default(UserRole.WORKER),
 })
 
 // Excel import validations

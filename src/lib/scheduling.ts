@@ -1,4 +1,4 @@
-import { ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { addDays, isSameDay } from "./utils"
 
 export interface RotationPattern {
@@ -7,6 +7,7 @@ export interface RotationPattern {
   includesNights: boolean
   nightsAtStart: boolean
   nightDays: number
+  alternatesShifts?: boolean  // When true, entire work periods alternate between DAY and NIGHT
 }
 
 export interface GeneratedSchedule {
@@ -21,13 +22,15 @@ export interface GeneratedSchedule {
  * @param startDate - The start date for schedule generation
  * @param endDate - The end date for schedule generation
  * @param startPhase - The starting phase offset (0 = beginning of rotation)
+ * @param startingShift - Override for which shift type to start with ("DAY" or "NIGHT")
  * @returns Array of generated schedules
  */
 export function generateRotationSchedule(
   pattern: RotationPattern,
   startDate: Date,
   endDate: Date,
-  startPhase: number = 0
+  startPhase: number = 0,
+  startingShift?: "DAY" | "NIGHT"
 ): GeneratedSchedule[] {
   const schedules: GeneratedSchedule[] = []
   const totalCycleDays = pattern.daysOn + pattern.daysOff
@@ -35,19 +38,35 @@ export function generateRotationSchedule(
   let currentDate = new Date(startDate)
   let dayInCycle = startPhase % totalCycleDays
 
+  // Track which cycle number we're on (for alternating shifts)
+  let cycleNumber = Math.floor(startPhase / totalCycleDays)
+
+  // Determine initial shift preference
+  const startsWithNight = startingShift
+    ? startingShift === "NIGHT"
+    : pattern.nightsAtStart
+
   while (currentDate <= endDate) {
     let shiftType: ShiftType
 
     if (dayInCycle < pattern.daysOn) {
       // Working days
       if (pattern.includesNights) {
-        if (pattern.nightsAtStart) {
-          // Night shifts first, then day shifts
-          shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
+        if (pattern.alternatesShifts) {
+          // Alternating mode: entire work period is either DAY or NIGHT
+          // Odd cycles get opposite of even cycles
+          const isNightCycle = startsWithNight ? (cycleNumber % 2 === 0) : (cycleNumber % 2 === 1)
+          shiftType = isNightCycle ? ShiftType.NIGHT : ShiftType.DAY
         } else {
-          // Day shifts first, then night shifts
-          const dayShifts = pattern.daysOn - pattern.nightDays
-          shiftType = dayInCycle < dayShifts ? ShiftType.DAY : ShiftType.NIGHT
+          // Original mode: split days between day and night within same work period
+          if (startsWithNight) {
+            // Night shifts first, then day shifts
+            shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
+          } else {
+            // Day shifts first, then night shifts
+            const dayShifts = pattern.daysOn - pattern.nightDays
+            shiftType = dayInCycle < dayShifts ? ShiftType.DAY : ShiftType.NIGHT
+          }
         }
       } else {
         shiftType = ShiftType.DAY
@@ -63,7 +82,13 @@ export function generateRotationSchedule(
     })
 
     currentDate = addDays(currentDate, 1)
+    const previousDayInCycle = dayInCycle
     dayInCycle = (dayInCycle + 1) % totalCycleDays
+
+    // Increment cycle number when we wrap around to a new cycle
+    if (dayInCycle < previousDayInCycle) {
+      cycleNumber++
+    }
   }
 
   return schedules

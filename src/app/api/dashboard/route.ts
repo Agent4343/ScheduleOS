@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { addDays, startOfWeek, endOfWeek } from "@/lib/utils"
 import { logger } from "@/lib/logger"
 
@@ -135,7 +135,7 @@ export async function GET() {
       const daySchedules = schedulesByDate.get(dateKey) || []
 
       for (const rule of staffingRules) {
-        const count = daySchedules.filter(s => s.shiftType === rule.shiftType).length
+        const count = daySchedules.filter((s: { shiftType: string }) => s.shiftType === rule.shiftType).length
         if (count < rule.minWorkers) {
           staffingGaps++
           gapDetails.push({
@@ -194,8 +194,8 @@ export async function GET() {
         recentActivity,
         upcomingTimeOff,
         todayBreakdown: {
-          dayShift: todaySchedules.filter(s => s.shiftType === ShiftType.DAY).length,
-          nightShift: todaySchedules.filter(s => s.shiftType === ShiftType.NIGHT).length,
+          dayShift: todaySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.DAY).length,
+          nightShift: todaySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.NIGHT).length,
         },
       },
     })

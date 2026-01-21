@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
-import { ShiftType } from "@prisma/client"
+import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/utils"
 import { logger } from "@/lib/logger"
 import { audit, AuditAction, getClientInfo } from "@/lib/audit"
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
     })
 
     await prisma.notification.createMany({
-      data: supervisors.map(supervisor => ({
+      data: supervisors.map((supervisor: { id: string }) => ({
         userId: supervisor.id,
         type: "TIME_OFF_REQUEST",
         title: "New Time Off Request",
