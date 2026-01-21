@@ -112,17 +112,20 @@ npm run db:push
 npx prisma studio
 ```
 Navigate to the User table and create a new record with:
-- Email: your-email@local
+- Email: admin@localhost (or your preferred email)
 - Name: Admin User
 - Role: ADMIN
 - Status: ACTIVE
-- passwordHash: (generate with bcrypt, e.g., using Node.js REPL)
+- passwordHash: Use bcrypt to hash your password. Example using Node.js:
+  ```bash
+  node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
+  ```
 
 **Option B: Opt-in demo seeding**
 ```bash
 SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
 ```
-This creates `admin@local` with your chosen password. Demo seeding is disabled by default for security.
+This creates `admin@localhost` with your chosen password. Demo seeding is disabled by default for security.
 
 6. Start development server:
 ```bash

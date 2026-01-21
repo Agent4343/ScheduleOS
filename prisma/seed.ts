@@ -156,10 +156,10 @@ async function main() {
 
     // Create local demo admin
     const admin = await prisma.user.upsert({
-      where: { email: "admin@local" },
+      where: { email: "admin@localhost" },
       update: {},
       create: {
-        email: "admin@local",
+        email: "admin@localhost",
         name: "Demo Admin",
         passwordHash,
         role: "ADMIN",
@@ -172,8 +172,8 @@ async function main() {
 
     // Create minimal demo workers
     const workers = [
-      { name: "Worker A1", email: "worker-a1@local", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
-      { name: "Worker A2", email: "worker-a2@local", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
+      { name: "Worker A1", email: "worker-a1@localhost", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+      { name: "Worker A2", email: "worker-a2@localhost", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
     ]
 
     for (const worker of workers) {
