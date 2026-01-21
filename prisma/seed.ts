@@ -150,8 +150,15 @@ async function main() {
   if (process.env.SEED_DEMO === "true") {
     console.log("SEED_DEMO is enabled, creating demo users...")
     
-    const demoAdminEmail = process.env.SEED_ADMIN_EMAIL || "admin@example.com"
-    const demoAdminPassword = process.env.SEED_ADMIN_PASSWORD || "changeme"
+    // Require explicit credentials when creating demo users
+    const demoAdminEmail = process.env.SEED_ADMIN_EMAIL
+    const demoAdminPassword = process.env.SEED_ADMIN_PASSWORD
+    
+    if (!demoAdminEmail || !demoAdminPassword) {
+      console.error("ERROR: SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD must be set when SEED_DEMO=true")
+      console.error("Example: SEED_DEMO=true SEED_ADMIN_EMAIL=admin@local.dev SEED_ADMIN_PASSWORD=yourpassword npm run db:seed")
+      process.exit(1)
+    }
     
     const passwordHash = await bcrypt.hash(demoAdminPassword, 12)
 
@@ -172,6 +179,9 @@ async function main() {
 
     // Create demo workers (optional, only if SEED_DEMO is true)
     if (process.env.SEED_DEMO_WORKERS === "true") {
+      const demoWorkerPassword = process.env.SEED_WORKER_PASSWORD || demoAdminPassword
+      const workerPasswordHash = await bcrypt.hash(demoWorkerPassword, 12)
+      
       const workers = [
         { name: "John Smith", email: "john@example.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
         { name: "Jane Doe", email: "jane@example.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
@@ -190,7 +200,7 @@ async function main() {
           create: {
             email: worker.email,
             name: worker.name,
-            passwordHash,
+            passwordHash: workerPasswordHash,
             role: "WORKER",
             position: worker.position,
             positionType: worker.positionType,
