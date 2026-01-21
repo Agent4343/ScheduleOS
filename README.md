@@ -56,10 +56,12 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
    npx prisma db push
    ```
 
-6. **Seed demo data** (optional):
+6. **Seed organization data**:
    ```bash
    npm run db:seed
    ```
+
+7. **Create an admin user** (see "Creating Admin Users" section below)
 
 ### Railway Environment Variables
 
@@ -101,23 +103,58 @@ cp .env.example .env
 npm run db:push
 ```
 
-5. Seed demo data (optional):
+5. Seed organization and rotation data:
 ```bash
 npm run db:seed
 ```
 
-6. Start development server:
+6. Create an admin user (see "Creating Admin Users" below)
+
+7. Start development server:
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Demo Credentials
+### Creating Admin Users
 
-After seeding:
-- **Email**: admin@demo.com
-- **Password**: demo1234
+For local development, you need to create an admin user manually. Choose one of these methods:
+
+**Option 1: Opt-in Demo Seeding (Quick Start)**
+
+Create demo users with a password of your choice:
+```bash
+SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+```
+
+This creates:
+- Admin user: `admin@local` (with your password)
+- A few demo workers for testing
+
+**Option 2: Using Prisma Studio (Recommended for Production)**
+
+1. Open Prisma Studio:
+```bash
+npx prisma studio
+```
+
+2. Navigate to the `User` model
+3. Click "Add record" and create a user with:
+   - `email`: your-email@example.com
+   - `name`: Your Name
+   - `passwordHash`: (see script below to generate)
+   - `role`: ADMIN
+   - `status`: ACTIVE
+   - `organizationId`: (get from Organization table)
+
+**Option 3: Create Admin via Script**
+
+```bash
+node -e "const bcrypt = require('bcryptjs'); bcrypt.hash('yourpassword', 12).then(console.log)"
+```
+
+Use the output hash when creating a user in Prisma Studio or via a custom script.
 
 ## Project Structure
 
@@ -162,7 +199,7 @@ npm run start        # Start production server
 npm run lint         # Run ESLint
 npm run db:push      # Push schema to database
 npm run db:migrate   # Run migrations
-npm run db:seed      # Seed demo data
+npm run db:seed      # Seed organization and rotation data
 ```
 
 ## License
