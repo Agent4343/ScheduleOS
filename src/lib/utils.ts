@@ -5,6 +5,31 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Escapes HTML special characters to prevent XSS attacks
+ */
+export function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+}
+
+/**
+ * Escapes CSV cells to prevent formula injection
+ * Prefixes cells starting with =, +, -, @ with a single quote
+ */
+export function escapeCsvCell(value: string): string {
+  const str = String(value)
+  // Check if cell starts with dangerous characters
+  if (/^[=+\-@]/.test(str)) {
+    return `'${str}`
+  }
+  return str
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return d.toLocaleDateString('en-US', {

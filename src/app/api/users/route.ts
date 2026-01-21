@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions, hashPassword } from "@/lib/auth"
-import { createUserSchema } from "@/lib/validations"
+import { createUserSchema, userQueryParamsSchema } from "@/lib/validations"
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,12 +17,23 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const role = searchParams.get("role")
 
+    // Validate query parameters
+    const queryValidation = userQueryParamsSchema.safeParse({ crewId, status, role })
+    if (!queryValidation.success) {
+      return NextResponse.json(
+        { error: "Invalid query parameters", details: queryValidation.error.format() },
+        { status: 400 }
+      )
+    }
+
+    const validatedQuery = queryValidation.data
+
     const users = await prisma.user.findMany({
       where: {
         organizationId: session.user.organizationId,
-        ...(crewId && { crewId }),
-        ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
-        ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
+        ...(validatedQuery.crewId && { crewId: validatedQuery.crewId }),
+        ...(validatedQuery.status && { status: validatedQuery.status }),
+        ...(validatedQuery.role && { role: validatedQuery.role }),
       },
       select: {
         id: true,

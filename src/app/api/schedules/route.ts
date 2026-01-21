@@ -204,9 +204,7 @@ async function generateSchedules(
   organizationId: string,
   body: unknown
 ) {
-  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
-  console.log("Validated data:", JSON.stringify(validatedData))
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({
@@ -325,14 +323,12 @@ async function generateSchedules(
       where: deleteWhere,
     })
     deletedCount = deleteResult.count
-    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
 
     // Create new schedules
     await tx.schedule.createMany({
       data: scheduleData,
       skipDuplicates: true,
     })
-    console.log(`Created ${scheduleData.length} new schedules`)
   })
 
   return NextResponse.json({
