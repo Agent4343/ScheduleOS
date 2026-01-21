@@ -63,7 +63,10 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - api/health (health check - must bypass auth for Railway)
+     * - api/setup (database setup - must work before auth is configured)
+     * - api/migrate (database migrations - must work before auth is configured)
      */
-    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/|api/health|api/setup|api/migrate).*)",
   ],
 }
