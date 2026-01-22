@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
 
+export const dynamic = "force-dynamic"
+
 // Sanitize CSV values to prevent injection attacks
 function sanitizeCSVValue(value: string | null | undefined): string {
   if (!value) return ""
