@@ -56,10 +56,17 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
    npx prisma db push
    ```
 
-6. **Seed demo data** (optional):
+6. **Seed database** (creates organization, crews, rotation patterns):
    ```bash
    npm run db:seed
    ```
+   
+   To create demo users (optional), set environment variables:
+   ```bash
+   SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+   ```
+
+7. **Create an admin user** - See "Creating Admin Users" section below for options.
 
 ### Railway Environment Variables
 
@@ -101,23 +108,55 @@ cp .env.example .env
 npm run db:push
 ```
 
-5. Seed demo data (optional):
+5. Seed database (creates organization, crews, rotation patterns):
 ```bash
 npm run db:seed
 ```
 
-6. Start development server:
+6. Create an admin user (see "Creating Admin Users" below)
+
+7. Start development server:
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Demo Credentials
+### Creating Admin Users
 
-After seeding:
-- **Email**: admin@demo.com
-- **Password**: demo1234
+For local development, you have several options to create an admin user:
+
+**Option 1: Using Prisma Studio (Recommended)**
+```bash
+npx prisma studio
+```
+Then create a user with role "ADMIN" and a bcrypt-hashed password.
+
+**Option 2: Opt-in Demo Seeding**
+```bash
+SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+```
+This creates a demo admin (admin@local) and minimal demo workers with your chosen password.
+
+**Option 3: Manual Script**
+```typescript
+import { PrismaClient } from "@prisma/client"
+import bcrypt from "bcryptjs"
+
+const prisma = new PrismaClient()
+const passwordHash = await bcrypt.hash("yourpassword", 12)
+
+await prisma.user.create({
+  data: {
+    email: "admin@yourdomain.com",
+    name: "Admin User",
+    passwordHash,
+    role: "ADMIN",
+    status: "ACTIVE",
+    organizationId: "your-org-id",
+  },
+})
+```
 
 ## Project Structure
 
