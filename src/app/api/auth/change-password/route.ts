@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions, hashPassword, verifyPassword } from "@/lib/auth"
+import { passwordSchema } from "@/lib/validations"
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,8 +19,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Current and new passwords are required" }, { status: 400 })
     }
 
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
+    const passwordValidation = passwordSchema.safeParse(newPassword)
+    if (!passwordValidation.success) {
+      return NextResponse.json(
+        { error: passwordValidation.error.issues[0]?.message ?? "Password does not meet policy" },
+        { status: 400 }
+      )
     }
 
     // Get user with password hash
