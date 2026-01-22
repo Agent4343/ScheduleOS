@@ -86,6 +86,19 @@ export async function PATCH(
     const body = await request.json()
     const validatedData = updateUserSchema.parse(body)
 
+    let normalizedEmail: string | undefined
+    if (validatedData.email) {
+      normalizedEmail = validatedData.email.toLowerCase()
+      const emailOwner = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      })
+
+      if (emailOwner && emailOwner.id !== params.id) {
+        return NextResponse.json({ error: "Email already in use" }, { status: 400 })
+      }
+    }
+
     // Verify crew belongs to organization if provided
     if (validatedData.crewId) {
       const crew = await prisma.crew.findFirst({
@@ -104,7 +117,7 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         name: validatedData.name,
-        email: validatedData.email,
+        email: normalizedEmail,
         role: validatedData.role,
         position: validatedData.position,
         positionType: validatedData.positionType,
@@ -133,6 +146,10 @@ export async function PATCH(
       },
     })
 
+    const auditChanges = normalizedEmail
+      ? { ...validatedData, email: normalizedEmail }
+      : validatedData
+
     // Log audit event
     await logAudit({
       action: AuditAction.USER_UPDATED,
@@ -141,7 +158,7 @@ export async function PATCH(
       targetId: params.id,
       targetType: "User",
       metadata: {
-        changes: validatedData,
+        changes: auditChanges,
       },
       ipAddress: getClientIP(request),
     })
