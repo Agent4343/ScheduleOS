@@ -4,6 +4,21 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
 
+// Sanitize CSV values to prevent injection attacks
+function sanitizeCSVValue(value: string | null | undefined): string {
+  if (!value) return ""
+  
+  // Convert to string and remove potential formula injection characters
+  let sanitized = String(value)
+  
+  // If value starts with special chars that could be interpreted as formulas, prefix with single quote
+  if (/^[=+\-@\t\r]/.test(sanitized)) {
+    sanitized = "'" + sanitized
+  }
+  
+  return sanitized
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -27,7 +42,7 @@ export async function GET(request: NextRequest) {
       csv += "WORKERS\n"
       csv += "Name,Email,Role,Position,Status,Crew,Hire Date\n"
       for (const user of users) {
-        csv += `"${user.name || ""}","${user.email}","${user.role}","${user.position || ""}","${user.status}","${user.crew?.name || ""}","${user.hireDate?.toISOString().split("T")[0] || ""}"\n`
+        csv += `"${sanitizeCSVValue(user.name)}","${sanitizeCSVValue(user.email)}","${sanitizeCSVValue(user.role)}","${sanitizeCSVValue(user.position)}","${sanitizeCSVValue(user.status)}","${sanitizeCSVValue(user.crew?.name)}","${sanitizeCSVValue(user.hireDate?.toISOString().split("T")[0])}"\n`
       }
       csv += "\n"
     }
@@ -54,7 +69,7 @@ export async function GET(request: NextRequest) {
       csv += "Date,Worker,Email,Shift Type,Crew,Notes,Is Override\n"
       for (const schedule of schedules) {
         const date = schedule.date.toISOString().split("T")[0]
-        csv += `"${date}","${schedule.user.name || ""}","${schedule.user.email}","${schedule.shiftType}","${schedule.crew?.name || ""}","${schedule.notes || ""}","${schedule.isOverride}"\n`
+        csv += `"${sanitizeCSVValue(date)}","${sanitizeCSVValue(schedule.user.name)}","${sanitizeCSVValue(schedule.user.email)}","${sanitizeCSVValue(schedule.shiftType)}","${sanitizeCSVValue(schedule.crew?.name)}","${sanitizeCSVValue(schedule.notes)}","${sanitizeCSVValue(String(schedule.isOverride))}"\n`
       }
       csv += "\n"
     }
@@ -69,7 +84,7 @@ export async function GET(request: NextRequest) {
       csv += "CREWS\n"
       csv += "Name,Description,Color,Pattern,Workers\n"
       for (const crew of crews) {
-        csv += `"${crew.name}","${crew.description || ""}","${crew.color}","${crew.rotationPattern?.name || ""}","${crew._count.workers}"\n`
+        csv += `"${sanitizeCSVValue(crew.name)}","${sanitizeCSVValue(crew.description)}","${sanitizeCSVValue(crew.color)}","${sanitizeCSVValue(crew.rotationPattern?.name)}","${sanitizeCSVValue(String(crew._count.workers))}"\n`
       }
       csv += "\n"
 
@@ -81,7 +96,7 @@ export async function GET(request: NextRequest) {
       csv += "ROTATION PATTERNS\n"
       csv += "Name,Days On,Days Off,Includes Nights,Night Days,Alternates\n"
       for (const pattern of patterns) {
-        csv += `"${pattern.name}","${pattern.daysOn}","${pattern.daysOff}","${pattern.includesNights}","${pattern.nightDays}","${pattern.alternatesShifts}"\n`
+        csv += `"${sanitizeCSVValue(pattern.name)}","${sanitizeCSVValue(String(pattern.daysOn))}","${sanitizeCSVValue(String(pattern.daysOff))}","${sanitizeCSVValue(String(pattern.includesNights))}","${sanitizeCSVValue(String(pattern.nightDays))}","${sanitizeCSVValue(String(pattern.alternatesShifts))}"\n`
       }
     }
 
