@@ -8,7 +8,7 @@ import { rateLimit, rateLimitResponse, rateLimitPresets, getClientIP } from "@/l
 export async function POST(request: NextRequest) {
   // Apply rate limiting
   const clientIP = getClientIP(request)
-  const rateLimitResult = rateLimit(`register:${clientIP}`, rateLimitPresets.auth)
+  const rateLimitResult = await rateLimit(`register:${clientIP}`, rateLimitPresets.auth)
   
   if (!rateLimitResult.success) {
     return rateLimitResponse(rateLimitResult.resetIn)

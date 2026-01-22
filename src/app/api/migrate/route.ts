@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
 
 // Migration statements to bring database in sync with current Prisma schema
 // These are idempotent - safe to run multiple times
@@ -121,6 +123,15 @@ export async function GET(request: NextRequest) {
 
   if (migrateKey !== expectedKey) {
     return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
+  }
+
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin privileges required" }, { status: 403 })
   }
 
   try {

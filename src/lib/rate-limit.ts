@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server"
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
 
 interface RateLimitEntry {
   count: number
   resetTime: number
 }
 
-// In-memory store (use Redis in production for multiple instances)
+// In-memory store (used when Redis is not configured)
 const rateLimitStore = new Map<string, RateLimitEntry>()
+
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+const upstashRedis = redisUrl && redisToken
+  ? new Redis({ url: redisUrl, token: redisToken })
+  : null
+const upstashLimiters = new Map<string, Ratelimit>()
 
 // Clean up expired entries periodically
 setInterval(() => {
@@ -28,9 +37,29 @@ const defaultConfig: RateLimitConfig = {
   maxRequests: 100, // 100 requests per minute
 }
 
-export function rateLimit(
+function getUpstashLimiter(config: RateLimitConfig): Ratelimit | null {
+  if (!upstashRedis) {
+    return null
+  }
+
+  const key = `${config.windowMs}:${config.maxRequests}`
+  const existing = upstashLimiters.get(key)
+  if (existing) {
+    return existing
+  }
+
+  const windowSeconds = Math.max(1, Math.ceil(config.windowMs / 1000))
+  const limiter = new Ratelimit({
+    redis: upstashRedis,
+    limiter: Ratelimit.slidingWindow(config.maxRequests, `${windowSeconds} s`),
+  })
+  upstashLimiters.set(key, limiter)
+  return limiter
+}
+
+function rateLimitInMemory(
   identifier: string,
-  config: RateLimitConfig = defaultConfig
+  config: RateLimitConfig
 ): { success: boolean; remaining: number; resetIn: number } {
   const now = Date.now()
   const key = identifier
@@ -67,6 +96,27 @@ export function rateLimit(
     success: true,
     remaining: config.maxRequests - entry.count,
     resetIn: entry.resetTime - now,
+  }
+}
+
+export async function rateLimit(
+  identifier: string,
+  config: RateLimitConfig = defaultConfig
+): Promise<{ success: boolean; remaining: number; resetIn: number }> {
+  const limiter = getUpstashLimiter(config)
+  if (!limiter) {
+    return rateLimitInMemory(identifier, config)
+  }
+
+  const result = await limiter.limit(identifier)
+  const resetAt = typeof result.reset === "number"
+    ? result.reset
+    : result.reset.getTime()
+
+  return {
+    success: result.success,
+    remaining: result.remaining,
+    resetIn: Math.max(resetAt - Date.now(), 0),
   }
 }
 
