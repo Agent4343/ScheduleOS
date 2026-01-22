@@ -69,6 +69,9 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
 | `DIRECT_URL` | Direct DB connection for migrations | Yes |
 | `NEXTAUTH_URL` | Your Railway app URL | Yes |
 | `NEXTAUTH_SECRET` | Random 32-byte secret | Yes |
+| `SETUP_KEY` | Setup/migration protection key | Yes |
+
+**Security Note:** Generate `NEXTAUTH_SECRET` and `SETUP_KEY` with: `openssl rand -base64 32`
 
 ## Local Development
 
