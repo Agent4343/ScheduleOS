@@ -17,12 +17,18 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const role = searchParams.get("role")
 
+    const isWorker = session.user.role === "WORKER"
+
     const users = await prisma.user.findMany({
       where: {
         organizationId: session.user.organizationId,
-        ...(crewId && { crewId }),
-        ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
-        ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
+        ...(isWorker
+          ? { id: session.user.id }
+          : {
+              ...(crewId && { crewId }),
+              ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
+              ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
+            }),
       },
       select: {
         id: true,

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     }
 
     const organizationId = session.user.organizationId
+    const isWorker = session.user.role === "WORKER"
 
     const { searchParams } = new URL(request.url)
     const startDateParam = searchParams.get("startDate")
@@ -47,8 +48,9 @@ export async function GET(request: NextRequest) {
     const userFilter: Record<string, unknown> = {
       organizationId: organizationId,
     }
-    if (crewIdParam) {
-      userFilter.crewId = crewIdParam
+    const effectiveCrewId = isWorker ? null : crewIdParam
+    if (effectiveCrewId) {
+      userFilter.crewId = effectiveCrewId
     }
 
     const whereClause: Record<string, unknown> = {
@@ -60,8 +62,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Add optional filters only if provided
-    if (userIdParam) {
-      whereClause.userId = userIdParam
+    const effectiveUserId = isWorker ? session.user.id : userIdParam
+    if (effectiveUserId) {
+      whereClause.userId = effectiveUserId
     }
 
     const schedules = await prisma.schedule.findMany({
@@ -200,9 +203,7 @@ async function generateSchedules(
   organizationId: string,
   body: unknown
 ) {
-  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
-  console.log("Validated data:", JSON.stringify(validatedData))
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({
@@ -321,14 +322,12 @@ async function generateSchedules(
       where: deleteWhere,
     })
     deletedCount = deleteResult.count
-    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
 
     // Create new schedules
     await tx.schedule.createMany({
       data: scheduleData,
       skipDuplicates: true,
     })
-    console.log(`Created ${scheduleData.length} new schedules`)
   })
 
   return NextResponse.json({

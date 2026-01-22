@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
 
+export const dynamic = "force-dynamic"
+
 // Sanitize CSV values to prevent injection attacks
 function sanitizeCSVValue(value: string | null | undefined): string {
   if (!value) return ""
@@ -25,6 +27,10 @@ export async function GET(request: NextRequest) {
 
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
