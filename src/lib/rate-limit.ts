@@ -109,14 +109,10 @@ export async function rateLimit(
   }
 
   const result = await limiter.limit(identifier)
-  const resetAt = typeof result.reset === "number"
-    ? result.reset
-    : result.reset.getTime()
-
   return {
     success: result.success,
     remaining: result.remaining,
-    resetIn: Math.max(resetAt - Date.now(), 0),
+    resetIn: Math.max(result.reset - Date.now(), 0),
   }
 }
 
