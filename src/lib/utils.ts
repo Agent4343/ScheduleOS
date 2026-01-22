@@ -83,6 +83,16 @@ export function generateSlug(name: string): string {
 }
 
 export function generateToken(length: number = 32): string {
-  const crypto = require('crypto')
-  return crypto.randomBytes(length).toString('hex').slice(0, length)
+  const byteLength = Math.ceil(length / 2)
+  const bytes = new Uint8Array(byteLength)
+
+  if (!globalThis.crypto || typeof globalThis.crypto.getRandomValues !== "function") {
+    throw new Error("Secure crypto is not available in this environment")
+  }
+
+  globalThis.crypto.getRandomValues(bytes)
+
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, length)
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -18,6 +19,7 @@ const sizeClasses = {
 
 function Avatar({ className, src, alt, fallback, size = "md", ...props }: AvatarProps) {
   const [imageError, setImageError] = React.useState(false)
+  const imageSize = size === "sm" ? "32px" : size === "lg" ? "48px" : "40px"
 
   const initials = React.useMemo(() => {
     if (fallback) return fallback.slice(0, 2).toUpperCase()
@@ -41,10 +43,12 @@ function Avatar({ className, src, alt, fallback, size = "md", ...props }: Avatar
       {...props}
     >
       {src && !imageError ? (
-        <img
+        <Image
           src={src}
           alt={alt || "Avatar"}
-          className="aspect-square h-full w-full object-cover"
+          fill
+          sizes={imageSize}
+          className="object-cover"
           onError={() => setImageError(true)}
         />
       ) : (
