@@ -59,16 +59,16 @@ Build with:
 docker buildx build --secret id=npm_token,src=.npmtoken .
 ```
 
-## NIXPACKS_PATH Configuration
+## NIXPACKS_PATH and Build Variables
 
-Railway's Nixpacks build system may use `NIXPACKS_PATH` during the build. If your Dockerfile references this variable, declare it with a sensible fallback:
+If you create a custom Dockerfile and need to reference build system variables like `NIXPACKS_PATH`, declare them with sensible fallbacks to prevent build failures:
 
 ```dockerfile
 ARG NIXPACKS_PATH
 ENV NIXPACKS_PATH=${NIXPACKS_PATH:-/usr/local/nixpacks}
 ```
 
-This ensures the build doesn't fail if the variable is undefined.
+This ensures the build doesn't fail if the variable is undefined. However, note that this project uses Railway's Nixpacks builder (not a custom Dockerfile), so this is only relevant if you decide to create a custom Dockerfile in the future.
 
 ## Additional Security Recommendations
 
