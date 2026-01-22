@@ -89,12 +89,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
     console.error("Error fetching schedules:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json({
       error: "Failed to fetch schedules",
-      details: errorMessage,
-      stack: process.env.NODE_ENV === "development" ? errorStack : undefined,
     }, { status: 500 })
   }
 }

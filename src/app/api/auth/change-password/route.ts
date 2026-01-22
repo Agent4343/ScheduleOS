@@ -2,9 +2,33 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions, hashPassword, verifyPassword } from "@/lib/auth"
+import { z } from "zod"
+import { rateLimit, rateLimitPresets, rateLimitResponse, getClientIP } from "@/lib/rate-limit"
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+    ),
+})
 
 export async function POST(request: NextRequest) {
   try {
+    // Apply rate limiting
+    const clientIP = getClientIP(request)
+    const rateLimitResult = rateLimit(
+      `change-password:${clientIP}`,
+      rateLimitPresets.auth
+    )
+
+    if (!rateLimitResult.success) {
+      return rateLimitResponse(rateLimitResult.resetIn)
+    }
+
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
@@ -12,15 +36,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { currentPassword, newPassword } = body
-
-    if (!currentPassword || !newPassword) {
-      return NextResponse.json({ error: "Current and new passwords are required" }, { status: 400 })
+    
+    // Validate input
+    const validation = changePasswordSchema.safeParse(body)
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Invalid input", details: validation.error.format() },
+        { status: 400 }
+      )
     }
 
-    if (newPassword.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
-    }
+    const { currentPassword, newPassword } = validation.data
 
     // Get user with password hash
     const user = await prisma.user.findUnique({
