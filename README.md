@@ -50,6 +50,8 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
    NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
    DIRECT_URL=${{Postgres.DATABASE_URL}}
    ```
+   
+   **IMPORTANT**: Do not commit secrets into the Dockerfile or repository. Set `NEXTAUTH_SECRET`, `RESEND_API_KEY`, and other sensitive values as environment variables in Railway (Project → Variables) or your host provider. If you accidentally committed secrets, rotate them immediately and remove them from Git history. See [Railway Environment Variables documentation](https://docs.railway.app/guides/variables) for more information.
 
 5. **Run database migrations** (in Railway shell or locally):
    ```bash
@@ -76,6 +78,7 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
 | `DIRECT_URL` | Direct DB connection for migrations | Yes |
 | `NEXTAUTH_URL` | Your Railway app URL | Yes |
 | `NEXTAUTH_SECRET` | Random 32-byte secret | Yes |
+| `RESEND_API_KEY` | Resend API key for email (if using email features) | Optional |
 
 ## Local Development
 
