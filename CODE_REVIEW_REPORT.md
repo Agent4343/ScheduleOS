@@ -466,7 +466,7 @@ autocannon -c 100 -d 30 http://localhost:3000/api/users
 
 ShiftSync demonstrates **solid engineering fundamentals** with excellent architecture and database design. However, the presence of **critical security vulnerabilities** (hardcoded keys, missing rate limiting, CSV injection) makes it **unsuitable for production** in its current state.
 
-**Estimated effort to reach production-ready state:** 2-3 weeks with 1 developer
+**Estimated effort to reach production-ready state:** 2 to 3 weeks with 1 developer
 
 The development team should prioritize the P0 and P1 security fixes before considering deployment. Once these are addressed, the application will be well-positioned for a successful launch.
 
