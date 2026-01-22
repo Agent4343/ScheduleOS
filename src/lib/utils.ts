@@ -23,8 +23,8 @@ export function escapeHtml(unsafe: string): string {
  */
 export function escapeCsvCell(value: string): string {
   const str = String(value)
-  // Check if cell starts with dangerous characters
-  if (/^[=+\-@]/.test(str)) {
+  // Check if cell starts with dangerous characters (=, +, -, @)
+  if (/^[=+@-]/.test(str)) {
     return `'${str}`
   }
   return str

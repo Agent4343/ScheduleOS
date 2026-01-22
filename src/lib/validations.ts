@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { UserRole, UserStatus, TimeOffType, ShiftType } from "@prisma/client"
+import { UserRole, UserStatus, TimeOffType, ShiftType, RequestStatus } from "@prisma/client"
 import { PositionType } from "@/types"
 
 // Auth validations
@@ -203,5 +203,5 @@ export const scheduleQueryParamsSchema = z.object({
 
 export const timeOffQueryParamsSchema = z.object({
   userId: z.string().optional(),
-  status: z.enum(["PENDING", "APPROVED", "DENIED"]).optional(),
+  status: z.nativeEnum(RequestStatus).optional(),
 })
