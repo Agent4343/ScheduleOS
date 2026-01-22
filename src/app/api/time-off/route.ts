@@ -6,6 +6,8 @@ import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/va
 import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/timezone"
 import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
+import { logAudit, AuditAction } from "@/lib/audit-log"
+import { getClientIP } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -226,7 +228,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
@@ -274,6 +276,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 })
     }
 
+    // Prevent supervisors from approving their own requests
+    if (existingRequest.userId === session.user.id) {
+      return NextResponse.json(
+        { error: "You cannot approve your own time-off request" },
+        { status: 403 }
+      )
+    }
+
     if (existingRequest.status !== "PENDING") {
       return NextResponse.json(
         { error: "Only pending requests can be updated" },
@@ -290,6 +300,23 @@ export async function PATCH(request: NextRequest) {
         approvedById: session.user.id,
         approvedAt: new Date(),
       },
+    })
+
+    // Log audit event
+    await logAudit({
+      action: validatedData.status === "APPROVED" ? AuditAction.TIME_OFF_APPROVED : AuditAction.TIME_OFF_DENIED,
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      targetId: requestId,
+      targetType: "TimeOffRequest",
+      metadata: {
+        requestUserId: existingRequest.userId,
+        startDate: existingRequest.startDate,
+        endDate: existingRequest.endDate,
+        type: existingRequest.type,
+        adminNotes: validatedData.adminNotes,
+      },
+      ipAddress: getClientIP(request),
     })
 
     // If approved, create schedule entries

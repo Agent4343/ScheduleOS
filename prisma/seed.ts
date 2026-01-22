@@ -145,55 +145,67 @@ async function main() {
 
   console.log("Created staffing rules")
 
-  // Create demo admin user
-  const passwordHash = await bcrypt.hash("demo1234", 12)
+  // Opt-in demo user seeding (disabled by default for security)
+  // To create demo users, set: SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+  // For local development without demo users, use Prisma Studio to create an admin:
+  //   npx prisma studio
+  //   Or manually: const hash = await bcrypt.hash('yourpassword', 12); await prisma.user.create({...})
+  if (process.env.SEED_DEMO === 'true') {
+    const demoPassword = process.env.SEED_DEMO_PASSWORD
+    
+    if (!demoPassword) {
+      console.warn('⚠️  SEED_DEMO is enabled but SEED_DEMO_PASSWORD is not set. Skipping demo user creation.')
+      console.warn('   Set SEED_DEMO_PASSWORD to create demo users: SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed')
+    } else {
+      // Create demo admin user with provided password
+      const passwordHash = await bcrypt.hash(demoPassword, 12)
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@demo.com" },
-    update: {},
-    create: {
-      email: "admin@demo.com",
-      name: "Admin User",
-      passwordHash,
-      role: "ADMIN",
-      status: "ACTIVE",
-      organizationId: organization.id,
-    },
-  })
+      const admin = await prisma.user.upsert({
+        where: { email: "admin@local" },
+        update: {},
+        create: {
+          email: "admin@local",
+          name: "Local Admin",
+          passwordHash,
+          role: "ADMIN",
+          status: "ACTIVE",
+          organizationId: organization.id,
+        },
+      })
 
-  console.log("Created admin user:", admin.email)
+      console.log("✓ Created demo admin user:", admin.email)
 
-  // Create demo workers
-  const workers = [
-    { name: "John Smith", email: "john@demo.com", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Jane Doe", email: "jane@demo.com", crew: "Crew A", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Mike Johnson", email: "mike@demo.com", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Sarah Williams", email: "sarah@demo.com", crew: "Crew B", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Tom Brown", email: "tom@demo.com", crew: "Crew C", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Emily Davis", email: "emily@demo.com", crew: "Crew C", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-    { name: "Chris Wilson", email: "chris@demo.com", crew: "Crew D", position: "Operator", positionType: "OPERATOR" as const },
-    { name: "Lisa Anderson", email: "lisa@demo.com", crew: "Crew D", position: "Control Room", positionType: "ONSHORE_CONTROL_ROOM" as const },
-  ]
+      // Create minimal demo workers
+      const workers = [
+        { name: "Demo Worker 1", email: "worker1@local", crew: "Crew A", position: "Operator", positionType: "OPERATOR" as const },
+        { name: "Demo Worker 2", email: "worker2@local", crew: "Crew B", position: "Operator", positionType: "OPERATOR" as const },
+      ]
 
-  for (const worker of workers) {
-    await prisma.user.upsert({
-      where: { email: worker.email },
-      update: {},
-      create: {
-        email: worker.email,
-        name: worker.name,
-        passwordHash,
-        role: "WORKER",
-        position: worker.position,
-        positionType: worker.positionType,
-        status: "ACTIVE",
-        organizationId: organization.id,
-        crewId: crews[worker.crew],
-      },
-    })
+      for (const worker of workers) {
+        await prisma.user.upsert({
+          where: { email: worker.email },
+          update: {},
+          create: {
+            email: worker.email,
+            name: worker.name,
+            passwordHash,
+            role: "WORKER",
+            position: worker.position,
+            positionType: worker.positionType,
+            status: "ACTIVE",
+            organizationId: organization.id,
+            crewId: crews[worker.crew],
+          },
+        })
+      }
+
+      console.log("✓ Created demo workers")
+    }
+  } else {
+    console.log('ℹ️  Demo user creation is disabled (SEED_DEMO != true)')
+    console.log('   To enable: SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed')
+    console.log('   For manual admin creation, use Prisma Studio: npx prisma studio')
   }
-
-  console.log("Created demo workers")
 
   console.log("Seeding completed!")
 }
