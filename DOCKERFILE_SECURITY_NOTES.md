@@ -20,7 +20,7 @@ ENV RESEND_API_KEY=${RESEND_API_KEY}
 **✅ CORRECT - Declare ARGs Without Defaults:**
 ```dockerfile
 # Do NOT bake secret values into the Docker image. 
-# Set these at runtime in your deployment host (Railway, Vercel) under Project > Variables.
+# Set these at runtime in your deployment host (Railway) under Project > Variables.
 ARG NEXTAUTH_SECRET
 ARG RESEND_API_KEY
 

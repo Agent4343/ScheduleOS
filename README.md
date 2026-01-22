@@ -80,9 +80,7 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
 | `DIRECT_URL` | Direct DB connection for migrations | Yes |
 | `NEXTAUTH_URL` | Your Railway app URL | Yes |
 | `NEXTAUTH_SECRET` | Random 32-byte secret (generate with: `openssl rand -base64 32`) | Yes |
-| `RESEND_API_KEY` | Resend API key for email notifications | No* |
-
-\*Optional: Required only if you want to enable email functionality. Get your API key from [resend.com](https://resend.com).
+| `RESEND_API_KEY` | Resend API key for email notifications (optional - only required for email functionality, get from [resend.com](https://resend.com)) | No |
 
 ## Local Development
 
