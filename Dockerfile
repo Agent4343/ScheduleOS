@@ -24,18 +24,16 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # --- Secrets: DO NOT bake secret values into the Docker image ---
-# Build-time ARGs are declared for documentation only.
-# These secrets MUST be provided at runtime via environment variables in your deployment platform.
+# IMPORTANT: This Dockerfile does NOT require build-time secrets.
+# All secrets (NEXTAUTH_SECRET, RESEND_API_KEY, DATABASE_URL, etc.) should be 
+# provided at RUNTIME via environment variables in your deployment platform.
+#
 # For Railway: Set these in Project → Variables
 # For Docker: Use `docker run --env NEXTAUTH_SECRET=xxx --env RESEND_API_KEY=xxx`
-# For BuildKit secrets: `docker build --secret id=mysecret,src=/path/to/secret`
-ARG NEXTAUTH_SECRET
-ARG RESEND_API_KEY
-ARG DATABASE_URL
-ARG DIRECT_URL
-
-# Do NOT set ENV with secret defaults here. Secrets should come from the runtime environment.
-# Setting them here would bake secrets into image layers, which is a security risk.
+# For Kubernetes: Use Secrets or ConfigMaps
+#
+# Do NOT set ARG or ENV with secret defaults here, as this would bake them into 
+# image layers, which is a security risk.
 
 # --- Ensure NIXPACKS_PATH has a fallback value to avoid undefined-var errors ---
 # This variable is used by Nixpacks on Railway. If not provided, use a safe default.
@@ -77,5 +75,7 @@ EXPOSE 8080
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 
-# Start the application with Prisma migrations
+# Note: The CMD runs migrations before starting. In production with multiple replicas,
+# consider using Railway's health checks and restart policies, or run migrations separately
+# via a one-off job: `railway run npx prisma migrate deploy`
 CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
