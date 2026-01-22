@@ -89,12 +89,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: schedules })
   } catch (error) {
     console.error("Error fetching schedules:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json({
       error: "Failed to fetch schedules",
-      details: errorMessage,
-      stack: process.env.NODE_ENV === "development" ? errorStack : undefined,
     }, { status: 500 })
   }
 }
@@ -204,9 +200,7 @@ async function generateSchedules(
   organizationId: string,
   body: unknown
 ) {
-  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
-  console.log("Validated data:", JSON.stringify(validatedData))
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({
@@ -325,14 +319,12 @@ async function generateSchedules(
       where: deleteWhere,
     })
     deletedCount = deleteResult.count
-    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
 
     // Create new schedules
     await tx.schedule.createMany({
       data: scheduleData,
       skipDuplicates: true,
     })
-    console.log(`Created ${scheduleData.length} new schedules`)
   })
 
   return NextResponse.json({

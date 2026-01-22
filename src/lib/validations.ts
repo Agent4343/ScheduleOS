@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { UserRole, UserStatus, TimeOffType, ShiftType } from "@prisma/client"
+import { UserRole, UserStatus, TimeOffType, ShiftType, RequestStatus } from "@prisma/client"
 import { PositionType } from "@/types"
 
 // Auth validations
@@ -186,3 +186,22 @@ export type CreateStaffingRuleInput = z.infer<typeof createStaffingRuleSchema>
 export type CreateShutdownInput = z.infer<typeof createShutdownSchema>
 export type CreateHolidayInput = z.infer<typeof createHolidaySchema>
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>
+
+// Query parameter validations
+export const userQueryParamsSchema = z.object({
+  role: z.nativeEnum(UserRole).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
+  crewId: z.string().optional(),
+})
+
+export const scheduleQueryParamsSchema = z.object({
+  userId: z.string().optional(),
+  crewId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+})
+
+export const timeOffQueryParamsSchema = z.object({
+  userId: z.string().optional(),
+  status: z.nativeEnum(RequestStatus).optional(),
+})

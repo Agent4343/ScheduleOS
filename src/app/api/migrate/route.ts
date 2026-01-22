@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
   const migrateKey = request.nextUrl.searchParams.get("key")
 
   // Require a key for security
-  if (migrateKey !== process.env.SETUP_KEY && migrateKey !== "migrate-2026") {
+  if (!process.env.SETUP_KEY || migrateKey !== process.env.SETUP_KEY) {
     return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
   }
 

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
+import { escapeCsvCell } from "@/lib/utils"
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       csv += "WORKERS\n"
       csv += "Name,Email,Role,Position,Status,Crew,Hire Date\n"
       for (const user of users) {
-        csv += `"${user.name || ""}","${user.email}","${user.role}","${user.position || ""}","${user.status}","${user.crew?.name || ""}","${user.hireDate?.toISOString().split("T")[0] || ""}"\n`
+        csv += `"${escapeCsvCell(user.name || "")}","${escapeCsvCell(user.email)}","${escapeCsvCell(user.role)}","${escapeCsvCell(user.position || "")}","${escapeCsvCell(user.status)}","${escapeCsvCell(user.crew?.name || "")}","${user.hireDate?.toISOString().split("T")[0] || ""}"\n`
       }
       csv += "\n"
     }
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
       csv += "Date,Worker,Email,Shift Type,Crew,Notes,Is Override\n"
       for (const schedule of schedules) {
         const date = schedule.date.toISOString().split("T")[0]
-        csv += `"${date}","${schedule.user.name || ""}","${schedule.user.email}","${schedule.shiftType}","${schedule.crew?.name || ""}","${schedule.notes || ""}","${schedule.isOverride}"\n`
+        csv += `"${date}","${escapeCsvCell(schedule.user.name || "")}","${escapeCsvCell(schedule.user.email)}","${escapeCsvCell(schedule.shiftType)}","${escapeCsvCell(schedule.crew?.name || "")}","${escapeCsvCell(schedule.notes || "")}","${schedule.isOverride}"\n`
       }
       csv += "\n"
     }
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
       csv += "CREWS\n"
       csv += "Name,Description,Color,Pattern,Workers\n"
       for (const crew of crews) {
-        csv += `"${crew.name}","${crew.description || ""}","${crew.color}","${crew.rotationPattern?.name || ""}","${crew._count.workers}"\n`
+        csv += `"${escapeCsvCell(crew.name)}","${escapeCsvCell(crew.description || "")}","${escapeCsvCell(crew.color)}","${escapeCsvCell(crew.rotationPattern?.name || "")}","${crew._count.workers}"\n`
       }
       csv += "\n"
 
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
       csv += "ROTATION PATTERNS\n"
       csv += "Name,Days On,Days Off,Includes Nights,Night Days,Alternates\n"
       for (const pattern of patterns) {
-        csv += `"${pattern.name}","${pattern.daysOn}","${pattern.daysOff}","${pattern.includesNights}","${pattern.nightDays}","${pattern.alternatesShifts}"\n`
+        csv += `"${escapeCsvCell(pattern.name)}","${pattern.daysOn}","${pattern.daysOff}","${pattern.includesNights}","${pattern.nightDays}","${pattern.alternatesShifts}"\n`
       }
     }
 

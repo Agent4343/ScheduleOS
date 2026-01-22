@@ -1,4 +1,5 @@
 import { Resend } from "resend"
+import { escapeHtml } from "./utils"
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
@@ -48,24 +49,24 @@ export function timeOffRequestEmail(
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #1a1a1a;">New Time-Off Request</h2>
-      <p><strong>${workerName}</strong> has submitted a time-off request:</p>
+      <p><strong>${escapeHtml(workerName)}</strong> has submitted a time-off request:</p>
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Type:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${requestType}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(requestType)}</td>
         </tr>
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Start Date:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${startDate}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(startDate)}</td>
         </tr>
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>End Date:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${endDate}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(endDate)}</td>
         </tr>
         ${reason ? `
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Reason:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${reason}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(reason)}</td>
         </tr>
         ` : ""}
       </table>
@@ -88,25 +89,25 @@ export function timeOffResponseEmail(
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #1a1a1a;">Time-Off Request ${statusText}</h2>
-      <p>Hi ${workerName},</p>
+      <p>Hi ${escapeHtml(workerName)},</p>
       <p>Your time-off request has been <strong style="color: ${statusColor};">${statusText.toLowerCase()}</strong>.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Type:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${requestType}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(requestType)}</td>
         </tr>
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Start Date:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${startDate}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(startDate)}</td>
         </tr>
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>End Date:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${endDate}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(endDate)}</td>
         </tr>
         ${adminNotes ? `
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Notes:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${adminNotes}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(adminNotes)}</td>
         </tr>
         ` : ""}
       </table>
@@ -119,12 +120,12 @@ export function welcomeEmail(userName: string, loginEmail: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #1a1a1a;">Welcome to ScheduleOS!</h2>
-      <p>Hi ${userName},</p>
+      <p>Hi ${escapeHtml(userName)},</p>
       <p>Your account has been created. You can now log in to view your schedule and request time off.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
         <tr>
           <td style="padding: 10px; border-bottom: 1px solid #eee;"><strong>Email:</strong></td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${loginEmail}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #eee;">${escapeHtml(loginEmail)}</td>
         </tr>
       </table>
       <p>Your administrator will provide you with your temporary password. Please change it after your first login.</p>
