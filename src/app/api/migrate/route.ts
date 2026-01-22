@@ -112,9 +112,14 @@ const migrationStatements = [
 
 export async function GET(request: NextRequest) {
   const migrateKey = request.nextUrl.searchParams.get("key")
+  const expectedKey = process.env.SETUP_KEY
 
   // Require a key for security
-  if (migrateKey !== process.env.SETUP_KEY && migrateKey !== "migrate-2026") {
+  if (!expectedKey) {
+    return NextResponse.json({ error: "Migration key not configured" }, { status: 500 })
+  }
+
+  if (migrateKey !== expectedKey) {
     return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
   }
 
