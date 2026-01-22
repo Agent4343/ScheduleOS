@@ -5,6 +5,8 @@ import { authOptions } from "@/lib/auth"
 import { ShiftType, PositionType } from "@/types"
 import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
 
+export const dynamic = "force-dynamic"
+
 interface OrgSettings {
   minStaffOperators?: number
   minStaffOnshoreControlRoom?: number
