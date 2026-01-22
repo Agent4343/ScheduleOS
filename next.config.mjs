@@ -5,6 +5,11 @@ const nextConfig = {
   // Output standalone for optimal Railway/Docker deployment
   output: "standalone",
 
+  // Enable instrumentation hook for automatic database migrations
+  experimental: {
+    instrumentationHook: true,
+  },
+
   // Include Prisma client in standalone output
   // This is required for Prisma to work correctly in containerized deployments
   outputFileTracingIncludes: {
