@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type") || "all"
 

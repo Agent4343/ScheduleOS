@@ -17,6 +17,10 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (session.user.role === "WORKER" && params.id !== session.user.id) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
     const user = await prisma.user.findFirst({
       where: {
         id: params.id,
@@ -85,6 +89,7 @@ export async function PATCH(
 
     const body = await request.json()
     const validatedData = updateUserSchema.parse(body)
+    const normalizedEmail = validatedData.email?.toLowerCase()
 
     // Verify crew belongs to organization if provided
     if (validatedData.crewId) {
@@ -104,7 +109,7 @@ export async function PATCH(
       where: { id: params.id },
       data: {
         name: validatedData.name,
-        email: validatedData.email,
+        email: normalizedEmail,
         role: validatedData.role,
         position: validatedData.position,
         positionType: validatedData.positionType,
