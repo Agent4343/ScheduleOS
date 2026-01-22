@@ -44,7 +44,7 @@ If you accidentally committed secrets to the repository:
 3. **Remove from history** - Use `git filter-repo` or BFG Repo-Cleaner to remove secrets from Git history:
    ```bash
    # First, identify which files/commits contain secrets
-   git log -p --all -S "your-secret-keyword" --source --all
+   git log -p -S "your-secret-keyword" --source --all
    
    # Using BFG Repo-Cleaner to replace secret strings (recommended)
    # Create a file with secret strings to replace, one per line
@@ -54,6 +54,9 @@ If you accidentally committed secrets to the repository:
    
    # Or to delete specific files completely
    bfg --delete-files 'secrets.env'
+   
+   # After BFG, clean up references and garbage collect
+   git reflog expire --expire=now --all && git gc --prune=now --aggressive
    
    # Using git filter-repo to remove specific files
    git filter-repo --path 'path/to/secret-file.env' --invert-paths
