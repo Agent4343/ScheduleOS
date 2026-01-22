@@ -2,8 +2,19 @@ import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
 export default withAuth(
-  function middleware(_req) {
-    const response = NextResponse.next()
+  function middleware(req) {
+    const nonceBytes = new Uint8Array(16)
+    crypto.getRandomValues(nonceBytes)
+    const nonce = btoa(String.fromCharCode(...nonceBytes))
+
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("x-nonce", nonce)
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
 
     // Security headers
     response.headers.set("X-Content-Type-Options", "nosniff")
@@ -17,9 +28,21 @@ export default withAuth(
 
     // CSP header for production
     if (process.env.NODE_ENV === "production") {
+      const csp = [
+        "default-src 'self'",
+        `script-src 'self' 'nonce-${nonce}'`,
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+      ].join("; ")
+
       response.headers.set(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io"
+        csp
       )
     }
 
