@@ -226,7 +226,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
@@ -272,6 +272,14 @@ export async function PATCH(request: NextRequest) {
 
     if (!existingRequest) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 })
+    }
+
+    // Prevent supervisors from approving their own requests
+    if (existingRequest.userId === session.user.id) {
+      return NextResponse.json(
+        { error: "You cannot approve your own time-off request" },
+        { status: 403 }
+      )
     }
 
     if (existingRequest.status !== "PENDING") {
