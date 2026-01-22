@@ -43,11 +43,23 @@ If you accidentally committed secrets to the repository:
 2. **Update your deployment** - Set the new secrets in your hosting platform
 3. **Remove from history** - Use `git filter-repo` or BFG Repo-Cleaner to remove secrets from Git history:
    ```bash
-   # Using git filter-repo (recommended)
-   git filter-repo --path-glob '**/*secrets*' --invert-paths
+   # First, identify which files/commits contain secrets
+   git log -p --all -S "your-secret-keyword" --source --all
    
-   # Or using BFG Repo-Cleaner
-   bfg --delete-files secrets.txt
+   # Using BFG Repo-Cleaner to replace secret strings (recommended)
+   # Create a file with secret strings to replace, one per line
+   echo "sk_live_secret123" >> secrets.txt
+   echo "supersecretvalue" >> secrets.txt
+   bfg --replace-text secrets.txt
+   
+   # Or to delete specific files completely
+   bfg --delete-files 'secrets.env'
+   
+   # Using git filter-repo to remove specific files
+   git filter-repo --path 'path/to/secret-file.env' --invert-paths
+   
+   # Or to remove text patterns from all files
+   git filter-repo --replace-text <(echo "regex:sk_live_[a-zA-Z0-9]+==>***REMOVED***")
    ```
 4. **Force push** - After cleaning history (be careful, coordinate with team)
 
