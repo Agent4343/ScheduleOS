@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateUserSchema } from "@/lib/validations"
+import { logAudit, AuditAction } from "@/lib/audit-log"
+import { getClientIP } from "@/lib/rate-limit"
 
 export async function GET(
   request: NextRequest,
@@ -131,6 +133,19 @@ export async function PATCH(
       },
     })
 
+    // Log audit event
+    await logAudit({
+      action: AuditAction.USER_UPDATED,
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      targetId: params.id,
+      targetType: "User",
+      metadata: {
+        changes: validatedData,
+      },
+      ipAddress: getClientIP(request),
+    })
+
     return NextResponse.json({
       success: true,
       data: user,
@@ -141,7 +156,7 @@ export async function PATCH(
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
@@ -186,6 +201,16 @@ export async function DELETE(
 
     await prisma.user.delete({
       where: { id: params.id },
+    })
+
+    // Log audit event
+    await logAudit({
+      action: AuditAction.USER_DELETED,
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      targetId: params.id,
+      targetType: "User",
+      ipAddress: getClientIP(request),
     })
 
     return NextResponse.json({

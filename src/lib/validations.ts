@@ -12,18 +12,28 @@ export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z
     .string()
-    .min(8, "Password must be at least 8 characters")
+    .min(12, "Password must be at least 12 characters")
     .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      "Password must contain at least one uppercase letter, one lowercase letter, and one number"
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/])/,
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
     ),
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  organizationName: z.string().min(2, "Organization name must be at least 2 characters").optional(),
+  name: z.string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+  organizationName: z.string()
+    .min(2, "Organization name must be at least 2 characters")
+    .max(100, "Organization name must be at most 100 characters")
+    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters")
+    .optional(),
 })
 
 // Organization validations
 export const createOrganizationSchema = z.object({
-  name: z.string().min(2, "Organization name must be at least 2 characters"),
+  name: z.string()
+    .min(2, "Organization name must be at least 2 characters")
+    .max(100, "Organization name must be at most 100 characters")
+    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
   settings: z.object({
     timezone: z.string().default("America/St_Johns"),
     weekStartsOn: z.number().min(0).max(6).default(0),
@@ -38,10 +48,16 @@ export const updateOrganizationSchema = createOrganizationSchema.partial()
 // User validations
 export const createUserSchema = z.object({
   email: z.string().email("Invalid email address"),
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  name: z.string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
-  position: z.string().optional(),
+  position: z.string()
+    .max(100, "Position must be at most 100 characters")
+    .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
+    .optional(),
   positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   phone: z.string().optional(),
   crewId: z.string().optional(),
@@ -53,8 +69,13 @@ export const updateUserSchema = createUserSchema.partial()
 
 // Crew validations
 export const createCrewSchema = z.object({
-  name: z.string().min(1, "Crew name is required").max(50),
-  description: z.string().max(500).optional(),
+  name: z.string()
+    .min(1, "Crew name is required")
+    .max(50, "Crew name must be at most 50 characters")
+    .regex(/^[a-zA-Z0-9\s\-_]+$/, "Crew name contains invalid characters"),
+  description: z.string()
+    .max(500, "Description must be at most 500 characters")
+    .optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format"),
   rotationPatternId: z.string().optional(),
 })

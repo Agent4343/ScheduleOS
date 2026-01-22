@@ -230,7 +230,7 @@ const sqlStatements = [
 export async function GET(request: NextRequest) {
   const setupKey = request.nextUrl.searchParams.get("key")
 
-  if (setupKey !== process.env.SETUP_KEY && setupKey !== "initial-setup-2026") {
+  if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
     return NextResponse.json({ error: "Invalid setup key" }, { status: 401 })
   }
 

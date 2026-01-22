@@ -4,6 +4,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { prisma } from "./prisma"
 import { UserRole } from "@prisma/client"
+import { rateLimit, rateLimitPresets } from "./rate-limit"
 
 declare module "next-auth" {
   interface Session {
@@ -53,6 +54,13 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           throw new Error("Email and password are required")
+        }
+
+        // Apply rate limiting based on email
+        const rateLimitResult = rateLimit(`login:${credentials.email.toLowerCase()}`, rateLimitPresets.auth)
+        
+        if (!rateLimitResult.success) {
+          throw new Error("Too many login attempts. Please try again later.")
         }
 
         const user = await prisma.user.findUnique({

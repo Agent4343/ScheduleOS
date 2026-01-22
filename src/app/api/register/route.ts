@@ -3,8 +3,17 @@ import { prisma } from "@/lib/prisma"
 import { hashPassword } from "@/lib/auth"
 import { registerSchema } from "@/lib/validations"
 import { generateSlug } from "@/lib/utils"
+import { rateLimit, rateLimitResponse, rateLimitPresets, getClientIP } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
+  // Apply rate limiting
+  const clientIP = getClientIP(request)
+  const rateLimitResult = rateLimit(`register:${clientIP}`, rateLimitPresets.auth)
+  
+  if (!rateLimitResult.success) {
+    return rateLimitResponse(rateLimitResult.resetIn)
+  }
+
   try {
     const body = await request.json()
     const validatedData = registerSchema.parse(body)
@@ -183,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: "Invalid input data" },
         { status: 400 }
       )
     }
