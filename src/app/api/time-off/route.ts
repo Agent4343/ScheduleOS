@@ -6,6 +6,8 @@ import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/va
 import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/timezone"
 import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
+import { logAudit, AuditAction } from "@/lib/audit-log"
+import { getClientIP } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -298,6 +300,23 @@ export async function PATCH(request: NextRequest) {
         approvedById: session.user.id,
         approvedAt: new Date(),
       },
+    })
+
+    // Log audit event
+    await logAudit({
+      action: validatedData.status === "APPROVED" ? AuditAction.TIME_OFF_APPROVED : AuditAction.TIME_OFF_DENIED,
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      targetId: requestId,
+      targetType: "TimeOffRequest",
+      metadata: {
+        requestUserId: existingRequest.userId,
+        startDate: existingRequest.startDate,
+        endDate: existingRequest.endDate,
+        type: existingRequest.type,
+        adminNotes: validatedData.adminNotes,
+      },
+      ipAddress: getClientIP(request),
     })
 
     // If approved, create schedule entries
