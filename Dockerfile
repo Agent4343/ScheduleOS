@@ -24,10 +24,13 @@ ARG RESEND_API_KEY
 # Do not set ENV defaults for secrets here to avoid leaking them into image layers. If you must use build-time secrets use Docker BuildKit: `--secret`.
 
 # Define NIXPACKS_PATH with fallback to avoid undefined variable errors
+# NIXPACKS_PATH is used by Railway's Nixpacks builder. If undefined, it can cause build failures when referenced in build scripts.
+# Setting a safe fallback ensures compatibility across different deployment environments.
 ARG NIXPACKS_PATH
 ENV NIXPACKS_PATH=${NIXPACKS_PATH:-/usr/local/nixpacks}
 
-# Build arguments (non-secret)
+# Build arguments (needed for Prisma generation and Next.js build)
+# DATABASE_URL may contain credentials - prefer using BuildKit --secret or set at runtime
 ARG DATABASE_URL
 ARG DIRECT_URL
 ARG NEXTAUTH_URL
