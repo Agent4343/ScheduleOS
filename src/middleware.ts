@@ -5,7 +5,11 @@ export default withAuth(
   function middleware(req) {
     const nonceBytes = new Uint8Array(16)
     crypto.getRandomValues(nonceBytes)
-    const nonce = btoa(String.fromCharCode(...nonceBytes))
+    let nonceBinary = ""
+    for (let i = 0; i < nonceBytes.length; i++) {
+      nonceBinary += String.fromCharCode(nonceBytes[i])
+    }
+    const nonce = btoa(nonceBinary)
 
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set("x-nonce", nonce)
