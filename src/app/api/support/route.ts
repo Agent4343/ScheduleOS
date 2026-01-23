@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { z } from "zod"
 import { authOptions } from "@/lib/auth"
 import { sendEmail } from "@/lib/email"
-import { logAudit } from "@/lib/audit-log"
+import { AuditAction, logAudit } from "@/lib/audit-log"
 
 const supportSchema = z.object({
   category: z.string().optional(),
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     })
 
     await logAudit({
-      action: "support.request",
+      action: AuditAction.SUPPORT_REQUEST,
       userId: session.user.id,
       organizationId: session.user.organizationId,
       metadata: {

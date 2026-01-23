@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma"
+
 export enum AuditAction {
   USER_CREATED = "USER_CREATED",
   USER_UPDATED = "USER_UPDATED",
@@ -10,6 +12,7 @@ export enum AuditAction {
   CREW_DELETED = "CREW_DELETED",
   ORGANIZATION_UPDATED = "ORGANIZATION_UPDATED",
   ROLE_CHANGED = "ROLE_CHANGED",
+  SUPPORT_REQUEST = "SUPPORT_REQUEST",
 }
 
 interface AuditLogData {
