@@ -74,6 +74,18 @@ interface StaffingGap {
   availableWorkers: GapWorker[]
 }
 
+interface CoverageRow {
+  date: string
+  shiftType: string
+  ruleName: string
+  required: number
+  scheduled: number
+  shortage: number
+  crew?: { id: string; name: string }
+  positionType?: string
+  role?: string
+}
+
 const ROLE_OPTIONS = [
   { value: "", label: "All Roles" },
   { value: "WORKER", label: "Worker" },
@@ -116,6 +128,9 @@ export default function StaffingPage() {
   const [totalGaps, setTotalGaps] = useState(0)
   const [totalDays, setTotalDays] = useState(0)
   const [loadingGaps, setLoadingGaps] = useState(true)
+  const [coverageRows, setCoverageRows] = useState<CoverageRow[]>([])
+  const [coverageSummary, setCoverageSummary] = useState({ totalRows: 0, satisfied: 0, unsatisfied: 0 })
+  const [loadingCoverage, setLoadingCoverage] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
   const [assignSelections, setAssignSelections] = useState<Record<string, string>>({})
@@ -343,6 +358,39 @@ export default function StaffingPage() {
     }
   }, [startDate, endDate, crewId, shiftType, role, positionType])
 
+  const fetchCoverage = useCallback(async () => {
+    setLoadingCoverage(true)
+
+    try {
+      const params = new URLSearchParams({
+        startDate,
+        endDate,
+      })
+      if (crewId) params.set("crewId", crewId)
+      if (shiftType) params.set("shiftType", shiftType)
+      if (role) params.set("role", role)
+      if (positionType) params.set("positionType", positionType)
+
+      const response = await fetch(`/api/staffing-coverage?${params.toString()}`)
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch staffing coverage.")
+      }
+
+      setCoverageRows(data.data.rows || [])
+      setCoverageSummary({
+        totalRows: data.data.totalRows || 0,
+        satisfied: data.data.satisfied || 0,
+        unsatisfied: data.data.unsatisfied || 0,
+      })
+    } catch (err) {
+      console.error("Failed to load staffing coverage:", err)
+    } finally {
+      setLoadingCoverage(false)
+    }
+  }, [startDate, endDate, crewId, shiftType, role, positionType])
+
   const getGapKey = (gap: StaffingGap) => {
     return [
       gap.date,
@@ -401,7 +449,8 @@ export default function StaffingPage() {
 
   useEffect(() => {
     fetchGaps()
-  }, [fetchGaps])
+    fetchCoverage()
+  }, [fetchGaps, fetchCoverage])
 
   const handleExport = () => {
     const params = new URLSearchParams({
@@ -758,10 +807,94 @@ export default function StaffingPage() {
           ) : null}
 
           <div className="flex justify-end">
-            <Button onClick={fetchGaps} disabled={loadingGaps}>
-              {loadingGaps ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Filters"}
+            <Button
+              onClick={() => {
+                fetchGaps()
+                fetchCoverage()
+              }}
+              disabled={loadingGaps || loadingCoverage}
+            >
+              {loadingGaps || loadingCoverage ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Apply Filters"
+              )}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Coverage Summary</CardTitle>
+          <CardDescription>See if minimums are satisfied by date and shift.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Total Checks</CardDescription>
+                <CardTitle className="text-2xl">{coverageSummary.totalRows}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Minimums Met</CardDescription>
+                <CardTitle className="text-2xl">{coverageSummary.satisfied}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Minimums Missed</CardDescription>
+                <CardTitle className="text-2xl">{coverageSummary.unsatisfied}</CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+
+          {loadingCoverage ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : coverageRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No coverage checks found for this range.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Shift</TableHead>
+                  <TableHead>Rule</TableHead>
+                  <TableHead>Required</TableHead>
+                  <TableHead>Scheduled</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Crew</TableHead>
+                  <TableHead>Position</TableHead>
+                  <TableHead>Role</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {coverageRows.map((row, index) => (
+                  <TableRow key={`${row.date}-${row.shiftType}-${row.ruleName}-${index}`}>
+                    <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
+                    <TableCell>{row.shiftType}</TableCell>
+                    <TableCell>{row.ruleName}</TableCell>
+                    <TableCell>{row.required}</TableCell>
+                    <TableCell>{row.scheduled}</TableCell>
+                    <TableCell>
+                      {row.shortage === 0 ? (
+                        <Badge variant="default">Met</Badge>
+                      ) : (
+                        <Badge variant="destructive">Missing {row.shortage}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>{row.crew?.name || "Org-wide"}</TableCell>
+                    <TableCell>{row.positionType || "Any"}</TableCell>
+                    <TableCell>{row.role || "Any"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
