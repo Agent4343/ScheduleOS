@@ -41,9 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Price not configured for this plan" }, { status: 500 })
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    })
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
     const organization = await prisma.organization.findUnique({
       where: { id: session.user.organizationId },
