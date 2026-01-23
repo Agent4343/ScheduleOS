@@ -249,10 +249,20 @@ export default function ReportsPage() {
     + scheduleStats.sickDays
     + scheduleStats.leaveDays
     + scheduleStats.shutdownDays
-  const totalWorkDays = Math.max(scheduleStats.totalSchedules - nonWorkingDays, 0)
-  const workPercentage = scheduleStats.totalSchedules > 0
-    ? Math.round((totalWorkDays / scheduleStats.totalSchedules) * 100)
+  const workingDays = Math.max(scheduleStats.totalSchedules - nonWorkingDays, 0)
+
+  const rangeStart = new Date(`${startDate}T00:00:00.000Z`)
+  const rangeEnd = new Date(`${endDate}T00:00:00.000Z`)
+  const totalCalendarDays = Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())
+    ? 0
+    : Math.max(Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24)) + 1, 0)
+  const expectedWorkerDays = workerStats.activeWorkers * totalCalendarDays
+
+  const workPercentage = expectedWorkerDays > 0
+    ? Math.round((workingDays / expectedWorkerDays) * 100)
     : 0
+
+  const coverageDelta = expectedWorkerDays - scheduleStats.totalSchedules
 
   const breakdownItems = [
     { key: "day", label: "Day Shifts", count: scheduleStats.dayShifts, color: "bg-green-500", textColor: "text-green-500", icon: Sun },
@@ -385,12 +395,16 @@ export default function ReportsPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Scheduled Days</CardDescription>
-                <CardTitle className="text-3xl">{scheduleStats.totalSchedules}</CardTitle>
+                <CardTitle className="text-3xl">{workingDays}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
-                  <span>In selected period</span>
+                  <span>
+                    {expectedWorkerDays > 0
+                      ? `${expectedWorkerDays} worker-days possible`
+                      : "In selected period"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -403,11 +417,22 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />
-                  <span>Days worked vs total</span>
+                  <span>Days worked vs possible</span>
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          {expectedWorkerDays > 0 && coverageDelta !== 0 ? (
+            <Alert variant="warning">
+              <AlertTitle>Schedule coverage mismatch</AlertTitle>
+              <AlertDescription>
+                {coverageDelta > 0
+                  ? `${coverageDelta} worker-days are missing from the schedule for this period.`
+                  : `${Math.abs(coverageDelta)} worker-days exceed the expected total. Check for duplicate schedules.`}
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
           {/* Schedule Breakdown */}
           <div className="grid lg:grid-cols-2 gap-6">
