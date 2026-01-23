@@ -510,6 +510,13 @@ function SchedulePageContent() {
     setScheduleEditSuccess(null)
   }
 
+  function handleScheduleEditStartChange(value: string) {
+    setScheduleEditStartDate(value)
+    if (scheduleEditEndDate && value > scheduleEditEndDate) {
+      setScheduleEditEndDate(value)
+    }
+  }
+
   async function saveScheduleEdit() {
     if (!scheduleEditWorker || !scheduleEditStartDate || !scheduleEditEndDate) return
 
@@ -1054,7 +1061,7 @@ function SchedulePageContent() {
                 id="scheduleStartDate"
                 type="date"
                 value={scheduleEditStartDate}
-                onChange={(e) => setScheduleEditStartDate(e.target.value)}
+                onChange={(e) => handleScheduleEditStartChange(e.target.value)}
               />
             </div>
             <div className="space-y-2">
