@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
+import { PageHeader } from "@/components/layout/page-header"
 import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
@@ -619,27 +620,24 @@ function SchedulePageContent() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Schedule Calendar</h1>
-          <p className="text-muted-foreground">
-            {currentYear} - Full Year View - {sortedWorkers.length} Workers
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
-            This Year
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-semibold px-4 text-lg">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Schedule Calendar"
+        description={`${currentYear} - Full Year View - ${sortedWorkers.length} Workers`}
+        actions={(
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+              This Year
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-semibold px-4 text-lg">{currentYear}</span>
+            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      />
 
       {/* Filter */}
       <div className="flex items-center gap-4">

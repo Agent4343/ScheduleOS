@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
+import { PageHeader } from "@/components/layout/page-header"
 import {
   Building2,
   Calendar,
@@ -655,20 +656,16 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your organization settings and preferences
-          </p>
-        </div>
-        {isAdmin && (
+      <PageHeader
+        title="Settings"
+        description="Manage your organization settings and preferences"
+        actions={isAdmin ? (
           <Button onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4 mr-2" />
             {saving ? "Saving..." : "Save All"}
           </Button>
-        )}
-      </div>
+        ) : null}
+      />
 
       {message && (
         <Alert variant={message.includes("success") ? "default" : "destructive"}>

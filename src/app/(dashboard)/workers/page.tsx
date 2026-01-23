@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { PageHeader } from "@/components/layout/page-header"
 import {
   Table,
   TableBody,
@@ -97,6 +99,7 @@ export default function WorkersPage() {
     status: "ACTIVE" as UserStatus,
   })
   const [submitting, setSubmitting] = useState(false)
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
 
   useEffect(() => {
     async function fetchData() {
@@ -162,6 +165,7 @@ export default function WorkersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setFeedback(null)
 
     try {
       const response = await fetch("/api/users", {
@@ -190,12 +194,13 @@ export default function WorkersPage() {
           hireDate: "",
           password: "",
         })
+        setFeedback({ type: "success", message: "Worker created successfully." })
       } else {
-        alert(data.error || "Failed to create worker")
+        setFeedback({ type: "error", message: data.error || "Failed to create worker" })
       }
     } catch (error) {
       console.error("Failed to create worker:", error)
-      alert("Failed to create worker")
+      setFeedback({ type: "error", message: "Failed to create worker" })
     } finally {
       setSubmitting(false)
     }
@@ -205,6 +210,7 @@ export default function WorkersPage() {
     e.preventDefault()
     if (!editingUser) return
     setSubmitting(true)
+    setFeedback(null)
 
     try {
       const response = await fetch(`/api/users/${editingUser.id}`, {
@@ -230,12 +236,13 @@ export default function WorkersPage() {
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        setFeedback({ type: "success", message: "Worker updated successfully." })
       } else {
-        alert(data.error || "Failed to update worker")
+        setFeedback({ type: "error", message: data.error || "Failed to update worker" })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      alert("Failed to update worker")
+      setFeedback({ type: "error", message: "Failed to update worker" })
     } finally {
       setSubmitting(false)
     }
@@ -246,6 +253,7 @@ export default function WorkersPage() {
       return
     }
     setOpenMenuId(null)
+    setFeedback(null)
 
     try {
       const response = await fetch(`/api/users/${userId}`, {
@@ -256,30 +264,36 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => prev.filter((u) => u.id !== userId))
+        setFeedback({ type: "success", message: "Worker deleted successfully." })
       } else {
-        alert(data.error || "Failed to delete worker")
+        setFeedback({ type: "error", message: data.error || "Failed to delete worker" })
       }
     } catch (error) {
       console.error("Failed to delete worker:", error)
-      alert("Failed to delete worker")
+      setFeedback({ type: "error", message: "Failed to delete worker" })
     }
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Workers</h1>
-          <p className="text-muted-foreground">
-            Manage your workforce ({users.length} total)
-          </p>
-        </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Worker
-        </Button>
-      </div>
+      <PageHeader
+        title="Workers"
+        description={`Manage your workforce (${users.length} total)`}
+        actions={(
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Worker
+          </Button>
+        )}
+      />
+
+      {feedback ? (
+        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
+          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
+          <AlertDescription>{feedback.message}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">

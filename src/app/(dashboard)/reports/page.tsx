@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { PageHeader } from "@/components/layout/page-header"
 import {
   BarChart3,
   Users,
@@ -284,23 +285,21 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Reports</h1>
-          <p className="text-muted-foreground mt-1">
-            View scheduling statistics and workforce metrics
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={handleExport}
-          disabled={isLoading}
-        >
-          <Download className="h-4 w-4" />
-          Export CSV
-        </Button>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="View scheduling statistics and workforce metrics"
+        actions={(
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExport}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+        )}
+      />
 
       {/* Date Range Filter */}
       <Card>

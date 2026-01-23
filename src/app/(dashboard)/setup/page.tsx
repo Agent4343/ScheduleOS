@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PageHeader } from "@/components/layout/page-header"
 import {
   Calendar,
   Users,
@@ -303,12 +304,10 @@ export default function SetupPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Schedule Setup</h1>
-        <p className="text-muted-foreground mt-1">
-          Quickly set up schedules for your workers in just a few steps
-        </p>
-      </div>
+      <PageHeader
+        title="Schedule Setup"
+        description="Quickly set up schedules for your workers in just a few steps"
+      />
 
       {error && (
         <Alert variant="destructive">
