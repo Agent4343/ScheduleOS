@@ -909,7 +909,7 @@ function SchedulePageContent() {
                               className={cn(
                                 "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
                                 sizeClasses.cell,
-                                !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
+                                !style && "bg-black",
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
                               style={
