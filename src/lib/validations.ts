@@ -31,21 +31,36 @@ export const registerSchema = z.object({
 })
 
 // Organization validations
+const shiftColorSchema = z.object({
+  bg: z.string(),
+  text: z.string(),
+})
+
+const organizationSettingsSchema = z.object({
+  timezone: z.string().default("America/St_Johns"),
+  weekStartsOn: z.number().min(0).max(6).default(0),
+  minStaffingAlertEnabled: z.boolean().default(true),
+  emailNotificationsEnabled: z.boolean().default(true),
+  smsNotificationsEnabled: z.boolean().default(false),
+  dateFormat: z.string().optional(),
+  minStaffingPerCrew: z.number().int().min(0).optional(),
+  minStaffOperators: z.number().int().min(0).default(1),
+  minStaffOnshoreControlRoom: z.number().int().min(0).default(1),
+  shiftColors: z.record(shiftColorSchema).optional(),
+}).passthrough()
+
 export const createOrganizationSchema = z.object({
   name: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
-  settings: z.object({
-    timezone: z.string().default("America/St_Johns"),
-    weekStartsOn: z.number().min(0).max(6).default(0),
-    minStaffingAlertEnabled: z.boolean().default(true),
-    emailNotificationsEnabled: z.boolean().default(true),
-    smsNotificationsEnabled: z.boolean().default(false),
-  }).optional(),
+  settings: organizationSettingsSchema.optional(),
 })
 
-export const updateOrganizationSchema = createOrganizationSchema.partial()
+export const updateOrganizationSchema = z.object({
+  name: createOrganizationSchema.shape.name.optional(),
+  settings: organizationSettingsSchema.partial().optional(),
+})
 
 // User validations
 export const createUserSchema = z.object({

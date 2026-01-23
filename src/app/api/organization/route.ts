@@ -51,11 +51,25 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
     const validatedData = updateOrganizationSchema.parse(body)
 
+    const existingOrganization = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: { settings: true },
+    })
+
+    const existingSettings =
+      existingOrganization?.settings && typeof existingOrganization.settings === "object"
+        ? (existingOrganization.settings as Record<string, unknown>)
+        : {}
+
+    const mergedSettings = validatedData.settings
+      ? { ...existingSettings, ...validatedData.settings }
+      : undefined
+
     const organization = await prisma.organization.update({
       where: { id: session.user.organizationId },
       data: {
         ...(validatedData.name && { name: validatedData.name }),
-        ...(validatedData.settings && { settings: validatedData.settings }),
+        ...(mergedSettings && { settings: mergedSettings }),
       },
     })
 
