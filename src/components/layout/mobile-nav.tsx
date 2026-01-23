@@ -13,6 +13,7 @@ import {
   CalendarOff,
   BarChart3,
   Wand2,
+  AlertTriangle,
   X,
 } from "lucide-react"
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Staffing Gaps", href: "/staffing-gaps", icon: AlertTriangle },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
