@@ -46,7 +46,7 @@ const organizationSettingsSchema = z.object({
   minStaffingPerCrew: z.number().int().min(0).optional(),
   minStaffOperators: z.number().int().min(0).default(1),
   minStaffOnshoreControlRoom: z.number().int().min(0).default(1),
-  shiftColors: z.record(shiftColorSchema).optional(),
+  shiftColors: z.record(z.string(), shiftColorSchema).optional(),
 }).passthrough()
 
 export const createOrganizationSchema = z.object({
