@@ -188,6 +188,7 @@ function SchedulePageContent() {
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
   const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
   const [workerSort, setWorkerSort] = useState<WorkerSort>("custom")
+  const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -699,6 +700,13 @@ function SchedulePageContent() {
         description={`${currentYear} - Full Year View - ${sortedWorkers.length} Workers`}
         actions={(
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHideFiltersLegend((prev) => !prev)}
+            >
+              {hideFiltersLegend ? "Show filters/legend" : "Hide filters/legend"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
               This Year
             </Button>
@@ -713,75 +721,79 @@ function SchedulePageContent() {
         )}
       />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Filter by Crew:</span>
-          <Select
-            id="crew-filter"
-            name="crew-filter"
-            value={selectedCrew}
-            onChange={(e) => setSelectedCrew(e.target.value)}
-            options={[
-              { value: "", label: "All Crews" },
-              ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-            ]}
-            className="w-40"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Sort by:</span>
-          <Select
-            id="worker-sort"
-            name="worker-sort"
-            value={workerSort}
-            onChange={(e) => setWorkerSort(e.target.value as WorkerSort)}
-            options={WORKER_SORT_OPTIONS.map((option) => ({
-              value: option.value,
-              label: option.label,
-            }))}
-            className="w-44"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Calendar size:</span>
-          <Select
-            id="calendar-size"
-            name="calendar-size"
-            value={calendarSize}
-            onChange={(e) => setCalendarSize(e.target.value as CalendarSize)}
-            options={CALENDAR_SIZE_OPTIONS.map((option) => ({
-              value: option.value,
-              label: option.label,
-            }))}
-            className="w-44"
-          />
-        </div>
-      </div>
+      {!hideFiltersLegend && (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Filter by Crew:</span>
+              <Select
+                id="crew-filter"
+                name="crew-filter"
+                value={selectedCrew}
+                onChange={(e) => setSelectedCrew(e.target.value)}
+                options={[
+                  { value: "", label: "All Crews" },
+                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+                ]}
+                className="w-40"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Sort by:</span>
+              <Select
+                id="worker-sort"
+                name="worker-sort"
+                value={workerSort}
+                onChange={(e) => setWorkerSort(e.target.value as WorkerSort)}
+                options={WORKER_SORT_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                className="w-44"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Calendar size:</span>
+              <Select
+                id="calendar-size"
+                name="calendar-size"
+                value={calendarSize}
+                onChange={(e) => setCalendarSize(e.target.value as CalendarSize)}
+                options={CALENDAR_SIZE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                className="w-44"
+              />
+            </div>
+          </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: style.bg, color: style.text }}
-          >
-            <span className="font-bold">{style.label}</span>
-            <span>= {type.replace("_", " ")}</span>
+          {/* Legend */}
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+              <div
+                key={type}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: style.bg, color: style.text }}
+              >
+                <span className="font-bold">{style.label}</span>
+                <span>= {type.replace("_", " ")}</span>
+              </div>
+            ))}
+            {customShiftTypes.filter(t => t.isActive).map((t) => (
+              <div
+                key={t.code}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: t.color, color: t.textColor }}
+              >
+                <span className="font-bold">{t.code}</span>
+                <span>= {t.name}</span>
+              </div>
+            ))}
           </div>
-        ))}
-        {customShiftTypes.filter(t => t.isActive).map((t) => (
-          <div
-            key={t.code}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: t.color, color: t.textColor }}
-          >
-            <span className="font-bold">{t.code}</span>
-            <span>= {t.name}</span>
-          </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {/* Schedule Table */}
       <Card>
