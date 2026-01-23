@@ -394,7 +394,7 @@ export default function ReportsPage() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Scheduled Days</CardDescription>
+                <CardDescription>Work Days</CardDescription>
                 <CardTitle className="text-3xl">{workingDays}</CardTitle>
               </CardHeader>
               <CardContent>
