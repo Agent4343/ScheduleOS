@@ -10,6 +10,7 @@ const sqlStatements = [
   `DO $$ BEGIN CREATE TYPE "TimeOffType" AS ENUM ('VACATION', 'SICK', 'PERSONAL', 'BEREAVEMENT', 'JURY_DUTY', 'OTHER'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "RequestStatus" AS ENUM ('PENDING', 'APPROVED', 'DENIED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
   `DO $$ BEGIN CREATE TYPE "NotificationType" AS ENUM ('SCHEDULE_CHANGE', 'TIME_OFF_REQUEST', 'TIME_OFF_APPROVED', 'TIME_OFF_DENIED', 'STAFFING_ALERT', 'SHIFT_SWAP', 'SYSTEM'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+  `DO $$ BEGIN CREATE TYPE "ShiftSwapStatus" AS ENUM ('PENDING', 'APPROVED', 'DENIED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
 
   // Organization table
   `CREATE TABLE IF NOT EXISTS "Organization" (
@@ -225,6 +226,41 @@ const sqlStatements = [
     "createdById" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
     UNIQUE("organizationId", "email")
   )`,
+
+  // AuditLog table
+  `CREATE TABLE IF NOT EXISTS "AuditLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "action" TEXT NOT NULL,
+    "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
+    "targetId" TEXT,
+    "targetType" TEXT,
+    "metadata" JSONB,
+    "ipAddress" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS "AuditLog_organizationId_createdAt_idx" ON "AuditLog"("organizationId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "AuditLog_userId_idx" ON "AuditLog"("userId")`,
+
+  // ShiftSwapRequest table
+  `CREATE TABLE IF NOT EXISTS "ShiftSwapRequest" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "date" DATE NOT NULL,
+    "shiftType" "ShiftType" NOT NULL,
+    "status" "ShiftSwapStatus" NOT NULL DEFAULT 'PENDING',
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "requesterId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "targetUserId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "approvedById" TEXT REFERENCES "User"("id") ON DELETE SET NULL,
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_organizationId_status_idx" ON "ShiftSwapRequest"("organizationId", "status")`,
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_requesterId_idx" ON "ShiftSwapRequest"("requesterId")`,
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_targetUserId_idx" ON "ShiftSwapRequest"("targetUserId")`,
 ]
 
 export async function GET(request: NextRequest) {

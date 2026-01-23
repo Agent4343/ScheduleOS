@@ -75,6 +75,39 @@ export default function SetupPage() {
   const [customEndDate, setCustomEndDate] = useState("")
   const [startShift, setStartShift] = useState<"day" | "night">("day")
   const [clearOverrides, setClearOverrides] = useState(false)
+  const assignedWorkersCount = workers.filter((worker) => worker.crewId).length
+  const hasWorkers = workers.length > 0
+  const hasCrews = crews.length > 0
+  const hasPatterns = patterns.length > 0
+  const hasAssignments = assignedWorkersCount > 0
+  const setupSteps = [
+    {
+      title: "Add workers",
+      description: `${workers.length} worker${workers.length === 1 ? "" : "s"} added`,
+      completed: hasWorkers,
+    },
+    {
+      title: "Create crews",
+      description: `${crews.length} crew${crews.length === 1 ? "" : "s"} created`,
+      completed: hasCrews,
+    },
+    {
+      title: "Assign workers to crews",
+      description: `${assignedWorkersCount}/${workers.length} assigned`,
+      completed: hasAssignments,
+    },
+    {
+      title: "Define rotation patterns",
+      description: `${patterns.length} pattern${patterns.length === 1 ? "" : "s"} ready`,
+      completed: hasPatterns,
+    },
+    {
+      title: "Generate schedules",
+      description: "Create shifts for upcoming periods",
+      completed: false,
+    },
+  ]
+  const completedSteps = setupSteps.filter((step) => step.completed).length
 
   // Calculate end date from duration or custom selection
   const getEndDate = () => {
@@ -308,6 +341,42 @@ export default function SetupPage() {
         title="Schedule Setup"
         description="Quickly set up schedules for your workers in just a few steps"
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="h-5 w-5" />
+            Setup Progress
+          </CardTitle>
+          <CardDescription>
+            {completedSteps} of {setupSteps.length} steps completed
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {setupSteps.map((step) => (
+              <div key={step.title} className="flex items-start gap-3 rounded-lg border p-3">
+                {step.completed ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">{step.title}</p>
+                  <p className="text-xs text-muted-foreground">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {completedSteps < setupSteps.length && (
+            <Alert>
+              <AlertDescription>
+                Finish the remaining setup steps to generate accurate schedules and staffing coverage.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       {error && (
         <Alert variant="destructive">

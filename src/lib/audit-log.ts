@@ -40,8 +40,18 @@ export async function logAudit(data: AuditLogData): Promise<void> {
       ipAddress: data.ipAddress,
     }))
 
-    // Could also store in database if needed for compliance
-    // await prisma.auditLog.create({ data: ... })
+    // Store in database for compliance and reporting
+    await prisma.auditLog.create({
+      data: {
+        action: data.action,
+        userId: data.userId,
+        organizationId: data.organizationId,
+        targetId: data.targetId,
+        targetType: data.targetType,
+        metadata: data.metadata ?? undefined,
+        ipAddress: data.ipAddress,
+      },
+    })
   } catch (error) {
     // Don't throw errors from audit logging to avoid disrupting main flows
     console.error("Failed to log audit event:", error)
