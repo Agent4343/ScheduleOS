@@ -313,7 +313,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick links */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <a
           href="/schedule"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
@@ -339,6 +339,15 @@ export default function DashboardPage() {
           <Clock className="h-8 w-8 text-primary mb-2" />
           <h3 className="font-semibold group-hover:text-primary">Time Off Requests</h3>
           <p className="text-sm text-muted-foreground">Review pending requests</p>
+        </a>
+
+        <a
+          href="/staffing"
+          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
+        >
+          <AlertTriangle className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Staffing</h3>
+          <p className="text-sm text-muted-foreground">Review minimums and coverage gaps</p>
         </a>
       </div>
     </div>

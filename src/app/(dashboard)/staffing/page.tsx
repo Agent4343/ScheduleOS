@@ -425,6 +425,19 @@ export default function StaffingPage() {
         )}
       />
 
+      <Card>
+        <CardHeader>
+          <CardTitle>How staffing works</CardTitle>
+          <CardDescription>Understand how minimums and gaps are calculated.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>1. Organization minimums apply to all DAY and NIGHT shifts by position.</p>
+          <p>2. Staffing rules add crew, role, or position-specific minimums.</p>
+          <p>3. Gaps show required vs scheduled and the workers who can cover.</p>
+          <p>4. Assign coverage to create a schedule override for that day.</p>
+        </CardContent>
+      </Card>
+
       {feedback ? (
         <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
           <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
