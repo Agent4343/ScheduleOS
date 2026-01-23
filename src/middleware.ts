@@ -64,6 +64,9 @@ export default withAuth(
           "/api/auth",
           "/api/health",
           "/api/setup",
+          "/api/billing/webhook",
+          "/pricing",
+          "/status",
         ]
 
         // Check if the path is public

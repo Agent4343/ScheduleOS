@@ -36,6 +36,17 @@ const shiftColorSchema = z.object({
   text: z.string(),
 })
 
+const billingSchema = z.object({
+  plan: z.string().optional(),
+  status: z.string().optional(),
+  stripeCustomerId: z.string().optional(),
+  stripeSubscriptionId: z.string().optional(),
+  currentPeriodEnd: z.string().optional(),
+  trialEndsAt: z.string().optional(),
+  seatCount: z.number().int().min(0).optional(),
+  requestedPlan: z.string().optional(),
+})
+
 const organizationSettingsSchema = z.object({
   timezone: z.string().default("America/St_Johns"),
   weekStartsOn: z.number().min(0).max(6).default(0),
@@ -47,6 +58,7 @@ const organizationSettingsSchema = z.object({
   minStaffOperators: z.number().int().min(0).default(1),
   minStaffOnshoreControlRoom: z.number().int().min(0).default(1),
   shiftColors: z.record(z.string(), shiftColorSchema).optional(),
+  billing: billingSchema.optional(),
 }).passthrough()
 
 export const createOrganizationSchema = z.object({
