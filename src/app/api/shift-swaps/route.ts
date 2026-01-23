@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { ShiftType } from "@prisma/client"
+import { ShiftSwapStatus, ShiftType } from "@prisma/client"
 import { toUTCDate } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get("status")
+    const statusParam = searchParams.get("status")
+    const status = statusParam && ["PENDING", "APPROVED", "DENIED", "CANCELLED"].includes(statusParam)
+      ? (statusParam as ShiftSwapStatus)
+      : undefined
 
     const isAdmin = ["ADMIN", "SUPERVISOR"].includes(session.user.role)
     const where = {
