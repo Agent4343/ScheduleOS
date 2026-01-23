@@ -123,6 +123,50 @@ function getYearDays(year: number) {
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+const CALENDAR_SIZE_OPTIONS = [
+  { value: "compact", label: "Compact" },
+  { value: "comfortable", label: "Comfortable" },
+  { value: "large", label: "Large" },
+] as const
+
+type CalendarSize = typeof CALENDAR_SIZE_OPTIONS[number]["value"]
+
+const CALENDAR_SIZE_CLASSES: Record<CalendarSize, {
+  cell: string
+  header: string
+  dayText: string
+  shiftText: string
+}> = {
+  compact: {
+    cell: "w-7 min-w-[28px] h-7",
+    header: "w-7 min-w-[28px]",
+    dayText: "text-xs",
+    shiftText: "text-[10px]",
+  },
+  comfortable: {
+    cell: "w-9 min-w-[36px] h-9",
+    header: "w-9 min-w-[36px]",
+    dayText: "text-sm",
+    shiftText: "text-xs",
+  },
+  large: {
+    cell: "w-11 min-w-[44px] h-11",
+    header: "w-11 min-w-[44px]",
+    dayText: "text-sm",
+    shiftText: "text-sm",
+  },
+}
+
+const WORKER_SORT_OPTIONS = [
+  { value: "custom", label: "Custom order" },
+  { value: "name", label: "Name" },
+  { value: "crew", label: "Crew" },
+  { value: "position", label: "Position" },
+  { value: "role", label: "Role" },
+] as const
+
+type WorkerSort = typeof WORKER_SORT_OPTIONS[number]["value"]
+
 function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
@@ -142,6 +186,8 @@ function SchedulePageContent() {
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
+  const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
+  const [workerSort, setWorkerSort] = useState<WorkerSort>("custom")
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -318,18 +364,37 @@ function SchedulePageContent() {
 
   // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
-    return [...workers].sort((a, b) => {
-      // First sort by custom sortOrder (lower numbers first)
+    const list = [...workers]
+    list.sort((a, b) => {
+      if (workerSort === "name") {
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "crew") {
+        const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
+        if (crewCompare !== 0) return crewCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "position") {
+        const positionCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
+        if (positionCompare !== 0) return positionCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "role") {
+        const roleCompare = (a.role || "ZZZ").localeCompare(b.role || "ZZZ")
+        if (roleCompare !== 0) return roleCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+
+      // Default: custom sortOrder, then crew name, then name
       const sortOrderA = a.sortOrder ?? 999999
       const sortOrderB = b.sortOrder ?? 999999
       if (sortOrderA !== sortOrderB) return sortOrderA - sortOrderB
-      // Then by crew name
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
-      // Finally by worker name
       return (a.name || "").localeCompare(b.name || "")
     })
-  }, [workers])
+    return list
+  }, [workers, workerSort])
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -648,20 +713,50 @@ function SchedulePageContent() {
         )}
       />
 
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground">Filter by Crew:</span>
-        <Select
-          id="crew-filter"
-          name="crew-filter"
-          value={selectedCrew}
-          onChange={(e) => setSelectedCrew(e.target.value)}
-          options={[
-            { value: "", label: "All Crews" },
-            ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-          ]}
-          className="w-40"
-        />
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Filter by Crew:</span>
+          <Select
+            id="crew-filter"
+            name="crew-filter"
+            value={selectedCrew}
+            onChange={(e) => setSelectedCrew(e.target.value)}
+            options={[
+              { value: "", label: "All Crews" },
+              ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+            ]}
+            className="w-40"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Sort by:</span>
+          <Select
+            id="worker-sort"
+            name="worker-sort"
+            value={workerSort}
+            onChange={(e) => setWorkerSort(e.target.value as WorkerSort)}
+            options={WORKER_SORT_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            className="w-44"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Calendar size:</span>
+          <Select
+            id="calendar-size"
+            name="calendar-size"
+            value={calendarSize}
+            onChange={(e) => setCalendarSize(e.target.value as CalendarSize)}
+            options={CALENDAR_SIZE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            className="w-44"
+          />
+        </div>
       </div>
 
       {/* Legend */}
@@ -734,6 +829,7 @@ function SchedulePageContent() {
                     <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
+                        const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
                         const date = new Date(currentYear, month, day)
                         const isWeekend = date.getDay() === 0 || date.getDay() === 6
                         const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
@@ -742,12 +838,17 @@ function SchedulePageContent() {
                           <th
                             key={`${month}-${day}`}
                             className={cn(
-                              "border p-1 text-center font-normal w-8 min-w-[32px]",
+                              "border p-1 text-center font-normal",
+                              sizeClasses.header,
                               isWeekend ? "bg-muted" : "bg-muted/50",
                               isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
                             )}
                           >
-                            <div className={cn("text-sm font-semibold text-foreground", isTodayCell && "text-blue-600 dark:text-blue-300")}>{day}</div>
+                            <div className={cn(
+                              "font-semibold text-foreground",
+                              sizeClasses.dayText,
+                              isTodayCell && "text-blue-600 dark:text-blue-300"
+                            )}>{day}</div>
                           </th>
                         )
                       })
@@ -777,6 +878,7 @@ function SchedulePageContent() {
                       </td>
                       {yearMonths.map(({ month, days }) =>
                         days.map((day) => {
+                          const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
                           const schedule = getScheduleForDay(worker.id, month, day)
                           const date = new Date(currentYear, month, day)
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6
@@ -793,7 +895,8 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                sizeClasses.cell,
                                 !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
@@ -805,7 +908,7 @@ function SchedulePageContent() {
                               title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
                               onClick={() => openScheduleEditModal(worker, month, day)}
                             >
-                              <span className="text-xs font-bold">
+                              <span className={cn("font-bold", sizeClasses.shiftText)}>
                                 {style ? style.label : ""}
                               </span>
                             </td>
