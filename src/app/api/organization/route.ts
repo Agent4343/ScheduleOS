@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateOrganizationSchema } from "@/lib/validations"
+import { Prisma } from "@prisma/client"
 
 export async function GET() {
   try {
@@ -61,15 +62,15 @@ export async function PATCH(request: NextRequest) {
         ? (existingOrganization.settings as Record<string, unknown>)
         : {}
 
-    const mergedSettings = validatedData.settings
-      ? { ...existingSettings, ...validatedData.settings }
+    const mergedSettings: Prisma.InputJsonValue | undefined = validatedData.settings
+      ? ({ ...existingSettings, ...validatedData.settings } as Prisma.InputJsonValue)
       : undefined
 
     const organization = await prisma.organization.update({
       where: { id: session.user.organizationId },
       data: {
         ...(validatedData.name && { name: validatedData.name }),
-        ...(mergedSettings && { settings: mergedSettings }),
+        ...(mergedSettings !== undefined && { settings: mergedSettings }),
       },
     })
 
