@@ -28,7 +28,31 @@ interface DashboardStats {
 
 interface DashboardData {
   stats: DashboardStats
-  staffingGapDetails: Array<{ date: Date; shiftType: string; shortage: number }>
+  staffingGapDetails: Array<{
+    date: string
+    shiftType: string
+    shortage: number
+    required: number
+    scheduled: number
+    ruleName: string
+    crew?: { id: string; name: string }
+    positionType?: string
+    role?: string
+    scheduledWorkers: Array<{
+      id: string
+      name: string | null
+      crewName: string | null
+      role: string
+      positionType: string
+    }>
+    availableWorkers: Array<{
+      id: string
+      name: string | null
+      crewName: string | null
+      role: string
+      positionType: string
+    }>
+  }>
   upcomingTimeOff: Array<{
     id: string
     startDate: string
@@ -241,15 +265,40 @@ export default function DashboardPage() {
                 {data.staffingGapDetails.map((gap, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
+                    className="flex flex-col gap-2 py-3 border-b last:border-0"
                   >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                      <span>{new Date(gap.date).toLocaleDateString()}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                        <span className="font-medium">
+                          {new Date(gap.date).toLocaleDateString()} • {gap.shiftType}
+                        </span>
+                      </div>
+                      <Badge variant="destructive">
+                        Missing {gap.shortage}
+                      </Badge>
                     </div>
-                    <Badge variant="destructive">
-                      {gap.shiftType}: -{gap.shortage}
-                    </Badge>
+                    <div className="text-xs text-muted-foreground">
+                      Rule: {gap.ruleName}
+                      {gap.crew ? ` • Crew: ${gap.crew.name}` : ""}
+                      {gap.positionType ? ` • Position: ${gap.positionType}` : ""}
+                      {gap.role ? ` • Role: ${gap.role}` : ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Required: {gap.required} • Scheduled: {gap.scheduled}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Scheduled: {gap.scheduledWorkers.length > 0
+                        ? gap.scheduledWorkers.map((w) => w.name || "Unnamed").slice(0, 5).join(", ")
+                        : "None"}
+                      {gap.scheduledWorkers.length > 5 ? ` +${gap.scheduledWorkers.length - 5} more` : ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Available: {gap.availableWorkers.length > 0
+                        ? gap.availableWorkers.map((w) => w.name || "Unnamed").slice(0, 5).join(", ")
+                        : "None"}
+                      {gap.availableWorkers.length > 5 ? ` +${gap.availableWorkers.length - 5} more` : ""}
+                    </div>
                   </div>
                 ))}
               </div>
