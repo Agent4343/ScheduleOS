@@ -61,19 +61,26 @@ export async function POST(request: Request) {
         const subscription = event.data.object as Stripe.Subscription
         const organizationId = subscription.metadata?.organizationId as string | undefined
         const plan = getPlanFromPrice(subscription.items.data[0]?.price?.id)
+        const itemPeriodEnd = subscription.items?.data?.length
+          ? Math.max(...subscription.items.data.map((item) => item.current_period_end))
+          : undefined
+        const totalSeats = subscription.items?.data?.reduce(
+          (sum, item) => sum + (item.quantity ?? 0),
+          0
+        )
 
         if (organizationId) {
           await updateOrganizationBilling(organizationId, {
             plan,
             status: subscription.status,
             stripeSubscriptionId: subscription.id,
-            currentPeriodEnd: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
+            currentPeriodEnd: itemPeriodEnd
+              ? new Date(itemPeriodEnd * 1000).toISOString()
               : undefined,
             trialEndsAt: subscription.trial_end
               ? new Date(subscription.trial_end * 1000).toISOString()
               : undefined,
-            seatCount: subscription.items.data[0]?.quantity || undefined,
+            seatCount: totalSeats && totalSeats > 0 ? totalSeats : undefined,
           })
         }
         break
