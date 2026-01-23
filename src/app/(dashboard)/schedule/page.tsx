@@ -981,12 +981,12 @@ function SchedulePageContent() {
                 className="h-4 w-4"
               />
               <Label htmlFor="replaceExisting" className="text-sm font-normal">
-                Replace existing schedule from start date
+                Replace existing schedule (clears prior auto-generated shifts)
               </Label>
             </div>
             {replaceExisting && (
               <p className="text-xs text-muted-foreground">
-                Removes previously generated schedule days from the start date forward.
+                Deletes previous auto-generated shifts for selected workers. Manual edits remain unless cleared.
               </p>
             )}
 

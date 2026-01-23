@@ -809,12 +809,12 @@ export default function SetupPage() {
                 className="h-4 w-4"
               />
               <label htmlFor="replaceExisting" className="text-sm">
-                Replace existing schedule from start date
+                Replace existing schedule (clears prior auto-generated shifts)
               </label>
             </div>
             {replaceExisting && (
               <p className="text-xs text-muted-foreground">
-                Removes previously generated schedule days from the start date forward.
+                Deletes previous auto-generated shifts for selected workers. Manual edits remain unless cleared.
               </p>
             )}
 
