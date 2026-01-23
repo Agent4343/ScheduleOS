@@ -161,6 +161,7 @@ function SchedulePageContent() {
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
+  const [replaceExisting, setReplaceExisting] = useState(true)
   const [clearOverrides, setClearOverrides] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
@@ -439,6 +440,7 @@ function SchedulePageContent() {
         endDate: endDateStr,
         startPhase: 0,
         startingShift: startingShift,
+        replaceExisting: replaceExisting,
         clearOverrides: clearOverrides,
       }
 
@@ -962,6 +964,24 @@ function SchedulePageContent() {
                 onChange={(e) => setScheduleStartDate(e.target.value)}
               />
             </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="replaceExisting"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="replaceExisting" className="text-sm font-normal">
+                Replace existing schedule from start date
+              </Label>
+            </div>
+            {replaceExisting && (
+              <p className="text-xs text-muted-foreground">
+                Removes previously generated schedule days from the start date forward.
+              </p>
+            )}
 
             <div className="flex items-center gap-2">
               <input

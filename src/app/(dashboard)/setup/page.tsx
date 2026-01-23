@@ -74,6 +74,7 @@ export default function SetupPage() {
   const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
   const [customEndDate, setCustomEndDate] = useState("")
   const [startShift, setStartShift] = useState<"day" | "night">("day")
+  const [replaceExisting, setReplaceExisting] = useState(true)
   const [clearOverrides, setClearOverrides] = useState(false)
   const assignedWorkersCount = workers.filter((worker) => worker.crewId).length
   const hasWorkers = workers.length > 0
@@ -278,6 +279,7 @@ export default function SetupPage() {
           startDate,
           endDate,
           startPhase: 0,
+          replaceExisting,
           clearOverrides,
           // Send startingShift if pattern includes nights
           ...(pattern?.includesNights && {
@@ -797,6 +799,24 @@ export default function SetupPage() {
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="replaceExisting"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="replaceExisting" className="text-sm">
+                Replace existing schedule from start date
+              </label>
+            </div>
+            {replaceExisting && (
+              <p className="text-xs text-muted-foreground">
+                Removes previously generated schedule days from the start date forward.
+              </p>
+            )}
 
             <div className="flex items-center gap-2 pt-2">
               <input

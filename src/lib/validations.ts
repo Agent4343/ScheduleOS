@@ -147,6 +147,7 @@ export const generateScheduleSchema = z.object({
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
   startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  replaceExisting: z.boolean().default(false),
   clearOverrides: z.boolean().default(false),
 })
 
