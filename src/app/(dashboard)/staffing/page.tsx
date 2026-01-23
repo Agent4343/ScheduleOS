@@ -137,6 +137,12 @@ export default function StaffingPage() {
     isActive: true,
   })
 
+  const activeRuleCount = useMemo(
+    () => rules.filter((rule) => rule.isActive).length,
+    [rules]
+  )
+  const alertsEnabled = organization?.settings?.minStaffingAlertEnabled ?? false
+
   const loadStaffingData = useCallback(async () => {
     setLoadingSettings(true)
     try {
@@ -424,6 +430,44 @@ export default function StaffingPage() {
           </Button>
         )}
       />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Minimum Alerts</CardDescription>
+            <CardTitle className="text-2xl">
+              {alertsEnabled ? "Enabled" : "Disabled"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {alertsEnabled
+              ? "Alerts are active for minimum staffing."
+              : "Enable alerts to track minimum staffing."}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Active Rules</CardDescription>
+            <CardTitle className="text-2xl">{activeRuleCount}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {rules.length > 0
+              ? `${rules.length} total rules configured.`
+              : "No staffing rules configured yet."}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Coverage Gaps</CardDescription>
+            <CardTitle className="text-2xl">{totalGaps}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {totalDays > 0
+              ? `Across ${totalDays} day${totalDays === 1 ? "" : "s"} in range.`
+              : "Select a date range to see gaps."}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
