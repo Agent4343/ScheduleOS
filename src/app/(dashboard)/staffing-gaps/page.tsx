@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
 import { PageHeader } from "@/components/layout/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -68,6 +69,7 @@ const POSITION_OPTIONS = [
 ]
 
 export default function StaffingGapsPage() {
+  const { data: session } = useSession()
   const today = useMemo(() => getTodayUTC(), [])
   const [startDate, setStartDate] = useState(() => toDateString(startOfWeekUTC(today)))
   const [endDate, setEndDate] = useState(() => toDateString(endOfWeekUTC(today)))
@@ -81,6 +83,11 @@ export default function StaffingGapsPage() {
   const [totalDays, setTotalDays] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
+  const [assignSelections, setAssignSelections] = useState<Record<string, string>>({})
+  const [assigning, setAssigning] = useState<Record<string, boolean>>({})
+
+  const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERVISOR"
 
   useEffect(() => {
     async function fetchCrews() {
@@ -100,6 +107,7 @@ export default function StaffingGapsPage() {
   const fetchGaps = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setFeedback(null)
 
     try {
       const params = new URLSearchParams({
@@ -128,6 +136,62 @@ export default function StaffingGapsPage() {
       setLoading(false)
     }
   }, [startDate, endDate, crewId, shiftType, role, positionType])
+
+  const getGapKey = (gap: StaffingGap) => {
+    return [
+      gap.date,
+      gap.shiftType,
+      gap.ruleName,
+      gap.crew?.id || "org",
+      gap.positionType || "any",
+      gap.role || "any",
+    ].join("|")
+  }
+
+  const handleAssign = async (gap: StaffingGap) => {
+    if (!isAdmin) {
+      setFeedback({ type: "error", message: "Only admins and supervisors can assign coverage." })
+      return
+    }
+
+    const key = getGapKey(gap)
+    const selectedWorkerId = assignSelections[key]
+    if (!selectedWorkerId) {
+      setFeedback({ type: "error", message: "Select a worker before assigning coverage." })
+      return
+    }
+
+    setAssigning((prev) => ({ ...prev, [key]: true }))
+    setFeedback(null)
+
+    try {
+      const response = await fetch("/api/schedules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: selectedWorkerId,
+          date: gap.date,
+          shiftType: gap.shiftType,
+          isOverride: true,
+          overrideReason: `Staffing gap coverage: ${gap.ruleName}`,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to assign worker.")
+      }
+
+      setFeedback({ type: "success", message: "Coverage assigned successfully." })
+      await fetchGaps()
+    } catch (err) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Failed to assign worker.",
+      })
+    } finally {
+      setAssigning((prev) => ({ ...prev, [key]: false }))
+    }
+  }
 
   useEffect(() => {
     fetchGaps()
@@ -254,6 +318,13 @@ export default function StaffingGapsPage() {
         </Alert>
       ) : null}
 
+      {feedback ? (
+        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
+          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
+          <AlertDescription>{feedback.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
@@ -340,6 +411,48 @@ export default function StaffingGapsPage() {
                               ? gap.availableWorkers.map((w) => w.name || "Unnamed").join(", ")
                               : "None"}
                           </p>
+                          {isAdmin ? (
+                            <div className="pt-2 space-y-2">
+                              <Label htmlFor={`assign-${index}`} className="text-xs">Assign coverage</Label>
+                              <Select
+                                id={`assign-${index}`}
+                                value={assignSelections[getGapKey(gap)] || ""}
+                                onChange={(e) =>
+                                  setAssignSelections((prev) => ({
+                                    ...prev,
+                                    [getGapKey(gap)]: e.target.value,
+                                  }))
+                                }
+                                options={[
+                                  { value: "", label: "Select worker" },
+                                  ...gap.availableWorkers.map((worker) => ({
+                                    value: worker.id,
+                                    label: worker.name
+                                      ? `${worker.name}${worker.crewName ? ` (${worker.crewName})` : ""}`
+                                      : worker.id,
+                                  })),
+                                ]}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleAssign(gap)}
+                                disabled={assigning[getGapKey(gap)] || gap.availableWorkers.length === 0}
+                              >
+                                {assigning[getGapKey(gap)] ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Assign"
+                                )}
+                              </Button>
+                              {gap.availableWorkers.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No available workers match this rule.</p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground pt-2">
+                              Only supervisors and admins can assign coverage.
+                            </p>
+                          )}
                         </div>
                       </details>
                     </TableCell>
