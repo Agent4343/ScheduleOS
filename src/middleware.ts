@@ -14,6 +14,23 @@ export default withAuth(
     const requestHeaders = new Headers(req.headers)
     requestHeaders.set("x-nonce", nonce)
 
+    // CSP header for production (must be on request for Next.js nonce support)
+    let csp: string | null = null
+    if (process.env.NODE_ENV === "production") {
+      csp = [
+        "default-src 'self'",
+        `script-src 'self' 'nonce-${nonce}'`,
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+      ].join("; ")
+      requestHeaders.set("content-security-policy", csp)
+    }
+
     const response = NextResponse.next({
       request: {
         headers: requestHeaders,
@@ -30,24 +47,8 @@ export default withAuth(
       "camera=(), microphone=(), geolocation=()"
     )
 
-    // CSP header for production
-    if (process.env.NODE_ENV === "production") {
-      const csp = [
-        "default-src 'self'",
-        `script-src 'self' 'nonce-${nonce}'`,
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: https:",
-        "font-src 'self' data:",
-        "connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "frame-ancestors 'none'",
-      ].join("; ")
-
-      response.headers.set(
-        "Content-Security-Policy",
-        csp
-      )
+    if (csp) {
+      response.headers.set("Content-Security-Policy", csp)
     }
 
     return response
