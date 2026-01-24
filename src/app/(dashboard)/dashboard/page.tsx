@@ -140,7 +140,7 @@ export default function DashboardPage() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Staffing Alert</AlertTitle>
           <AlertDescription>
-            There are {stats.staffingGaps} staffing gaps this week that need attention.
+            There are {stats.staffingGaps} staffing gaps in the next 3 weeks that need attention.
             <a href="/schedule" className="ml-2 underline">View schedule</a>
           </AlertDescription>
         </Alert>
@@ -255,9 +255,9 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              This Week&apos;s Coverage
+              Next 3 Weeks Coverage
             </CardTitle>
-            <CardDescription>Staffing levels for the current week</CardDescription>
+            <CardDescription>Staffing levels for the next 3 weeks</CardDescription>
           </CardHeader>
           <CardContent>
             {data?.staffingGapDetails && data.staffingGapDetails.length > 0 ? (

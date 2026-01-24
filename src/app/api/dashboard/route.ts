@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { ShiftType, PositionType } from "@/types"
-import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
+import { getTodayUTC, addDaysUTC } from "@/lib/timezone"
 
 export const dynamic = "force-dynamic"
 
@@ -72,8 +72,8 @@ export async function GET() {
 
     const today = getTodayUTC()
 
-    const weekStart = startOfWeekUTC(today)
-    const weekEnd = endOfWeekUTC(today)
+    const rangeStart = today
+    const rangeEnd = addDaysUTC(today, 20)
 
     // Get stats in parallel
     const [
@@ -126,7 +126,7 @@ export async function GET() {
       prisma.schedule.findMany({
         where: {
           user: { organizationId },
-          date: { gte: weekStart, lte: weekEnd },
+          date: { gte: rangeStart, lte: rangeEnd },
           shiftType: { in: [ShiftType.DAY, ShiftType.NIGHT] },
         },
         include: {
@@ -230,8 +230,9 @@ export async function GET() {
     }
 
     // Check each day against staffing rules and position-based minimums
-    for (let i = 0; i < 7; i++) {
-      const checkDate = addDaysUTC(weekStart, i)
+    const daysToCheck = 21
+    for (let i = 0; i < daysToCheck; i++) {
+      const checkDate = addDaysUTC(rangeStart, i)
       const dateKey = checkDate.toISOString().split("T")[0]
       const daySchedules = schedulesByDate.get(dateKey) || []
 
