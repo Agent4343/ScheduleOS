@@ -194,6 +194,7 @@ function SchedulePageContent() {
     return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
   })
   const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
+  const [showRosterPanel, setShowRosterPanel] = useState(true)
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -432,6 +433,32 @@ function SchedulePageContent() {
     })
     return list
   }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear])
+
+  const rosterData = useMemo(() => {
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const day: Worker[] = []
+    const night: Worker[] = []
+    const off: Worker[] = []
+    const other: Worker[] = []
+
+    for (const worker of sortedWorkers) {
+      const schedule = scheduleMap.get(`${worker.id}-${shiftDateKey}`)
+      const shiftType = schedule?.shiftType
+      if (shiftType === "DAY") {
+        day.push(worker)
+      } else if (shiftType === "NIGHT") {
+        night.push(worker)
+      } else if (shiftType === "OFF") {
+        off.push(worker)
+      } else if (shiftType) {
+        other.push(worker)
+      } else {
+        other.push(worker)
+      }
+    }
+
+    return { day, night, off, other, shiftDateKey }
+  }, [sortedWorkers, scheduleMap, shiftGroupDate, currentYear])
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -743,6 +770,13 @@ function SchedulePageContent() {
             >
               {hideFiltersLegend ? "Show filters/legend" : "Hide filters/legend"}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRosterPanel((prev) => !prev)}
+            >
+              {showRosterPanel ? "Hide roster" : "Show roster"}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
               This Year
             </Button>
@@ -842,144 +876,236 @@ function SchedulePageContent() {
         </>
       )}
 
-      {/* Schedule Table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            {currentYear} Schedule
-            <Badge variant="secondary" className="ml-2">
-              <Users className="h-3 w-3 mr-1" />
-              {sortedWorkers.length} workers
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : sortedWorkers.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No workers found</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
-              <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
-                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
-                  {/* Month headers */}
-                  <tr>
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
-                      Worker
-                    </th>
-                    {yearMonths.map(({ month, days }) => (
-                      <th
-                        key={month}
-                        colSpan={days.length}
-                        className="border p-2 text-center font-semibold bg-muted text-base"
-                      >
-                        {MONTH_NAMES[month]}
+      {/* Schedule Table + Roster */}
+      <div className={cn("grid gap-4", showRosterPanel ? "xl:grid-cols-[1fr_280px]" : "grid-cols-1")}>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {currentYear} Schedule
+              <Badge variant="secondary" className="ml-2">
+                <Users className="h-3 w-3 mr-1" />
+                {sortedWorkers.length} workers
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : sortedWorkers.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No workers found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+                <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
+                  <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
+                    {/* Month headers */}
+                    <tr>
+                      <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
+                        Worker
                       </th>
-                    ))}
-                  </tr>
-                  {/* Day headers */}
-                  <tr>
-                    <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
-                        const date = new Date(currentYear, month, day)
-                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                        const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-
-                        return (
-                          <th
-                            key={`${month}-${day}`}
-                            className={cn(
-                              "border p-1 text-center font-normal",
-                              sizeClasses.header,
-                              isWeekend ? "bg-muted" : "bg-muted/50",
-                              isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
-                            )}
-                          >
-                            <div className={cn(
-                              "font-semibold text-foreground",
-                              sizeClasses.dayText,
-                              isTodayCell && "text-blue-600 dark:text-blue-300"
-                            )}>{day}</div>
-                          </th>
-                        )
-                      })
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedWorkers.map((worker) => (
-                    <tr key={worker.id} className="hover:bg-muted/20">
-                      <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
-                        onClick={() => openEditModal(worker)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-2 h-8 rounded"
-                            style={{ backgroundColor: worker.crew?.color || "#ccc" }}
-                          />
-                          <div className="truncate max-w-[160px]">
-                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {worker.crew?.name || "No crew"}
-                            </div>
-                          </div>
-                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
-                        </div>
-                      </td>
+                      {yearMonths.map(({ month, days }) => (
+                        <th
+                          key={month}
+                          colSpan={days.length}
+                          className="border p-2 text-center font-semibold bg-muted text-base"
+                        >
+                          {MONTH_NAMES[month]}
+                        </th>
+                      ))}
+                    </tr>
+                    {/* Day headers */}
+                    <tr>
+                      <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
                       {yearMonths.map(({ month, days }) =>
                         days.map((day) => {
                           const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
-                          const schedule = getScheduleForDay(worker.id, month, day)
+                          const date = new Date(currentYear, month, day)
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6
                           const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-                          // Handle custom shift types by building the key
-                          const shiftKey = schedule
-                            ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
-                              ? `CUSTOM:${schedule.customShiftCode}`
-                              : schedule.shiftType
-                            : null
-                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
 
                           return (
-                            <td
+                            <th
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
-                                sizeClasses.cell,
-                                !style && "bg-black",
-                                isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                                "border p-1 text-center font-normal",
+                                sizeClasses.header,
+                                isWeekend ? "bg-muted" : "bg-muted/50",
+                                isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
                               )}
-                              style={
-                                style
-                                  ? { backgroundColor: style.bg, color: style.text }
-                                  : undefined
-                              }
-                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
-                              onClick={() => openScheduleEditModal(worker, month, day)}
                             >
-                              <span className={cn("font-bold", sizeClasses.shiftText)}>
-                                {style ? style.label : ""}
-                              </span>
-                            </td>
+                              <div className={cn(
+                                "font-semibold text-foreground",
+                                sizeClasses.dayText,
+                                isTodayCell && "text-blue-600 dark:text-blue-300"
+                              )}>{day}</div>
+                            </th>
                           )
                         })
                       )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {sortedWorkers.map((worker) => (
+                      <tr key={worker.id} className="hover:bg-muted/20">
+                        <td
+                          className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
+                          onClick={() => openEditModal(worker)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2 h-8 rounded"
+                              style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                            />
+                            <div className="truncate max-w-[160px]">
+                              <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {worker.crew?.name || "No crew"}
+                              </div>
+                            </div>
+                            <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
+                          </div>
+                        </td>
+                        {yearMonths.map(({ month, days }) =>
+                          days.map((day) => {
+                            const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
+                            const schedule = getScheduleForDay(worker.id, month, day)
+                            const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+                            // Handle custom shift types by building the key
+                            const shiftKey = schedule
+                              ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+                                ? `CUSTOM:${schedule.customShiftCode}`
+                                : schedule.shiftType
+                              : null
+                            const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+
+                            return (
+                              <td
+                                key={`${month}-${day}`}
+                                className={cn(
+                                  "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                  sizeClasses.cell,
+                                  !style && "bg-black",
+                                  isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                                )}
+                                style={
+                                  style
+                                    ? { backgroundColor: style.bg, color: style.text }
+                                    : undefined
+                                }
+                                title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                                onClick={() => openScheduleEditModal(worker, month, day)}
+                              >
+                                <span className={cn("font-bold", sizeClasses.shiftText)}>
+                                  {style ? style.label : ""}
+                                </span>
+                              </td>
+                            )
+                          })
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        {showRosterPanel && (
+          <Card className="h-fit">
+            <CardHeader>
+              <CardTitle>Shift Roster</CardTitle>
+              <CardDescription>
+                {new Date(rosterData.shiftDateKey).toLocaleDateString()}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between text-sm font-semibold text-green-400">
+                  <span>Day Shift</span>
+                  <span>{rosterData.day.length}</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {rosterData.day.length === 0 ? (
+                    <li className="text-muted-foreground">No day shift</li>
+                  ) : (
+                    rosterData.day.map((worker) => (
+                      <li key={worker.id} className="flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: worker.crew?.color || "#22c55e" }}
+                        />
+                        <span className="truncate">{worker.name || "Unnamed"}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm font-semibold text-blue-400">
+                  <span>Night Shift</span>
+                  <span>{rosterData.night.length}</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {rosterData.night.length === 0 ? (
+                    <li className="text-muted-foreground">No night shift</li>
+                  ) : (
+                    rosterData.night.map((worker) => (
+                      <li key={worker.id} className="flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: worker.crew?.color || "#2563eb" }}
+                        />
+                        <span className="truncate">{worker.name || "Unnamed"}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                  <span>Off</span>
+                  <span>{rosterData.off.length}</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {rosterData.off.length === 0 ? (
+                    <li className="text-muted-foreground">No off days</li>
+                  ) : (
+                    rosterData.off.map((worker) => (
+                      <li key={worker.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-gray-400" />
+                        <span className="truncate">{worker.name || "Unnamed"}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                  <span>Other</span>
+                  <span>{rosterData.other.length}</span>
+                </div>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {rosterData.other.length === 0 ? (
+                    <li className="text-muted-foreground">No other shifts</li>
+                  ) : (
+                    rosterData.other.map((worker) => (
+                      <li key={worker.id} className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-gray-400" />
+                        <span className="truncate">{worker.name || "Unnamed"}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Edit Worker Modal */}
       <Modal
