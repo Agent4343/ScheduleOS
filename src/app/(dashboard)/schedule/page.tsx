@@ -194,7 +194,6 @@ function SchedulePageContent() {
     return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
   })
   const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
-  const [showRosterPanel, setShowRosterPanel] = useState(true)
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -770,13 +769,6 @@ function SchedulePageContent() {
             >
               {hideFiltersLegend ? "Show filters/legend" : "Hide filters/legend"}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRosterPanel((prev) => !prev)}
-            >
-              {showRosterPanel ? "Hide roster" : "Show roster"}
-            </Button>
             <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
               This Year
             </Button>
@@ -877,7 +869,7 @@ function SchedulePageContent() {
       )}
 
       {/* Schedule Table + Roster */}
-      <div className={cn("grid gap-4", showRosterPanel ? "xl:grid-cols-[1fr_280px]" : "grid-cols-1")}>
+      <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2">
@@ -1015,96 +1007,94 @@ function SchedulePageContent() {
             )}
           </CardContent>
         </Card>
-        {showRosterPanel && (
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle>Shift Roster</CardTitle>
-              <CardDescription>
-                {new Date(rosterData.shiftDateKey).toLocaleDateString()}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between text-sm font-semibold text-green-400">
-                  <span>Day Shift</span>
-                  <span>{rosterData.day.length}</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {rosterData.day.length === 0 ? (
-                    <li className="text-muted-foreground">No day shift</li>
-                  ) : (
-                    rosterData.day.map((worker) => (
-                      <li key={worker.id} className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: worker.crew?.color || "#22c55e" }}
-                        />
-                        <span className="truncate">{worker.name || "Unnamed"}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
+        <Card className="h-fit">
+          <CardHeader>
+            <CardTitle>Shift Roster</CardTitle>
+            <CardDescription>
+              {new Date(rosterData.shiftDateKey).toLocaleDateString()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-green-400">
+                <span>Day Shift</span>
+                <span>{rosterData.day.length}</span>
               </div>
-              <div>
-                <div className="flex items-center justify-between text-sm font-semibold text-blue-400">
-                  <span>Night Shift</span>
-                  <span>{rosterData.night.length}</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {rosterData.night.length === 0 ? (
-                    <li className="text-muted-foreground">No night shift</li>
-                  ) : (
-                    rosterData.night.map((worker) => (
-                      <li key={worker.id} className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: worker.crew?.color || "#2563eb" }}
-                        />
-                        <span className="truncate">{worker.name || "Unnamed"}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.day.length === 0 ? (
+                  <li className="text-muted-foreground">No day shift</li>
+                ) : (
+                  rosterData.day.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: worker.crew?.color || "#22c55e" }}
+                      />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-blue-400">
+                <span>Night Shift</span>
+                <span>{rosterData.night.length}</span>
               </div>
-              <div>
-                <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
-                  <span>Off</span>
-                  <span>{rosterData.off.length}</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {rosterData.off.length === 0 ? (
-                    <li className="text-muted-foreground">No off days</li>
-                  ) : (
-                    rosterData.off.map((worker) => (
-                      <li key={worker.id} className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-gray-400" />
-                        <span className="truncate">{worker.name || "Unnamed"}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.night.length === 0 ? (
+                  <li className="text-muted-foreground">No night shift</li>
+                ) : (
+                  rosterData.night.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: worker.crew?.color || "#2563eb" }}
+                      />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span>Off</span>
+                <span>{rosterData.off.length}</span>
               </div>
-              <div>
-                <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
-                  <span>Other</span>
-                  <span>{rosterData.other.length}</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {rosterData.other.length === 0 ? (
-                    <li className="text-muted-foreground">No other shifts</li>
-                  ) : (
-                    rosterData.other.map((worker) => (
-                      <li key={worker.id} className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-gray-400" />
-                        <span className="truncate">{worker.name || "Unnamed"}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.off.length === 0 ? (
+                  <li className="text-muted-foreground">No off days</li>
+                ) : (
+                  rosterData.off.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gray-400" />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span>Other</span>
+                <span>{rosterData.other.length}</span>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.other.length === 0 ? (
+                  <li className="text-muted-foreground">No other shifts</li>
+                ) : (
+                  rosterData.other.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gray-400" />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Edit Worker Modal */}
