@@ -21,7 +21,7 @@ import {
   CalendarPlus,
   RotateCcw,
 } from "lucide-react"
-import { ShiftType, UserRole } from "@/types"
+import { PositionType, ShiftType, UserRole } from "@/types"
 
 interface Schedule {
   id: string
@@ -51,6 +51,7 @@ interface Worker {
   name: string | null
   email?: string
   position: string | null
+  positionType?: PositionType | null
   phone?: string | null
   role?: UserRole
   hireDate?: string | null
@@ -160,6 +161,7 @@ const CALENDAR_SIZE_CLASSES: Record<CalendarSize, {
 const WORKER_SORT_OPTIONS = [
   { value: "custom", label: "Custom order" },
   { value: "shift", label: "Shift (selected date)" },
+  { value: "positionGroup", label: "Position group" },
   { value: "name", label: "Name" },
   { value: "crew", label: "Crew" },
   { value: "position", label: "Position" },
@@ -188,7 +190,7 @@ function SchedulePageContent() {
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
   const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
-  const [workerSort, setWorkerSort] = useState<WorkerSort>("shift")
+  const [workerSort, setWorkerSort] = useState<WorkerSort>("positionGroup")
   const [shiftGroupDate, setShiftGroupDate] = useState(() => {
     const today = new Date()
     return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
@@ -385,6 +387,34 @@ function SchedulePageContent() {
     const list = [...workers]
     const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
 
+    const getPositionGroupOrder = (worker: Worker) => {
+      const positionText = (worker.position || "").toLowerCase()
+
+      if (
+        worker.positionType === PositionType.OPERATOR ||
+        positionText.includes("operator")
+      ) {
+        return 0
+      }
+      if (
+        worker.positionType === PositionType.ONSHORE_CONTROL_ROOM ||
+        positionText.includes("onshore") ||
+        positionText.includes("control room")
+      ) {
+        return 1
+      }
+      if (positionText.includes("oim")) {
+        return 2
+      }
+      if (worker.role === "SUPERVISOR" || positionText.includes("supervisor")) {
+        return 3
+      }
+      if (positionText.includes("production lead") || positionText.includes("prod lead")) {
+        return 4
+      }
+      return 5
+    }
+
     const getShiftGroupOrder = (shiftType?: ShiftType | null) => {
       if (!shiftType) return 5
       if (shiftType === "DAY") return 0
@@ -400,6 +430,12 @@ function SchedulePageContent() {
         const scheduleB = scheduleMap.get(`${b.id}-${shiftDateKey}`)
         const groupA = getShiftGroupOrder(scheduleA?.shiftType)
         const groupB = getShiftGroupOrder(scheduleB?.shiftType)
+        if (groupA !== groupB) return groupA - groupB
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "positionGroup") {
+        const groupA = getPositionGroupOrder(a)
+        const groupB = getPositionGroupOrder(b)
         if (groupA !== groupB) return groupA - groupB
         return (a.name || "").localeCompare(b.name || "")
       }
