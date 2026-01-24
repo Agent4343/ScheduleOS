@@ -136,6 +136,7 @@ export async function GET() {
               name: true,
               role: true,
               positionType: true,
+              position: true,
               status: true,
               crewId: true,
               crew: { select: { id: true, name: true } },
@@ -165,6 +166,7 @@ export async function GET() {
           name: true,
           role: true,
           positionType: true,
+          position: true,
           crewId: true,
           crew: { select: { id: true, name: true } },
         },
@@ -179,13 +181,26 @@ export async function GET() {
     const minOperators = orgSettings.minStaffOperators ?? 1
     const minOnshoreControlRoom = orgSettings.minStaffOnshoreControlRoom ?? 1
 
+    const resolvePositionType = (worker: { positionType?: PositionType | null; position?: string | null }) => {
+      if (worker.positionType && worker.positionType !== PositionType.OTHER) {
+        return worker.positionType
+      }
+      const positionText = (worker.position || "").toLowerCase()
+      if (positionText.includes("operator")) return PositionType.OPERATOR
+      if (positionText.includes("onshore") || positionText.includes("control room")) {
+        return PositionType.ONSHORE_CONTROL_ROOM
+      }
+      return worker.positionType ?? null
+    }
+
     const activeWorkerList = activeWorkers.map((worker) => ({
       id: worker.id,
       name: worker.name,
       crewName: worker.crew?.name || null,
       role: worker.role,
-      positionType: worker.positionType,
+      positionType: resolvePositionType(worker),
       crewId: worker.crewId,
+      position: worker.position ?? null,
     }))
 
     const orgRulesEnabled = orgSettings.minStaffingAlertEnabled !== false
@@ -229,7 +244,7 @@ export async function GET() {
         name: worker.name,
         crewName: worker.crewName,
         role: worker.role,
-        positionType: worker.positionType,
+        positionType: worker.positionType || "OTHER",
       })
 
       const getAvailableWorkers = (criteria: { crewId?: string | null; role?: string | null; positionType?: string | null }, scheduledIds: Set<string>) => {
@@ -254,7 +269,9 @@ export async function GET() {
           filteredSchedules = filteredSchedules.filter((s) => s.user.role === rule.role)
         }
         if (rule.positionType) {
-          filteredSchedules = filteredSchedules.filter((s) => s.user.positionType === rule.positionType)
+          filteredSchedules = filteredSchedules.filter(
+            (s) => resolvePositionType(s.user) === rule.positionType
+          )
         }
 
         const scheduledWorkers = filteredSchedules.map((s) => ({
@@ -262,7 +279,7 @@ export async function GET() {
           name: s.user.name,
           crewName: s.user.crew?.name || null,
           role: s.user.role,
-          positionType: s.user.positionType,
+          positionType: resolvePositionType(s.user) || PositionType.OTHER,
         }))
         const scheduledIds = new Set(scheduledWorkers.map((w) => w.id))
         const availableWorkers = getAvailableWorkers(
@@ -298,7 +315,7 @@ export async function GET() {
         for (const derivedRule of derivedRules) {
           const shiftSchedules = daySchedules.filter((s) => s.shiftType === shiftType)
           const matchingSchedules = shiftSchedules.filter(
-            (s) => s.user.positionType === derivedRule.positionType
+            (s) => resolvePositionType(s.user) === derivedRule.positionType
           )
 
           const scheduledWorkers = matchingSchedules.map((s) => ({
@@ -306,7 +323,7 @@ export async function GET() {
             name: s.user.name,
             crewName: s.user.crew?.name || null,
             role: s.user.role,
-            positionType: s.user.positionType,
+            positionType: resolvePositionType(s.user) || PositionType.OTHER,
           }))
           const scheduledIds = new Set(scheduledWorkers.map((w) => w.id))
           const availableWorkers = getAvailableWorkers(

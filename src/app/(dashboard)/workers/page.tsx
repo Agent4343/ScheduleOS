@@ -29,7 +29,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react"
-import { UserRole, UserStatus } from "@/types"
+import { PositionType, UserRole, UserStatus } from "@/types"
 
 interface User {
   id: string
@@ -37,6 +37,7 @@ interface User {
   name: string | null
   role: UserRole
   position: string | null
+  positionType: PositionType
   phone: string | null
   status: UserStatus
   hireDate: string | null
@@ -66,6 +67,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
   WORKER: "Worker",
 }
 
+const POSITION_TYPE_OPTIONS = [
+  { value: PositionType.OPERATOR, label: "Operator" },
+  { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
+  { value: PositionType.OTHER, label: "Other" },
+]
+
 export default function WorkersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
@@ -83,6 +90,7 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
+    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
     hireDate: "",
@@ -93,6 +101,7 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
+    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
     hireDate: "",
@@ -153,6 +162,7 @@ export default function WorkersPage() {
       email: user.email,
       role: user.role,
       position: user.position || "",
+      positionType: user.positionType || PositionType.OTHER,
       phone: user.phone || "",
       crewId: user.crew?.id || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
@@ -189,6 +199,7 @@ export default function WorkersPage() {
           email: "",
           role: "WORKER",
           position: "",
+        positionType: PositionType.OTHER,
           phone: "",
           crewId: "",
           hireDate: "",
@@ -221,6 +232,7 @@ export default function WorkersPage() {
           email: editFormData.email,
           role: editFormData.role,
           position: editFormData.position || null,
+          positionType: editFormData.positionType,
           phone: editFormData.phone || null,
           crewId: editFormData.crewId || null,
           hireDate: editFormData.hireDate || null,
@@ -502,12 +514,12 @@ export default function WorkersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              <Label htmlFor="positionType">Position Type</Label>
+              <Select
+                id="positionType"
+                value={formData.positionType}
+                onChange={(e) => setFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
+                options={POSITION_TYPE_OPTIONS}
               />
             </div>
           </div>
@@ -522,6 +534,18 @@ export default function WorkersPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="password">Password (Optional)</Label>
               <Input
@@ -631,12 +655,12 @@ export default function WorkersPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editFormData.phone}
-                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              <Label htmlFor="edit-positionType">Position Type</Label>
+              <Select
+                id="edit-positionType"
+                value={editFormData.positionType}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
+                options={POSITION_TYPE_OPTIONS}
               />
             </div>
             <div className="space-y-2">
@@ -646,6 +670,18 @@ export default function WorkersPage() {
                 type="date"
                 value={editFormData.hireDate}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
               />
             </div>
           </div>

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { PageHeader } from "@/components/layout/page-header"
+import { PositionType } from "@/types"
 import {
   Calendar,
   Users,
@@ -133,6 +134,7 @@ export default function SetupPage() {
     name: "",
     email: "",
     position: "",
+    positionType: PositionType.OTHER,
     crewId: "",
   })
 
@@ -213,6 +215,7 @@ export default function SetupPage() {
           name: newWorker.name,
           email: newWorker.email,
           position: newWorker.position || null,
+          positionType: newWorker.positionType,
           crewId: newWorker.crewId || null,
           role: "WORKER",
           status: "ACTIVE",
@@ -227,7 +230,7 @@ export default function SetupPage() {
         // Auto-select the new worker
         setSelectedWorkers((prev) => new Set([...Array.from(prev), data.data.id]))
         // Reset form
-        setNewWorker({ name: "", email: "", position: "", crewId: "" })
+        setNewWorker({ name: "", email: "", position: "", positionType: PositionType.OTHER, crewId: "" })
         setShowAddWorker(false)
         setSuccess(`Worker "${newWorker.name}" added successfully!`)
         setTimeout(() => setSuccess(""), 3000)
@@ -541,6 +544,19 @@ export default function SetupPage() {
                         setNewWorker({ ...newWorker, position: e.target.value })
                       }
                     />
+                    <select
+                      id="worker-positionType"
+                      name="worker-positionType"
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                      value={newWorker.positionType}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, positionType: e.target.value as PositionType })
+                      }
+                    >
+                      <option value={PositionType.OPERATOR}>Operator</option>
+                      <option value={PositionType.ONSHORE_CONTROL_ROOM}>Onshore Control Room</option>
+                      <option value={PositionType.OTHER}>Other</option>
+                    </select>
                     <select
                       id="worker-crew"
                       name="worker-crew"

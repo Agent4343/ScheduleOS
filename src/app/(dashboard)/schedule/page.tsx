@@ -66,6 +66,7 @@ interface Worker {
 interface WorkerEditForm {
   name: string
   position: string
+  positionType: PositionType
   phone: string
   crewId: string
   role: UserRole
@@ -262,6 +263,7 @@ function SchedulePageContent() {
   const [editForm, setEditForm] = useState<WorkerEditForm>({
     name: "",
     position: "",
+    positionType: PositionType.OTHER,
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
@@ -582,6 +584,7 @@ function SchedulePageContent() {
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
+      positionType: worker.positionType || PositionType.OTHER,
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
@@ -615,6 +618,7 @@ function SchedulePageContent() {
         body: JSON.stringify({
           name: editForm.name,
           position: editForm.position || null,
+          positionType: editForm.positionType,
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
@@ -635,6 +639,7 @@ function SchedulePageContent() {
                 ...w,
                 name: editForm.name,
                 position: editForm.position || null,
+                positionType: editForm.positionType,
                 phone: editForm.phone || null,
                 role: editForm.role,
                 hireDate: editForm.hireDate || null,
@@ -1234,6 +1239,20 @@ function SchedulePageContent() {
               value={editForm.position}
               onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
               placeholder="e.g., Operator, Technician"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="positionType">Position Type</Label>
+            <Select
+              id="positionType"
+              value={editForm.positionType}
+              onChange={(e) => setEditForm({ ...editForm, positionType: e.target.value as PositionType })}
+              options={[
+                { value: PositionType.OPERATOR, label: "Operator" },
+                { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
+                { value: PositionType.OTHER, label: "Other" },
+              ]}
             />
           </div>
 
