@@ -567,6 +567,68 @@ function SchedulePageContent() {
     return { day, night, off, other, shiftDateKey }
   }, [sortedWorkers, scheduleMap, shiftGroupDate, currentYear])
 
+  const roleRoster = useMemo(() => {
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const groupingRules = (scheduleGrouping.groups?.length
+      ? scheduleGrouping.groups
+      : DEFAULT_SCHEDULE_GROUPS
+    ).slice().sort((a, b) => a.order - b.order)
+
+    const matchesGroup = (worker: Worker, group: ScheduleGroupingGroup) => {
+      const positionText = (worker.position || "").toLowerCase()
+      const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
+      const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
+      const matchesKeyword =
+        group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
+      return matchesPositionType || matchesRole || matchesKeyword
+    }
+
+    const groupedWorkers = groupingRules.map((group) => {
+      const workersInGroup = workers.filter((worker) => matchesGroup(worker, group))
+      return { group, workers: workersInGroup }
+    })
+
+    const assignedIds = new Set(
+      groupedWorkers.flatMap((group) => group.workers.map((worker) => worker.id))
+    )
+    const otherWorkers = workers.filter((worker) => !assignedIds.has(worker.id))
+    if (otherWorkers.length > 0) {
+      groupedWorkers.push({
+        group: { id: "other", name: "Other", order: groupingRules.length + 1 },
+        workers: otherWorkers,
+      })
+    }
+
+    const buildShiftRoster = (shiftType: ShiftType) =>
+      groupedWorkers.map(({ group, workers: groupWorkers }) => {
+        const scheduled = groupWorkers.filter(
+          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType === shiftType
+        )
+        const missing = groupWorkers.filter(
+          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType !== shiftType
+        )
+        return {
+          group,
+          total: groupWorkers.length,
+          scheduled,
+          missing,
+        }
+      })
+
+    return {
+      day: buildShiftRoster(ShiftType.DAY),
+      night: buildShiftRoster(ShiftType.NIGHT),
+      shiftDateKey,
+    }
+  }, [workers, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
+
+  const formatWorkerNames = (list: Worker[], max = 6) => {
+    if (list.length === 0) return "None"
+    const names = list.map((worker) => worker.name || "Unnamed")
+    if (names.length <= max) return names.join(", ")
+    return `${names.slice(0, max).join(", ")} +${names.length - max} more`
+  }
+
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
 
@@ -1203,6 +1265,68 @@ function SchedulePageContent() {
                   ))
                 )}
               </ul>
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Role Coverage • Day</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              {roleRoster.day.map(({ group, total, scheduled, missing }) => (
+                <div key={`day-${group.id}`} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>{group.name}</span>
+                    <span>{scheduled.length}/{total}</span>
+                  </div>
+                  {total === 0 ? (
+                    <p className="text-xs text-muted-foreground">No workers in this group</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Scheduled: {formatWorkerNames(scheduled)}
+                      </p>
+                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                        Missing: {formatWorkerNames(missing)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Role Coverage • Night</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              {roleRoster.night.map(({ group, total, scheduled, missing }) => (
+                <div key={`night-${group.id}`} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>{group.name}</span>
+                    <span>{scheduled.length}/{total}</span>
+                  </div>
+                  {total === 0 ? (
+                    <p className="text-xs text-muted-foreground">No workers in this group</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Scheduled: {formatWorkerNames(scheduled)}
+                      </p>
+                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                        Missing: {formatWorkerNames(missing)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
