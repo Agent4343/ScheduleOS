@@ -539,7 +539,7 @@ function SchedulePageContent() {
       return (a.name || "").localeCompare(b.name || "")
     })
     return list
-  }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear])
+  }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
 
   const rosterData = useMemo(() => {
     const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
