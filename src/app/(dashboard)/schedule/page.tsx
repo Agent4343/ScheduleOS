@@ -95,7 +95,7 @@ interface CustomShiftType {
 const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
   NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
-  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "" },
+  OFF: { bg: "#000000", text: "#ffffff", label: "" },
   LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
   PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
   PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
