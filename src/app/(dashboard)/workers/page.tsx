@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { PageHeader } from "@/components/layout/page-header"
 import {
   Table,
   TableBody,
@@ -27,7 +29,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react"
-import { UserRole, UserStatus } from "@/types"
+import { PositionType, UserRole, UserStatus } from "@/types"
 
 interface User {
   id: string
@@ -35,6 +37,7 @@ interface User {
   name: string | null
   role: UserRole
   position: string | null
+  positionType: PositionType
   phone: string | null
   status: UserStatus
   hireDate: string | null
@@ -64,6 +67,12 @@ const ROLE_LABELS: Record<UserRole, string> = {
   WORKER: "Worker",
 }
 
+const POSITION_TYPE_OPTIONS = [
+  { value: PositionType.OPERATOR, label: "Operator" },
+  { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
+  { value: PositionType.OTHER, label: "Other" },
+]
+
 export default function WorkersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
@@ -81,6 +90,7 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
+    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
     hireDate: "",
@@ -91,12 +101,14 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
+    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
   })
   const [submitting, setSubmitting] = useState(false)
+  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
 
   useEffect(() => {
     async function fetchData() {
@@ -150,6 +162,7 @@ export default function WorkersPage() {
       email: user.email,
       role: user.role,
       position: user.position || "",
+      positionType: user.positionType || PositionType.OTHER,
       phone: user.phone || "",
       crewId: user.crew?.id || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
@@ -162,6 +175,7 @@ export default function WorkersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setFeedback(null)
 
     try {
       const response = await fetch("/api/users", {
@@ -185,17 +199,19 @@ export default function WorkersPage() {
           email: "",
           role: "WORKER",
           position: "",
+        positionType: PositionType.OTHER,
           phone: "",
           crewId: "",
           hireDate: "",
           password: "",
         })
+        setFeedback({ type: "success", message: "Worker created successfully." })
       } else {
-        alert(data.error || "Failed to create worker")
+        setFeedback({ type: "error", message: data.error || "Failed to create worker" })
       }
     } catch (error) {
       console.error("Failed to create worker:", error)
-      alert("Failed to create worker")
+      setFeedback({ type: "error", message: "Failed to create worker" })
     } finally {
       setSubmitting(false)
     }
@@ -205,6 +221,7 @@ export default function WorkersPage() {
     e.preventDefault()
     if (!editingUser) return
     setSubmitting(true)
+    setFeedback(null)
 
     try {
       const response = await fetch(`/api/users/${editingUser.id}`, {
@@ -215,6 +232,7 @@ export default function WorkersPage() {
           email: editFormData.email,
           role: editFormData.role,
           position: editFormData.position || null,
+          positionType: editFormData.positionType,
           phone: editFormData.phone || null,
           crewId: editFormData.crewId || null,
           hireDate: editFormData.hireDate || null,
@@ -230,12 +248,13 @@ export default function WorkersPage() {
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        setFeedback({ type: "success", message: "Worker updated successfully." })
       } else {
-        alert(data.error || "Failed to update worker")
+        setFeedback({ type: "error", message: data.error || "Failed to update worker" })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      alert("Failed to update worker")
+      setFeedback({ type: "error", message: "Failed to update worker" })
     } finally {
       setSubmitting(false)
     }
@@ -246,6 +265,7 @@ export default function WorkersPage() {
       return
     }
     setOpenMenuId(null)
+    setFeedback(null)
 
     try {
       const response = await fetch(`/api/users/${userId}`, {
@@ -256,30 +276,36 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => prev.filter((u) => u.id !== userId))
+        setFeedback({ type: "success", message: "Worker deleted successfully." })
       } else {
-        alert(data.error || "Failed to delete worker")
+        setFeedback({ type: "error", message: data.error || "Failed to delete worker" })
       }
     } catch (error) {
       console.error("Failed to delete worker:", error)
-      alert("Failed to delete worker")
+      setFeedback({ type: "error", message: "Failed to delete worker" })
     }
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Workers</h1>
-          <p className="text-muted-foreground">
-            Manage your workforce ({users.length} total)
-          </p>
-        </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Worker
-        </Button>
-      </div>
+      <PageHeader
+        title="Workers"
+        description={`Manage your workforce (${users.length} total)`}
+        actions={(
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Worker
+          </Button>
+        )}
+      />
+
+      {feedback ? (
+        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
+          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
+          <AlertDescription>{feedback.message}</AlertDescription>
+        </Alert>
+      ) : null}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -488,12 +514,12 @@ export default function WorkersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              <Label htmlFor="positionType">Position Type</Label>
+              <Select
+                id="positionType"
+                value={formData.positionType}
+                onChange={(e) => setFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
+                options={POSITION_TYPE_OPTIONS}
               />
             </div>
           </div>
@@ -508,6 +534,18 @@ export default function WorkersPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="password">Password (Optional)</Label>
               <Input
@@ -617,12 +655,12 @@ export default function WorkersPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editFormData.phone}
-                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+              <Label htmlFor="edit-positionType">Position Type</Label>
+              <Select
+                id="edit-positionType"
+                value={editFormData.positionType}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
+                options={POSITION_TYPE_OPTIONS}
               />
             </div>
             <div className="space-y-2">
@@ -632,6 +670,18 @@ export default function WorkersPage() {
                 type="date"
                 value={editFormData.hireDate}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
               />
             </div>
           </div>

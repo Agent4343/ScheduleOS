@@ -71,6 +71,8 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
+  auditLogs        AuditLog[]
+  shiftSwapRequests ShiftSwapRequest[]
 }
 
 model User {
@@ -106,6 +108,10 @@ model User {
   holidayTracking HolidayTracking[]
   notifications   Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
+  auditLogs       AuditLog[]
+  requestedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapRequester")
+  receivedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapTarget")
+  approvedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapApprover")
 
   @@index([organizationId])
   @@index([crewId])
@@ -393,6 +399,63 @@ enum NotificationType {
   STAFFING_ALERT
   SHIFT_SWAP
   SYSTEM
+}
+
+// =====================
+// Audit Logs
+// =====================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  action         String
+  userId         String
+  organizationId String
+  targetId       String?
+  targetType     String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+}
+
+// =====================
+// Shift Swaps
+// =====================
+
+model ShiftSwapRequest {
+  id             String          @id @default(cuid())
+  date           DateTime        @db.Date
+  shiftType      ShiftType
+  status         ShiftSwapStatus @default(PENDING)
+  reason         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  requesterId   String
+  targetUserId  String
+  approvedById  String?
+  organizationId String
+
+  requester     User         @relation("ShiftSwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetUser    User         @relation("ShiftSwapTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  approvedBy    User?        @relation("ShiftSwapApprover", fields: [approvedById], references: [id])
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([requesterId])
+  @@index([targetUserId])
+}
+
+enum ShiftSwapStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
 }
 
 // =====================

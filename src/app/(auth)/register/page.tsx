@@ -122,13 +122,16 @@ export default function RegisterPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               value={formData.password}
               onChange={handleChange}
               required
-              minLength={8}
+              minLength={12}
               disabled={isLoading}
             />
+            <p className="text-xs text-muted-foreground">
+              Must include uppercase, lowercase, number, and special character.
+            </p>
           </div>
 
           <div className="space-y-2">

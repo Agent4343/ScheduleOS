@@ -8,19 +8,21 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 })
 
+export const passwordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/])/,
+    "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+  )
+
 export const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z
-    .string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/])/,
-      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
-    ),
+  password: passwordSchema,
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z0-9\s\-'.]+$/, "Name contains invalid characters"),
   organizationName: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
@@ -29,21 +31,62 @@ export const registerSchema = z.object({
 })
 
 // Organization validations
+const shiftColorSchema = z.object({
+  bg: z.string(),
+  text: z.string(),
+})
+
+const billingSchema = z.object({
+  plan: z.string().optional(),
+  status: z.string().optional(),
+  stripeCustomerId: z.string().optional(),
+  stripeSubscriptionId: z.string().optional(),
+  currentPeriodEnd: z.string().optional(),
+  trialEndsAt: z.string().optional(),
+  seatCount: z.number().int().min(0).optional(),
+  requestedPlan: z.string().optional(),
+})
+
+const scheduleGroupingGroupSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+  order: z.number().int().min(0),
+  positionTypes: z.array(z.nativeEnum(PositionType)).optional(),
+  roles: z.array(z.nativeEnum(UserRole)).optional(),
+  keywords: z.array(z.string()).optional(),
+})
+
+const scheduleGroupingSchema = z.object({
+  groups: z.array(scheduleGroupingGroupSchema).optional(),
+})
+
+const organizationSettingsSchema = z.object({
+  timezone: z.string().default("America/St_Johns"),
+  weekStartsOn: z.number().min(0).max(6).default(0),
+  minStaffingAlertEnabled: z.boolean().default(true),
+  emailNotificationsEnabled: z.boolean().default(true),
+  smsNotificationsEnabled: z.boolean().default(false),
+  dateFormat: z.string().optional(),
+  minStaffingPerCrew: z.number().int().min(0).optional(),
+  minStaffOperators: z.number().int().min(0).default(1),
+  minStaffOnshoreControlRoom: z.number().int().min(0).default(1),
+  shiftColors: z.record(z.string(), shiftColorSchema).optional(),
+  billing: billingSchema.optional(),
+  scheduleGrouping: scheduleGroupingSchema.optional(),
+}).passthrough()
+
 export const createOrganizationSchema = z.object({
   name: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
-  settings: z.object({
-    timezone: z.string().default("America/St_Johns"),
-    weekStartsOn: z.number().min(0).max(6).default(0),
-    minStaffingAlertEnabled: z.boolean().default(true),
-    emailNotificationsEnabled: z.boolean().default(true),
-    smsNotificationsEnabled: z.boolean().default(false),
-  }).optional(),
+  settings: organizationSettingsSchema.optional(),
 })
 
-export const updateOrganizationSchema = createOrganizationSchema.partial()
+export const updateOrganizationSchema = z.object({
+  name: createOrganizationSchema.shape.name.optional(),
+  settings: organizationSettingsSchema.partial().optional(),
+})
 
 // User validations
 export const createUserSchema = z.object({
@@ -51,7 +94,7 @@ export const createUserSchema = z.object({
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z0-9\s\-'.]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string()
@@ -118,6 +161,7 @@ export const generateScheduleSchema = z.object({
   patternId: z.string(),
   startPhase: z.number().int().min(0).optional(),
   startingShift: z.enum(["DAY", "NIGHT"]).optional(),
+  replaceExisting: z.boolean().default(false),
   clearOverrides: z.boolean().default(false),
 })
 

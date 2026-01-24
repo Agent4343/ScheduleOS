@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
+import { getYearStartUTC, getYearEndUTC, toUTCDate } from "@/lib/timezone"
+
+export const dynamic = "force-dynamic"
 
 // Sanitize CSV values to prevent injection attacks
 function sanitizeCSVValue(value: string | null | undefined): string {
@@ -29,6 +31,28 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type") || "all"
+    const startDateParam = searchParams.get("startDate")
+    const endDateParam = searchParams.get("endDate")
+
+    let rangeStart: Date | null = null
+    let rangeEnd: Date | null = null
+
+    if (startDateParam || endDateParam) {
+      if (!startDateParam || !endDateParam) {
+        return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 })
+      }
+
+      rangeStart = toUTCDate(startDateParam)
+      rangeEnd = toUTCDate(endDateParam)
+
+      if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) {
+        return NextResponse.json({ error: "Invalid date range" }, { status: 400 })
+      }
+
+      if (rangeStart > rangeEnd) {
+        return NextResponse.json({ error: "startDate must be before endDate" }, { status: 400 })
+      }
+    }
 
     let csv = ""
 
@@ -48,10 +72,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "schedules" || type === "all") {
-      // Get schedules for the current year using UTC dates
+      // Get schedules for the requested range or current year using UTC dates
       const currentYear = new Date().getFullYear()
-      const startDate = getYearStartUTC(currentYear)
-      const endDate = getYearEndUTC(currentYear)
+      const startDate = rangeStart ?? getYearStartUTC(currentYear)
+      const endDate = rangeEnd ?? getYearEndUTC(currentYear)
 
       const schedules = await prisma.schedule.findMany({
         where: {

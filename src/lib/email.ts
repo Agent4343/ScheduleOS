@@ -2,7 +2,7 @@ import { Resend } from "resend"
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
-const FROM_EMAIL = process.env.EMAIL_FROM || "ScheduleOS <noreply@scheduleos.com>"
+const FROM_EMAIL = process.env.EMAIL_FROM || "ShiftSync <noreply@shiftsync.app>"
 
 export interface EmailOptions {
   to: string | string[]
@@ -69,7 +69,7 @@ export function timeOffRequestEmail(
         </tr>
         ` : ""}
       </table>
-      <p>Please review and respond to this request in ScheduleOS.</p>
+      <p>Please review and respond to this request in ShiftSync.</p>
     </div>
   `
 }
@@ -110,7 +110,7 @@ export function timeOffResponseEmail(
         </tr>
         ` : ""}
       </table>
-      <p>Log in to ScheduleOS to view your updated schedule.</p>
+      <p>Log in to ShiftSync to view your updated schedule.</p>
     </div>
   `
 }
@@ -118,7 +118,7 @@ export function timeOffResponseEmail(
 export function welcomeEmail(userName: string, loginEmail: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #1a1a1a;">Welcome to ScheduleOS!</h2>
+      <h2 style="color: #1a1a1a;">Welcome to ShiftSync!</h2>
       <p>Hi ${userName},</p>
       <p>Your account has been created. You can now log in to view your schedule and request time off.</p>
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">

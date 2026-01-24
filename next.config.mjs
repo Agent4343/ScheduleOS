@@ -8,13 +8,12 @@ const nextConfig = {
   // Enable instrumentation hook for automatic database migrations
   experimental: {
     instrumentationHook: true,
-  },
-
-  // Include Prisma client in standalone output
-  // This is required for Prisma to work correctly in containerized deployments
-  outputFileTracingIncludes: {
-    "/api/**/*": ["./node_modules/.prisma/**/*"],
-    "/": ["./node_modules/.prisma/**/*"],
+    // Include Prisma client in standalone output
+    // This is required for Prisma to work correctly in containerized deployments
+    outputFileTracingIncludes: {
+      "/api/**/*": ["./node_modules/.prisma/**/*"],
+      "/": ["./node_modules/.prisma/**/*"],
+    },
   },
 
   // Optimize images

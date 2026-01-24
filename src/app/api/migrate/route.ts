@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
+import { authOptions } from "@/lib/auth"
 
 // Migration statements to bring database in sync with current Prisma schema
 // These are idempotent - safe to run multiple times
@@ -108,14 +110,69 @@ const migrationStatements = [
   EXCEPTION
     WHEN duplicate_column THEN null;
   END $$`,
+
+  // =====================
+  // ShiftSwapStatus enum and ShiftSwapRequest table
+  // =====================
+  `DO $$ BEGIN CREATE TYPE "ShiftSwapStatus" AS ENUM ('PENDING', 'APPROVED', 'DENIED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+
+  `CREATE TABLE IF NOT EXISTS "ShiftSwapRequest" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "date" DATE NOT NULL,
+    "shiftType" "ShiftType" NOT NULL,
+    "status" "ShiftSwapStatus" NOT NULL DEFAULT 'PENDING',
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "requesterId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "targetUserId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "approvedById" TEXT REFERENCES "User"("id") ON DELETE SET NULL,
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_organizationId_status_idx" ON "ShiftSwapRequest"("organizationId", "status")`,
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_requesterId_idx" ON "ShiftSwapRequest"("requesterId")`,
+  `CREATE INDEX IF NOT EXISTS "ShiftSwapRequest_targetUserId_idx" ON "ShiftSwapRequest"("targetUserId")`,
+
+  // =====================
+  // AuditLog table
+  // =====================
+  `CREATE TABLE IF NOT EXISTS "AuditLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "action" TEXT NOT NULL,
+    "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
+    "targetId" TEXT,
+    "targetType" TEXT,
+    "metadata" JSONB,
+    "ipAddress" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS "AuditLog_organizationId_createdAt_idx" ON "AuditLog"("organizationId", "createdAt")`,
+  `CREATE INDEX IF NOT EXISTS "AuditLog_userId_idx" ON "AuditLog"("userId")`,
 ]
 
 export async function GET(request: NextRequest) {
   const migrateKey = request.nextUrl.searchParams.get("key")
+  const expectedKey = process.env.SETUP_KEY
 
   // Require a key for security
-  if (migrateKey !== process.env.SETUP_KEY && migrateKey !== "migrate-2026") {
+  if (!expectedKey) {
+    return NextResponse.json({ error: "Migration key not configured" }, { status: 500 })
+  }
+
+  if (migrateKey !== expectedKey) {
     return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
+  }
+
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Admin privileges required" }, { status: 403 })
   }
 
   try {

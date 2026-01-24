@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { PageHeader } from "@/components/layout/page-header"
+import { PositionType } from "@/types"
 import {
   Calendar,
   Users,
@@ -73,7 +75,41 @@ export default function SetupPage() {
   const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
   const [customEndDate, setCustomEndDate] = useState("")
   const [startShift, setStartShift] = useState<"day" | "night">("day")
+  const [replaceExisting, setReplaceExisting] = useState(true)
   const [clearOverrides, setClearOverrides] = useState(false)
+  const assignedWorkersCount = workers.filter((worker) => worker.crewId).length
+  const hasWorkers = workers.length > 0
+  const hasCrews = crews.length > 0
+  const hasPatterns = patterns.length > 0
+  const hasAssignments = assignedWorkersCount > 0
+  const setupSteps = [
+    {
+      title: "Add workers",
+      description: `${workers.length} worker${workers.length === 1 ? "" : "s"} added`,
+      completed: hasWorkers,
+    },
+    {
+      title: "Create crews",
+      description: `${crews.length} crew${crews.length === 1 ? "" : "s"} created`,
+      completed: hasCrews,
+    },
+    {
+      title: "Assign workers to crews",
+      description: `${assignedWorkersCount}/${workers.length} assigned`,
+      completed: hasAssignments,
+    },
+    {
+      title: "Define rotation patterns",
+      description: `${patterns.length} pattern${patterns.length === 1 ? "" : "s"} ready`,
+      completed: hasPatterns,
+    },
+    {
+      title: "Generate schedules",
+      description: "Create shifts for upcoming periods",
+      completed: false,
+    },
+  ]
+  const completedSteps = setupSteps.filter((step) => step.completed).length
 
   // Calculate end date from duration or custom selection
   const getEndDate = () => {
@@ -98,6 +134,7 @@ export default function SetupPage() {
     name: "",
     email: "",
     position: "",
+    positionType: PositionType.OTHER,
     crewId: "",
   })
 
@@ -178,6 +215,7 @@ export default function SetupPage() {
           name: newWorker.name,
           email: newWorker.email,
           position: newWorker.position || null,
+          positionType: newWorker.positionType,
           crewId: newWorker.crewId || null,
           role: "WORKER",
           status: "ACTIVE",
@@ -192,7 +230,7 @@ export default function SetupPage() {
         // Auto-select the new worker
         setSelectedWorkers((prev) => new Set([...Array.from(prev), data.data.id]))
         // Reset form
-        setNewWorker({ name: "", email: "", position: "", crewId: "" })
+        setNewWorker({ name: "", email: "", position: "", positionType: PositionType.OTHER, crewId: "" })
         setShowAddWorker(false)
         setSuccess(`Worker "${newWorker.name}" added successfully!`)
         setTimeout(() => setSuccess(""), 3000)
@@ -244,6 +282,7 @@ export default function SetupPage() {
           startDate,
           endDate,
           startPhase: 0,
+          replaceExisting,
           clearOverrides,
           // Send startingShift if pattern includes nights
           ...(pattern?.includesNights && {
@@ -303,12 +342,46 @@ export default function SetupPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Schedule Setup</h1>
-        <p className="text-muted-foreground mt-1">
-          Quickly set up schedules for your workers in just a few steps
-        </p>
-      </div>
+      <PageHeader
+        title="Schedule Setup"
+        description="Quickly set up schedules for your workers in just a few steps"
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="h-5 w-5" />
+            Setup Progress
+          </CardTitle>
+          <CardDescription>
+            {completedSteps} of {setupSteps.length} steps completed
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {setupSteps.map((step) => (
+              <div key={step.title} className="flex items-start gap-3 rounded-lg border p-3">
+                {step.completed ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">{step.title}</p>
+                  <p className="text-xs text-muted-foreground">{step.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {completedSteps < setupSteps.length && (
+            <Alert>
+              <AlertDescription>
+                Finish the remaining setup steps to generate accurate schedules and staffing coverage.
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       {error && (
         <Alert variant="destructive">
@@ -471,6 +544,19 @@ export default function SetupPage() {
                         setNewWorker({ ...newWorker, position: e.target.value })
                       }
                     />
+                    <select
+                      id="worker-positionType"
+                      name="worker-positionType"
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                      value={newWorker.positionType}
+                      onChange={(e) =>
+                        setNewWorker({ ...newWorker, positionType: e.target.value as PositionType })
+                      }
+                    >
+                      <option value={PositionType.OPERATOR}>Operator</option>
+                      <option value={PositionType.ONSHORE_CONTROL_ROOM}>Onshore Control Room</option>
+                      <option value={PositionType.OTHER}>Other</option>
+                    </select>
                     <select
                       id="worker-crew"
                       name="worker-crew"
@@ -729,6 +815,24 @@ export default function SetupPage() {
                 </div>
               </div>
             </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                type="checkbox"
+                id="replaceExisting"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <label htmlFor="replaceExisting" className="text-sm">
+                Replace existing schedule (clears prior auto-generated shifts)
+              </label>
+            </div>
+            {replaceExisting && (
+              <p className="text-xs text-muted-foreground">
+                Deletes previous auto-generated shifts for selected workers. Manual edits remain unless cleared.
+              </p>
+            )}
 
             <div className="flex items-center gap-2 pt-2">
               <input

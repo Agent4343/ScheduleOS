@@ -1,4 +1,5 @@
-import { prisma } from "./prisma"
+import { prisma } from "@/lib/prisma"
+import { Prisma } from "@prisma/client"
 
 export enum AuditAction {
   USER_CREATED = "USER_CREATED",
@@ -12,6 +13,7 @@ export enum AuditAction {
   CREW_DELETED = "CREW_DELETED",
   ORGANIZATION_UPDATED = "ORGANIZATION_UPDATED",
   ROLE_CHANGED = "ROLE_CHANGED",
+  SUPPORT_REQUEST = "SUPPORT_REQUEST",
 }
 
 interface AuditLogData {
@@ -42,8 +44,18 @@ export async function logAudit(data: AuditLogData): Promise<void> {
       ipAddress: data.ipAddress,
     }))
 
-    // Could also store in database if needed for compliance
-    // await prisma.auditLog.create({ data: ... })
+    // Store in database for compliance and reporting
+    await prisma.auditLog.create({
+      data: {
+        action: data.action,
+        userId: data.userId,
+        organizationId: data.organizationId,
+        targetId: data.targetId,
+        targetType: data.targetType,
+        metadata: data.metadata ? (data.metadata as Prisma.InputJsonValue) : undefined,
+        ipAddress: data.ipAddress,
+      },
+    })
   } catch (error) {
     // Don't throw errors from audit logging to avoid disrupting main flows
     console.error("Failed to log audit event:", error)

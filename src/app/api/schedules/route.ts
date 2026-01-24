@@ -313,9 +313,13 @@ async function generateSchedules(
     const startDate = normalizeToUTCMidnight(new Date(validatedData.startDate))
     const endDate = normalizeToUTCMidnight(new Date(validatedData.endDate))
 
-    const deleteWhere = validatedData.clearOverrides
-      ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }
-      : { userId: { in: userIds }, isOverride: false, date: { gte: startDate, lte: endDate } }
+    const deleteWhere = validatedData.replaceExisting
+      ? (validatedData.clearOverrides
+        ? { userId: { in: userIds } }
+        : { userId: { in: userIds }, isOverride: false })
+      : (validatedData.clearOverrides
+        ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }
+        : { userId: { in: userIds }, isOverride: false, date: { gte: startDate, lte: endDate } })
 
     const deleteResult = await tx.schedule.deleteMany({
       where: deleteWhere,

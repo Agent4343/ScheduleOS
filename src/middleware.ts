@@ -2,8 +2,40 @@ import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
 export default withAuth(
-  function middleware(_req) {
-    const response = NextResponse.next()
+  function middleware(req) {
+    const nonceBytes = new Uint8Array(16)
+    crypto.getRandomValues(nonceBytes)
+    let nonceBinary = ""
+    for (let i = 0; i < nonceBytes.length; i++) {
+      nonceBinary += String.fromCharCode(nonceBytes[i])
+    }
+    const nonce = btoa(nonceBinary)
+
+    const requestHeaders = new Headers(req.headers)
+    requestHeaders.set("x-nonce", nonce)
+
+    // CSP header for production (must be on request for Next.js nonce support)
+    let csp: string | null = null
+    if (process.env.NODE_ENV === "production") {
+      csp = [
+        "default-src 'self'",
+        `script-src 'self' 'nonce-${nonce}'`,
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+      ].join("; ")
+      requestHeaders.set("content-security-policy", csp)
+    }
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
 
     // Security headers
     response.headers.set("X-Content-Type-Options", "nosniff")
@@ -15,12 +47,8 @@ export default withAuth(
       "camera=(), microphone=(), geolocation=()"
     )
 
-    // CSP header for production
-    if (process.env.NODE_ENV === "production") {
-      response.headers.set(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.ingest.sentry.io https://*.sentry.io"
-      )
+    if (csp) {
+      response.headers.set("Content-Security-Policy", csp)
     }
 
     return response
@@ -37,6 +65,9 @@ export default withAuth(
           "/api/auth",
           "/api/health",
           "/api/setup",
+          "/api/billing/webhook",
+          "/pricing",
+          "/status",
         ]
 
         // Check if the path is public

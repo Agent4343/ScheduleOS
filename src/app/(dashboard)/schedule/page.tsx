@@ -2,13 +2,14 @@
 
 import { Suspense, useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
+import { PageHeader } from "@/components/layout/page-header"
 import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
@@ -20,7 +21,7 @@ import {
   CalendarPlus,
   RotateCcw,
 } from "lucide-react"
-import { ShiftType, UserRole } from "@/types"
+import { PositionType, ShiftType, UserRole } from "@/types"
 
 interface Schedule {
   id: string
@@ -50,6 +51,7 @@ interface Worker {
   name: string | null
   email?: string
   position: string | null
+  positionType?: PositionType | null
   phone?: string | null
   role?: UserRole
   hireDate?: string | null
@@ -64,6 +66,7 @@ interface Worker {
 interface WorkerEditForm {
   name: string
   position: string
+  positionType: PositionType
   phone: string
   crewId: string
   role: UserRole
@@ -94,7 +97,7 @@ interface CustomShiftType {
 const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
   NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
-  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
+  OFF: { bg: "#000000", text: "#ffffff", label: "" },
   LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
   PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
   PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
@@ -122,6 +125,108 @@ function getYearDays(year: number) {
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+const CALENDAR_SIZE_OPTIONS = [
+  { value: "compact", label: "Compact" },
+  { value: "comfortable", label: "Comfortable" },
+  { value: "large", label: "Large" },
+] as const
+
+type CalendarSize = typeof CALENDAR_SIZE_OPTIONS[number]["value"]
+
+const CALENDAR_SIZE_CLASSES: Record<CalendarSize, {
+  cell: string
+  header: string
+  dayText: string
+  shiftText: string
+}> = {
+  compact: {
+    cell: "w-7 min-w-[28px] h-7",
+    header: "w-7 min-w-[28px]",
+    dayText: "text-xs",
+    shiftText: "text-[10px]",
+  },
+  comfortable: {
+    cell: "w-9 min-w-[36px] h-9",
+    header: "w-9 min-w-[36px]",
+    dayText: "text-sm",
+    shiftText: "text-xs",
+  },
+  large: {
+    cell: "w-11 min-w-[44px] h-11",
+    header: "w-11 min-w-[44px]",
+    dayText: "text-sm",
+    shiftText: "text-sm",
+  },
+}
+
+const WORKER_SORT_OPTIONS = [
+  { value: "custom", label: "Custom order" },
+  { value: "shift", label: "Shift (selected date)" },
+  { value: "positionGroup", label: "Position group" },
+  { value: "name", label: "Name" },
+  { value: "crew", label: "Crew" },
+  { value: "position", label: "Position" },
+  { value: "role", label: "Role" },
+] as const
+
+interface ScheduleGroupingGroup {
+  id: string
+  name: string
+  order: number
+  positionTypes?: PositionType[]
+  roles?: UserRole[]
+  keywords?: string[]
+}
+
+interface ScheduleGroupingSettings {
+  groups?: ScheduleGroupingGroup[]
+}
+
+const DEFAULT_SCHEDULE_GROUPS: ScheduleGroupingGroup[] = [
+  {
+    id: "operators",
+    name: "Operators",
+    order: 1,
+    positionTypes: [PositionType.OPERATOR],
+    roles: [],
+    keywords: ["operator"],
+  },
+  {
+    id: "onshore-control",
+    name: "Onshore Control Room",
+    order: 2,
+    positionTypes: [PositionType.ONSHORE_CONTROL_ROOM],
+    roles: [],
+    keywords: ["onshore", "control room"],
+  },
+  {
+    id: "oim",
+    name: "OIM",
+    order: 3,
+    positionTypes: [],
+    roles: [],
+    keywords: ["oim"],
+  },
+  {
+    id: "supervisor",
+    name: "Supervisor",
+    order: 4,
+    positionTypes: [],
+    roles: [UserRole.SUPERVISOR],
+    keywords: ["supervisor"],
+  },
+  {
+    id: "production-lead",
+    name: "Production Leads",
+    order: 5,
+    positionTypes: [],
+    roles: [],
+    keywords: ["production lead", "prod lead"],
+  },
+]
+
+type WorkerSort = typeof WORKER_SORT_OPTIONS[number]["value"]
+
 function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
@@ -141,6 +246,16 @@ function SchedulePageContent() {
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
+  const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
+  const [workerSort, setWorkerSort] = useState<WorkerSort>("positionGroup")
+  const [shiftGroupDate, setShiftGroupDate] = useState(() => {
+    const today = new Date()
+    return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+  })
+  const [scheduleGrouping, setScheduleGrouping] = useState<ScheduleGroupingSettings>({
+    groups: DEFAULT_SCHEDULE_GROUPS,
+  })
+  const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -148,6 +263,7 @@ function SchedulePageContent() {
   const [editForm, setEditForm] = useState<WorkerEditForm>({
     name: "",
     position: "",
+    positionType: PositionType.OTHER,
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
@@ -160,6 +276,7 @@ function SchedulePageContent() {
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
+  const [replaceExisting, setReplaceExisting] = useState(true)
   const [clearOverrides, setClearOverrides] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
@@ -241,6 +358,27 @@ function SchedulePageContent() {
     fetchCustomShiftTypes()
   }, [])
 
+  // Fetch organization settings for grouping rules
+  useEffect(() => {
+    async function fetchOrganization() {
+      try {
+        const response = await fetch("/api/organization")
+        const result = await response.json()
+        if (result.success && result.data?.settings?.scheduleGrouping?.groups?.length) {
+          setScheduleGrouping({
+            groups: result.data.settings.scheduleGrouping.groups,
+          })
+        } else {
+          setScheduleGrouping({ groups: DEFAULT_SCHEDULE_GROUPS })
+        }
+      } catch (error) {
+        console.error("Failed to fetch organization settings:", error)
+      }
+    }
+
+    fetchOrganization()
+  }, [])
+
   // Fetch workers
   useEffect(() => {
     async function fetchWorkers() {
@@ -303,6 +441,18 @@ function SchedulePageContent() {
     fetchSchedules()
   }, [currentYear, selectedCrew])
 
+  useEffect(() => {
+    const currentYearPrefix = String(currentYear)
+    if (!shiftGroupDate.startsWith(currentYearPrefix)) {
+      const today = new Date()
+      const nextDate =
+        today.getFullYear() === currentYear
+          ? formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+          : `${currentYear}-01-01`
+      setShiftGroupDate(nextDate)
+    }
+  }, [currentYear, shiftGroupDate])
+
   // Build schedule lookup map
   const scheduleMap = useMemo(() => {
     const map = new Map<string, Schedule>()
@@ -316,18 +466,168 @@ function SchedulePageContent() {
 
   // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
-    return [...workers].sort((a, b) => {
-      // First sort by custom sortOrder (lower numbers first)
+    const list = [...workers]
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const groupingRules = (scheduleGrouping.groups?.length
+      ? scheduleGrouping.groups
+      : DEFAULT_SCHEDULE_GROUPS
+    ).slice().sort((a, b) => a.order - b.order)
+
+    const getPositionGroupOrder = (worker: Worker) => {
+      const positionText = (worker.position || "").toLowerCase()
+      for (const group of groupingRules) {
+        const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
+        const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
+        const matchesKeyword =
+          group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
+        if (matchesPositionType || matchesRole || matchesKeyword) {
+          return group.order
+        }
+      }
+      return groupingRules.length + 1
+    }
+
+    const getShiftGroupOrder = (shiftType?: ShiftType | null) => {
+      if (!shiftType) return 5
+      if (shiftType === "DAY") return 0
+      if (shiftType === "NIGHT") return 1
+      if (shiftType === "OFF") return 2
+      if (["VACATION", "SICK", "LEAVE", "TRAINING", "SHUTDOWN"].includes(shiftType)) return 3
+      return 4
+    }
+
+    list.sort((a, b) => {
+      if (workerSort === "shift") {
+        const scheduleA = scheduleMap.get(`${a.id}-${shiftDateKey}`)
+        const scheduleB = scheduleMap.get(`${b.id}-${shiftDateKey}`)
+        const groupA = getShiftGroupOrder(scheduleA?.shiftType)
+        const groupB = getShiftGroupOrder(scheduleB?.shiftType)
+        if (groupA !== groupB) return groupA - groupB
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "positionGroup") {
+        const groupA = getPositionGroupOrder(a)
+        const groupB = getPositionGroupOrder(b)
+        if (groupA !== groupB) return groupA - groupB
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "name") {
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "crew") {
+        const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
+        if (crewCompare !== 0) return crewCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "position") {
+        const positionCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
+        if (positionCompare !== 0) return positionCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+      if (workerSort === "role") {
+        const roleCompare = (a.role || "ZZZ").localeCompare(b.role || "ZZZ")
+        if (roleCompare !== 0) return roleCompare
+        return (a.name || "").localeCompare(b.name || "")
+      }
+
+      // Default: custom sortOrder, then crew name, then name
       const sortOrderA = a.sortOrder ?? 999999
       const sortOrderB = b.sortOrder ?? 999999
       if (sortOrderA !== sortOrderB) return sortOrderA - sortOrderB
-      // Then by crew name
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
-      // Finally by worker name
       return (a.name || "").localeCompare(b.name || "")
     })
-  }, [workers])
+    return list
+  }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
+
+  const rosterData = useMemo(() => {
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const day: Worker[] = []
+    const night: Worker[] = []
+    const off: Worker[] = []
+    const other: Worker[] = []
+
+    for (const worker of sortedWorkers) {
+      const schedule = scheduleMap.get(`${worker.id}-${shiftDateKey}`)
+      const shiftType = schedule?.shiftType
+      if (shiftType === "DAY") {
+        day.push(worker)
+      } else if (shiftType === "NIGHT") {
+        night.push(worker)
+      } else if (shiftType === "OFF") {
+        off.push(worker)
+      } else if (shiftType) {
+        other.push(worker)
+      } else {
+        other.push(worker)
+      }
+    }
+
+    return { day, night, off, other, shiftDateKey }
+  }, [sortedWorkers, scheduleMap, shiftGroupDate, currentYear])
+
+  const roleRoster = useMemo(() => {
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const groupingRules = (scheduleGrouping.groups?.length
+      ? scheduleGrouping.groups
+      : DEFAULT_SCHEDULE_GROUPS
+    ).slice().sort((a, b) => a.order - b.order)
+
+    const matchesGroup = (worker: Worker, group: ScheduleGroupingGroup) => {
+      const positionText = (worker.position || "").toLowerCase()
+      const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
+      const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
+      const matchesKeyword =
+        group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
+      return matchesPositionType || matchesRole || matchesKeyword
+    }
+
+    const groupedWorkers = groupingRules.map((group) => {
+      const workersInGroup = workers.filter((worker) => matchesGroup(worker, group))
+      return { group, workers: workersInGroup }
+    })
+
+    const assignedIds = new Set(
+      groupedWorkers.flatMap((group) => group.workers.map((worker) => worker.id))
+    )
+    const otherWorkers = workers.filter((worker) => !assignedIds.has(worker.id))
+    if (otherWorkers.length > 0) {
+      groupedWorkers.push({
+        group: { id: "other", name: "Other", order: groupingRules.length + 1 },
+        workers: otherWorkers,
+      })
+    }
+
+    const buildShiftRoster = (shiftType: ShiftType) =>
+      groupedWorkers.map(({ group, workers: groupWorkers }) => {
+        const scheduled = groupWorkers.filter(
+          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType === shiftType
+        )
+        const missing = groupWorkers.filter(
+          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType !== shiftType
+        )
+        return {
+          group,
+          total: groupWorkers.length,
+          scheduled,
+          missing,
+        }
+      })
+
+    return {
+      day: buildShiftRoster(ShiftType.DAY),
+      night: buildShiftRoster(ShiftType.NIGHT),
+      shiftDateKey,
+    }
+  }, [workers, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
+
+  const formatWorkerNames = (list: Worker[], max = 6) => {
+    if (list.length === 0) return "None"
+    const names = list.map((worker) => worker.name || "Unnamed")
+    if (names.length <= max) return names.join(", ")
+    return `${names.slice(0, max).join(", ")} +${names.length - max} more`
+  }
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -346,6 +646,7 @@ function SchedulePageContent() {
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
+      positionType: worker.positionType || PositionType.OTHER,
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
@@ -379,6 +680,7 @@ function SchedulePageContent() {
         body: JSON.stringify({
           name: editForm.name,
           position: editForm.position || null,
+          positionType: editForm.positionType,
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
@@ -399,6 +701,7 @@ function SchedulePageContent() {
                 ...w,
                 name: editForm.name,
                 position: editForm.position || null,
+                positionType: editForm.positionType,
                 phone: editForm.phone || null,
                 role: editForm.role,
                 hireDate: editForm.hireDate || null,
@@ -438,6 +741,7 @@ function SchedulePageContent() {
         endDate: endDateStr,
         startPhase: 0,
         startingShift: startingShift,
+        replaceExisting: replaceExisting,
         clearOverrides: clearOverrides,
       }
 
@@ -505,6 +809,13 @@ function SchedulePageContent() {
     setScheduleEditWorker(null)
     setScheduleEditError(null)
     setScheduleEditSuccess(null)
+  }
+
+  function handleScheduleEditStartChange(value: string) {
+    setScheduleEditStartDate(value)
+    if (scheduleEditEndDate && value > scheduleEditEndDate) {
+      setScheduleEditEndDate(value)
+    }
   }
 
   async function saveScheduleEdit() {
@@ -619,200 +930,407 @@ function SchedulePageContent() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Schedule Calendar</h1>
-          <p className="text-muted-foreground">
-            {currentYear} - Full Year View - {sortedWorkers.length} Workers
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
-            This Year
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-semibold px-4 text-lg">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Filter */}
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-muted-foreground">Filter by Crew:</span>
-        <Select
-          id="crew-filter"
-          name="crew-filter"
-          value={selectedCrew}
-          onChange={(e) => setSelectedCrew(e.target.value)}
-          options={[
-            { value: "", label: "All Crews" },
-            ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-          ]}
-          className="w-40"
-        />
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: style.bg, color: style.text }}
-          >
-            <span className="font-bold">{style.label}</span>
-            <span>= {type.replace("_", " ")}</span>
+      <PageHeader
+        title="Schedule Calendar"
+        description={`${currentYear} - Full Year View - ${sortedWorkers.length} Workers`}
+        actions={(
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHideFiltersLegend((prev) => !prev)}
+            >
+              {hideFiltersLegend ? "Show filters/legend" : "Hide filters/legend"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+              This Year
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="font-semibold px-4 text-lg">{currentYear}</span>
+            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-        ))}
-        {customShiftTypes.filter(t => t.isActive).map((t) => (
-          <div
-            key={t.code}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: t.color, color: t.textColor }}
-          >
-            <span className="font-bold">{t.code}</span>
-            <span>= {t.name}</span>
-          </div>
-        ))}
-      </div>
+        )}
+      />
 
-      {/* Schedule Table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            {currentYear} Schedule
-            <Badge variant="secondary" className="ml-2">
-              <Users className="h-3 w-3 mr-1" />
-              {sortedWorkers.length} workers
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      {!hideFiltersLegend && (
+        <>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Filter by Crew:</span>
+              <Select
+                id="crew-filter"
+                name="crew-filter"
+                value={selectedCrew}
+                onChange={(e) => setSelectedCrew(e.target.value)}
+                options={[
+                  { value: "", label: "All Crews" },
+                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+                ]}
+                className="w-40"
+              />
             </div>
-          ) : sortedWorkers.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No workers found</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Sort by:</span>
+              <Select
+                id="worker-sort"
+                name="worker-sort"
+                value={workerSort}
+                onChange={(e) => setWorkerSort(e.target.value as WorkerSort)}
+                options={WORKER_SORT_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                className="w-44"
+              />
             </div>
-          ) : (
-            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
-              <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
-                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
-                  {/* Month headers */}
-                  <tr>
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
-                      Worker
-                    </th>
-                    {yearMonths.map(({ month, days }) => (
-                      <th
-                        key={month}
-                        colSpan={days.length}
-                        className="border p-2 text-center font-semibold bg-muted text-base"
-                      >
-                        {MONTH_NAMES[month]}
+            {workerSort === "shift" && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Shift date:</span>
+                <Input
+                  type="date"
+                  value={shiftGroupDate}
+                  onChange={(e) => setShiftGroupDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Calendar size:</span>
+              <Select
+                id="calendar-size"
+                name="calendar-size"
+                value={calendarSize}
+                onChange={(e) => setCalendarSize(e.target.value as CalendarSize)}
+                options={CALENDAR_SIZE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                className="w-44"
+              />
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+              <div
+                key={type}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: style.bg, color: style.text }}
+              >
+                <span className="font-bold">{style.label}</span>
+                <span>= {type.replace("_", " ")}</span>
+              </div>
+            ))}
+            {customShiftTypes.filter(t => t.isActive).map((t) => (
+              <div
+                key={t.code}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: t.color, color: t.textColor }}
+              >
+                <span className="font-bold">{t.code}</span>
+                <span>= {t.name}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Schedule Table + Roster */}
+      <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {currentYear} Schedule
+              <Badge variant="secondary" className="ml-2">
+                <Users className="h-3 w-3 mr-1" />
+                {sortedWorkers.length} workers
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : sortedWorkers.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No workers found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+                <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
+                  <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
+                    {/* Month headers */}
+                    <tr>
+                      <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
+                        Worker
                       </th>
-                    ))}
-                  </tr>
-                  {/* Day headers */}
-                  <tr>
-                    <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const date = new Date(currentYear, month, day)
-                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                        const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-
-                        return (
-                          <th
-                            key={`${month}-${day}`}
-                            className={cn(
-                              "border p-1 text-center font-normal w-8 min-w-[32px]",
-                              isWeekend ? "bg-muted" : "bg-muted/50",
-                              isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
-                            )}
-                          >
-                            <div className={cn("text-sm font-semibold text-foreground", isTodayCell && "text-blue-600 dark:text-blue-300")}>{day}</div>
-                          </th>
-                        )
-                      })
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedWorkers.map((worker) => (
-                    <tr key={worker.id} className="hover:bg-muted/20">
-                      <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
-                        onClick={() => openEditModal(worker)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-2 h-8 rounded"
-                            style={{ backgroundColor: worker.crew?.color || "#ccc" }}
-                          />
-                          <div className="truncate max-w-[160px]">
-                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {worker.crew?.name || "No crew"}
-                            </div>
-                          </div>
-                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
-                        </div>
-                      </td>
+                      {yearMonths.map(({ month, days }) => (
+                        <th
+                          key={month}
+                          colSpan={days.length}
+                          className="border p-2 text-center font-semibold bg-muted text-base"
+                        >
+                          {MONTH_NAMES[month]}
+                        </th>
+                      ))}
+                    </tr>
+                    {/* Day headers */}
+                    <tr>
+                      <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
                       {yearMonths.map(({ month, days }) =>
                         days.map((day) => {
-                          const schedule = getScheduleForDay(worker.id, month, day)
+                          const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
                           const date = new Date(currentYear, month, day)
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6
                           const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-                          // Handle custom shift types by building the key
-                          const shiftKey = schedule
-                            ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
-                              ? `CUSTOM:${schedule.customShiftCode}`
-                              : schedule.shiftType
-                            : null
-                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
 
                           return (
-                            <td
+                            <th
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
-                                !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
-                                isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                                "border p-1 text-center font-normal",
+                                sizeClasses.header,
+                                isWeekend ? "bg-muted" : "bg-muted/50",
+                                isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
                               )}
-                              style={
-                                style
-                                  ? { backgroundColor: style.bg, color: style.text }
-                                  : undefined
-                              }
-                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
-                              onClick={() => openScheduleEditModal(worker, month, day)}
                             >
-                              <span className="text-xs font-bold">
-                                {style ? style.label : ""}
-                              </span>
-                            </td>
+                              <div className={cn(
+                                "font-semibold text-foreground",
+                                sizeClasses.dayText,
+                                isTodayCell && "text-blue-600 dark:text-blue-300"
+                              )}>{day}</div>
+                            </th>
                           )
                         })
                       )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sortedWorkers.map((worker) => (
+                      <tr key={worker.id} className="hover:bg-muted/20">
+                        <td
+                          className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
+                          onClick={() => openEditModal(worker)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2 h-8 rounded"
+                              style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                            />
+                            <div className="truncate max-w-[160px]">
+                              <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {worker.crew?.name || "No crew"}
+                              </div>
+                            </div>
+                            <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
+                          </div>
+                        </td>
+                        {yearMonths.map(({ month, days }) =>
+                          days.map((day) => {
+                            const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
+                            const schedule = getScheduleForDay(worker.id, month, day)
+                            const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+                            // Handle custom shift types by building the key
+                            const shiftKey = schedule
+                              ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+                                ? `CUSTOM:${schedule.customShiftCode}`
+                                : schedule.shiftType
+                              : null
+                            const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+
+                            return (
+                              <td
+                                key={`${month}-${day}`}
+                                className={cn(
+                                  "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                  sizeClasses.cell,
+                                  !style && "bg-black",
+                                  isTodayCell && "ring-2 ring-blue-400 ring-inset"
+                                )}
+                                style={
+                                  style
+                                    ? { backgroundColor: style.bg, color: style.text }
+                                    : undefined
+                                }
+                                title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                                onClick={() => openScheduleEditModal(worker, month, day)}
+                              >
+                                <span className={cn("font-bold", sizeClasses.shiftText)}>
+                                  {style ? style.label : ""}
+                                </span>
+                              </td>
+                            )
+                          })
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="h-fit">
+          <CardHeader>
+            <CardTitle>Shift Roster</CardTitle>
+            <CardDescription>
+              {new Date(rosterData.shiftDateKey).toLocaleDateString()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-green-400">
+                <span>Day Shift</span>
+                <span>{rosterData.day.length}</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.day.length === 0 ? (
+                  <li className="text-muted-foreground">No day shift</li>
+                ) : (
+                  rosterData.day.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: worker.crew?.color || "#22c55e" }}
+                      />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-blue-400">
+                <span>Night Shift</span>
+                <span>{rosterData.night.length}</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.night.length === 0 ? (
+                  <li className="text-muted-foreground">No night shift</li>
+                ) : (
+                  rosterData.night.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: worker.crew?.color || "#2563eb" }}
+                      />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span>Off</span>
+                <span>{rosterData.off.length}</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.off.length === 0 ? (
+                  <li className="text-muted-foreground">No off days</li>
+                ) : (
+                  rosterData.off.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gray-400" />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
+                <span>Other</span>
+                <span>{rosterData.other.length}</span>
+              </div>
+              <ul className="mt-2 space-y-1 text-sm">
+                {rosterData.other.length === 0 ? (
+                  <li className="text-muted-foreground">No other shifts</li>
+                ) : (
+                  rosterData.other.map((worker) => (
+                    <li key={worker.id} className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-gray-400" />
+                      <span className="truncate">{worker.name || "Unnamed"}</span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Role Coverage • Day</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              {roleRoster.day.map(({ group, total, scheduled, missing }) => (
+                <div key={`day-${group.id}`} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>{group.name}</span>
+                    <span>{scheduled.length}/{total}</span>
+                  </div>
+                  {total === 0 ? (
+                    <p className="text-xs text-muted-foreground">No workers in this group</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Scheduled: {formatWorkerNames(scheduled)}
+                      </p>
+                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                        Missing: {formatWorkerNames(missing)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Role Coverage • Night</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              {roleRoster.night.map(({ group, total, scheduled, missing }) => (
+                <div key={`night-${group.id}`} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span>{group.name}</span>
+                    <span>{scheduled.length}/{total}</span>
+                  </div>
+                  {total === 0 ? (
+                    <p className="text-xs text-muted-foreground">No workers in this group</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        Scheduled: {formatWorkerNames(scheduled)}
+                      </p>
+                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                        Missing: {formatWorkerNames(missing)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Edit Worker Modal */}
       <Modal
@@ -845,6 +1363,20 @@ function SchedulePageContent() {
               value={editForm.position}
               onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
               placeholder="e.g., Operator, Technician"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="positionType">Position Type</Label>
+            <Select
+              id="positionType"
+              value={editForm.positionType}
+              onChange={(e) => setEditForm({ ...editForm, positionType: e.target.value as PositionType })}
+              options={[
+                { value: PositionType.OPERATOR, label: "Operator" },
+                { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
+                { value: PositionType.OTHER, label: "Other" },
+              ]}
             />
           </div>
 
@@ -968,6 +1500,24 @@ function SchedulePageContent() {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
+                id="replaceExisting"
+                checked={replaceExisting}
+                onChange={(e) => setReplaceExisting(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="replaceExisting" className="text-sm font-normal">
+                Replace existing schedule (clears prior auto-generated shifts)
+              </Label>
+            </div>
+            {replaceExisting && (
+              <p className="text-xs text-muted-foreground">
+                Deletes previous auto-generated shifts for selected workers. Manual edits remain unless cleared.
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
                 id="clearOverrides"
                 checked={clearOverrides}
                 onChange={(e) => setClearOverrides(e.target.checked)}
@@ -1036,7 +1586,7 @@ function SchedulePageContent() {
                 id="scheduleStartDate"
                 type="date"
                 value={scheduleEditStartDate}
-                onChange={(e) => setScheduleEditStartDate(e.target.value)}
+                onChange={(e) => handleScheduleEditStartChange(e.target.value)}
               />
             </div>
             <div className="space-y-2">
