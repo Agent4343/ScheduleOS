@@ -52,6 +52,13 @@ interface DashboardData {
       role: string
       positionType: string
     }>
+    eligibility?: {
+      activeCount: number
+      crewMatchCount?: number
+      roleMatchCount?: number
+      positionMatchCount?: number
+      eligibleCount: number
+    }
   }>
   upcomingTimeOff: Array<{
     id: string
@@ -287,6 +294,26 @@ export default function DashboardPage() {
                     <div className="text-xs text-muted-foreground">
                       Required: {gap.required} • Scheduled: {gap.scheduled}
                     </div>
+                    {gap.eligibility && (
+                      <div className="text-xs text-muted-foreground">
+                        Eligible workers: {gap.eligibility.eligibleCount} (Active: {gap.eligibility.activeCount}
+                        {gap.eligibility.positionMatchCount !== undefined
+                          ? ` • Position match: ${gap.eligibility.positionMatchCount}`
+                          : ""}
+                        {gap.eligibility.roleMatchCount !== undefined
+                          ? ` • Role match: ${gap.eligibility.roleMatchCount}`
+                          : ""}
+                        {gap.eligibility.crewMatchCount !== undefined
+                          ? ` • Crew match: ${gap.eligibility.crewMatchCount}`
+                          : ""}
+                        )
+                      </div>
+                    )}
+                    {gap.eligibility?.eligibleCount === 0 && (
+                      <div className="text-xs text-destructive">
+                        No eligible workers match this rule. Check worker position types, roles, or crew assignments.
+                      </div>
+                    )}
                     <div className="text-xs text-muted-foreground">
                       Scheduled: {gap.scheduledWorkers.length > 0
                         ? gap.scheduledWorkers.map((w) => w.name || "Unnamed").slice(0, 5).join(", ")

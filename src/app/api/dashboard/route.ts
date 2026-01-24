@@ -34,6 +34,13 @@ interface StaffingGapDetail {
   role?: string
   scheduledWorkers: GapWorkerSummary[]
   availableWorkers: GapWorkerSummary[]
+  eligibility?: {
+    activeCount: number
+    crewMatchCount?: number
+    roleMatchCount?: number
+    positionMatchCount?: number
+    eligibleCount: number
+  }
 }
 
 export async function GET() {
@@ -258,6 +265,27 @@ export async function GET() {
         })
       }
 
+      const getEligibilitySummary = (criteria: { crewId?: string | null; role?: string | null; positionType?: string | null }) => {
+        const activeCount = activeWorkerList.length
+        const crewMatch = criteria.crewId
+          ? activeWorkerList.filter((worker) => worker.crewId === criteria.crewId)
+          : activeWorkerList
+        const roleMatch = criteria.role
+          ? crewMatch.filter((worker) => worker.role === criteria.role)
+          : crewMatch
+        const positionMatch = criteria.positionType
+          ? roleMatch.filter((worker) => worker.positionType === criteria.positionType)
+          : roleMatch
+
+        return {
+          activeCount,
+          crewMatchCount: criteria.crewId ? crewMatch.length : undefined,
+          roleMatchCount: criteria.role ? roleMatch.length : undefined,
+          positionMatchCount: criteria.positionType ? positionMatch.length : undefined,
+          eligibleCount: positionMatch.length,
+        }
+      }
+
       // Check staffing rules
       for (const rule of staffingRules) {
         let filteredSchedules = daySchedules.filter((s) => s.shiftType === rule.shiftType)
@@ -307,6 +335,11 @@ export async function GET() {
             role: rule.role || undefined,
             scheduledWorkers,
             availableWorkers,
+            eligibility: getEligibilitySummary({
+              crewId: rule.crewId ?? null,
+              role: rule.role ?? null,
+              positionType: rule.positionType ?? null,
+            }),
           })
         }
       }
@@ -347,6 +380,9 @@ export async function GET() {
               positionType: derivedRule.positionType,
               scheduledWorkers,
               availableWorkers,
+              eligibility: getEligibilitySummary({
+                positionType: derivedRule.positionType,
+              }),
             })
           }
         }
