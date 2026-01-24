@@ -892,7 +892,6 @@ function SchedulePageContent() {
                         days.map((day) => {
                           const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
                           const schedule = getScheduleForDay(worker.id, month, day)
-                          const date = new Date(currentYear, month, day)
                           const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
                           // Handle custom shift types by building the key
                           const shiftKey = schedule
