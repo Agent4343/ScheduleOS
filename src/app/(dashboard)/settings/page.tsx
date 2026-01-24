@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { PageHeader } from "@/components/layout/page-header"
+import { PositionType, UserRole } from "@/types"
 import {
   Building2,
   Calendar,
@@ -51,6 +52,7 @@ interface Organization {
     minStaffOperators?: number
     minStaffOnshoreControlRoom?: number
     shiftColors?: Record<string, { bg: string; text: string }>
+    scheduleGrouping?: ScheduleGroupingSettings
   }
   _count: {
     users: number
@@ -104,6 +106,19 @@ interface NewShiftType {
   description: string
 }
 
+interface ScheduleGroupingGroup {
+  id: string
+  name: string
+  order: number
+  positionTypes: PositionType[]
+  roles: UserRole[]
+  keywords: string[]
+}
+
+interface ScheduleGroupingSettings {
+  groups: ScheduleGroupingGroup[]
+}
+
 interface Holiday {
   id: string
   name: string
@@ -141,6 +156,61 @@ const TIMEZONES = [
   { value: "Asia/Dubai", label: "Dubai (GST)" },
   { value: "Asia/Singapore", label: "Singapore (SGT)" },
   { value: "Australia/Sydney", label: "Sydney (AEST)" },
+]
+
+const DEFAULT_SCHEDULE_GROUPS: ScheduleGroupingGroup[] = [
+  {
+    id: "operators",
+    name: "Operators",
+    order: 1,
+    positionTypes: [PositionType.OPERATOR],
+    roles: [],
+    keywords: ["operator"],
+  },
+  {
+    id: "onshore-control",
+    name: "Onshore Control Room",
+    order: 2,
+    positionTypes: [PositionType.ONSHORE_CONTROL_ROOM],
+    roles: [],
+    keywords: ["onshore", "control room"],
+  },
+  {
+    id: "oim",
+    name: "OIM",
+    order: 3,
+    positionTypes: [],
+    roles: [],
+    keywords: ["oim"],
+  },
+  {
+    id: "supervisor",
+    name: "Supervisor",
+    order: 4,
+    positionTypes: [],
+    roles: [UserRole.SUPERVISOR],
+    keywords: ["supervisor"],
+  },
+  {
+    id: "production-lead",
+    name: "Production Leads",
+    order: 5,
+    positionTypes: [],
+    roles: [],
+    keywords: ["production lead", "prod lead"],
+  },
+]
+
+const POSITION_TYPE_OPTIONS = [
+  { value: PositionType.OPERATOR, label: "Operator" },
+  { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
+  { value: PositionType.OTHER, label: "Other" },
+]
+
+const ROLE_OPTIONS = [
+  { value: UserRole.SUPERVISOR, label: "Supervisor" },
+  { value: UserRole.ADMIN, label: "Admin" },
+  { value: UserRole.WORKER, label: "Worker" },
 ]
 
 export default function SettingsPage() {
@@ -206,6 +276,9 @@ export default function SettingsPage() {
   // Shift colors state
   const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
   const [showColorEditor, setShowColorEditor] = useState(false)
+  const [scheduleGrouping, setScheduleGrouping] = useState<ScheduleGroupingSettings>({
+    groups: DEFAULT_SCHEDULE_GROUPS,
+  })
 
   const isAdmin = session?.user?.role === "ADMIN"
 
@@ -227,6 +300,11 @@ export default function SettingsPage() {
         setOrganization(orgData.data)
         if (orgData.data.settings?.shiftColors) {
           setShiftColors({ ...DEFAULT_SHIFT_COLORS, ...orgData.data.settings.shiftColors })
+        }
+        if (orgData.data.settings?.scheduleGrouping?.groups?.length) {
+          setScheduleGrouping({ groups: orgData.data.settings.scheduleGrouping.groups })
+        } else {
+          setScheduleGrouping({ groups: DEFAULT_SCHEDULE_GROUPS })
         }
       }
       if (patternsData.success) setPatterns(patternsData.data)
@@ -602,7 +680,7 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: organization.name,
-          settings: { ...organization.settings, shiftColors },
+          settings: { ...organization.settings, shiftColors, scheduleGrouping },
         }),
       })
 
@@ -798,6 +876,165 @@ export default function SettingsPage() {
                   Monday
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Schedule grouping (position)</Label>
+              <p className="text-xs text-muted-foreground">
+                Define how workers are grouped together on the schedule for your business.
+              </p>
+              <div className="space-y-3">
+                {scheduleGrouping.groups.map((group, index) => (
+                  <div key={group.id} className="rounded-lg border p-3 space-y-3">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label htmlFor={`group-name-${group.id}`}>Group name</Label>
+                        <Input
+                          id={`group-name-${group.id}`}
+                          value={group.name}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            setScheduleGrouping((prev) => ({
+                              groups: prev.groups.map((item, idx) =>
+                                idx === index ? { ...item, name: value } : item
+                              ),
+                            }))
+                          }}
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`group-order-${group.id}`}>Order</Label>
+                        <Input
+                          id={`group-order-${group.id}`}
+                          type="number"
+                          value={group.order}
+                          onChange={(e) => {
+                            const value = Number(e.target.value) || 0
+                            setScheduleGrouping((prev) => ({
+                              groups: prev.groups.map((item, idx) =>
+                                idx === index ? { ...item, order: value } : item
+                              ),
+                            }))
+                          }}
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor={`group-keywords-${group.id}`}>Keywords</Label>
+                        <Input
+                          id={`group-keywords-${group.id}`}
+                          placeholder="e.g., operator, oim"
+                          value={group.keywords.join(", ")}
+                          onChange={(e) => {
+                            const keywords = e.target.value
+                              .split(",")
+                              .map((value) => value.trim())
+                              .filter(Boolean)
+                            setScheduleGrouping((prev) => ({
+                              groups: prev.groups.map((item, idx) =>
+                                idx === index ? { ...item, keywords } : item
+                              ),
+                            }))
+                          }}
+                          disabled={!isAdmin}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Position types</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {POSITION_TYPE_OPTIONS.map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={group.positionTypes.includes(option.value)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...group.positionTypes, option.value]
+                                    : group.positionTypes.filter((value) => value !== option.value)
+                                  setScheduleGrouping((prev) => ({
+                                    groups: prev.groups.map((item, idx) =>
+                                      idx === index ? { ...item, positionTypes: next } : item
+                                    ),
+                                  }))
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Roles</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {ROLE_OPTIONS.map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={group.roles.includes(option.value)}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...group.roles, option.value]
+                                    : group.roles.filter((value) => value !== option.value)
+                                  setScheduleGrouping((prev) => ({
+                                    groups: prev.groups.map((item, idx) =>
+                                      idx === index ? { ...item, roles: next } : item
+                                    ),
+                                  }))
+                                }}
+                                disabled={!isAdmin}
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isAdmin && (
+                      <div className="flex justify-end">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setScheduleGrouping((prev) => ({
+                              groups: prev.groups.filter((item) => item.id !== group.id),
+                            }))
+                          }}
+                        >
+                          Remove group
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const newGroup: ScheduleGroupingGroup = {
+                      id: `group-${Date.now()}`,
+                      name: "New Group",
+                      order: scheduleGrouping.groups.length + 1,
+                      positionTypes: [],
+                      roles: [],
+                      keywords: [],
+                    }
+                    setScheduleGrouping((prev) => ({
+                      groups: [...prev.groups, newGroup],
+                    }))
+                  }}
+                >
+                  Add group
+                </Button>
+              )}
             </div>
 
             <div className="space-y-2">

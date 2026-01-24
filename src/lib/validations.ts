@@ -47,6 +47,19 @@ const billingSchema = z.object({
   requestedPlan: z.string().optional(),
 })
 
+const scheduleGroupingGroupSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+  order: z.number().int().min(0),
+  positionTypes: z.array(z.nativeEnum(PositionType)).optional(),
+  roles: z.array(z.nativeEnum(UserRole)).optional(),
+  keywords: z.array(z.string()).optional(),
+})
+
+const scheduleGroupingSchema = z.object({
+  groups: z.array(scheduleGroupingGroupSchema).optional(),
+})
+
 const organizationSettingsSchema = z.object({
   timezone: z.string().default("America/St_Johns"),
   weekStartsOn: z.number().min(0).max(6).default(0),
@@ -59,6 +72,7 @@ const organizationSettingsSchema = z.object({
   minStaffOnshoreControlRoom: z.number().int().min(0).default(1),
   shiftColors: z.record(z.string(), shiftColorSchema).optional(),
   billing: billingSchema.optional(),
+  scheduleGrouping: scheduleGroupingSchema.optional(),
 }).passthrough()
 
 export const createOrganizationSchema = z.object({

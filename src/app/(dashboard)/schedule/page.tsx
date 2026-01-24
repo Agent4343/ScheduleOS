@@ -168,6 +168,62 @@ const WORKER_SORT_OPTIONS = [
   { value: "role", label: "Role" },
 ] as const
 
+interface ScheduleGroupingGroup {
+  id: string
+  name: string
+  order: number
+  positionTypes?: PositionType[]
+  roles?: UserRole[]
+  keywords?: string[]
+}
+
+interface ScheduleGroupingSettings {
+  groups?: ScheduleGroupingGroup[]
+}
+
+const DEFAULT_SCHEDULE_GROUPS: ScheduleGroupingGroup[] = [
+  {
+    id: "operators",
+    name: "Operators",
+    order: 1,
+    positionTypes: [PositionType.OPERATOR],
+    roles: [],
+    keywords: ["operator"],
+  },
+  {
+    id: "onshore-control",
+    name: "Onshore Control Room",
+    order: 2,
+    positionTypes: [PositionType.ONSHORE_CONTROL_ROOM],
+    roles: [],
+    keywords: ["onshore", "control room"],
+  },
+  {
+    id: "oim",
+    name: "OIM",
+    order: 3,
+    positionTypes: [],
+    roles: [],
+    keywords: ["oim"],
+  },
+  {
+    id: "supervisor",
+    name: "Supervisor",
+    order: 4,
+    positionTypes: [],
+    roles: [UserRole.SUPERVISOR],
+    keywords: ["supervisor"],
+  },
+  {
+    id: "production-lead",
+    name: "Production Leads",
+    order: 5,
+    positionTypes: [],
+    roles: [],
+    keywords: ["production lead", "prod lead"],
+  },
+]
+
 type WorkerSort = typeof WORKER_SORT_OPTIONS[number]["value"]
 
 function SchedulePageContent() {
@@ -194,6 +250,9 @@ function SchedulePageContent() {
   const [shiftGroupDate, setShiftGroupDate] = useState(() => {
     const today = new Date()
     return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+  })
+  const [scheduleGrouping, setScheduleGrouping] = useState<ScheduleGroupingSettings>({
+    groups: DEFAULT_SCHEDULE_GROUPS,
   })
   const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
 
@@ -297,6 +356,27 @@ function SchedulePageContent() {
     fetchCustomShiftTypes()
   }, [])
 
+  // Fetch organization settings for grouping rules
+  useEffect(() => {
+    async function fetchOrganization() {
+      try {
+        const response = await fetch("/api/organization")
+        const result = await response.json()
+        if (result.success && result.data?.settings?.scheduleGrouping?.groups?.length) {
+          setScheduleGrouping({
+            groups: result.data.settings.scheduleGrouping.groups,
+          })
+        } else {
+          setScheduleGrouping({ groups: DEFAULT_SCHEDULE_GROUPS })
+        }
+      } catch (error) {
+        console.error("Failed to fetch organization settings:", error)
+      }
+    }
+
+    fetchOrganization()
+  }, [])
+
   // Fetch workers
   useEffect(() => {
     async function fetchWorkers() {
@@ -386,33 +466,23 @@ function SchedulePageContent() {
   const sortedWorkers = useMemo(() => {
     const list = [...workers]
     const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+    const groupingRules = (scheduleGrouping.groups?.length
+      ? scheduleGrouping.groups
+      : DEFAULT_SCHEDULE_GROUPS
+    ).slice().sort((a, b) => a.order - b.order)
 
     const getPositionGroupOrder = (worker: Worker) => {
       const positionText = (worker.position || "").toLowerCase()
-
-      if (
-        worker.positionType === PositionType.OPERATOR ||
-        positionText.includes("operator")
-      ) {
-        return 0
+      for (const group of groupingRules) {
+        const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
+        const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
+        const matchesKeyword =
+          group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
+        if (matchesPositionType || matchesRole || matchesKeyword) {
+          return group.order
+        }
       }
-      if (
-        worker.positionType === PositionType.ONSHORE_CONTROL_ROOM ||
-        positionText.includes("onshore") ||
-        positionText.includes("control room")
-      ) {
-        return 1
-      }
-      if (positionText.includes("oim")) {
-        return 2
-      }
-      if (worker.role === "SUPERVISOR" || positionText.includes("supervisor")) {
-        return 3
-      }
-      if (positionText.includes("production lead") || positionText.includes("prod lead")) {
-        return 4
-      }
-      return 5
+      return groupingRules.length + 1
     }
 
     const getShiftGroupOrder = (shiftType?: ShiftType | null) => {
