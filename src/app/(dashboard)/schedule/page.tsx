@@ -159,6 +159,7 @@ const CALENDAR_SIZE_CLASSES: Record<CalendarSize, {
 
 const WORKER_SORT_OPTIONS = [
   { value: "custom", label: "Custom order" },
+  { value: "shift", label: "Shift (selected date)" },
   { value: "name", label: "Name" },
   { value: "crew", label: "Crew" },
   { value: "position", label: "Position" },
@@ -187,7 +188,11 @@ function SchedulePageContent() {
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
   const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
-  const [workerSort, setWorkerSort] = useState<WorkerSort>("custom")
+  const [workerSort, setWorkerSort] = useState<WorkerSort>("shift")
+  const [shiftGroupDate, setShiftGroupDate] = useState(() => {
+    const today = new Date()
+    return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+  })
   const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
 
   // Edit modal state
@@ -352,6 +357,18 @@ function SchedulePageContent() {
     fetchSchedules()
   }, [currentYear, selectedCrew])
 
+  useEffect(() => {
+    const currentYearPrefix = String(currentYear)
+    if (!shiftGroupDate.startsWith(currentYearPrefix)) {
+      const today = new Date()
+      const nextDate =
+        today.getFullYear() === currentYear
+          ? formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+          : `${currentYear}-01-01`
+      setShiftGroupDate(nextDate)
+    }
+  }, [currentYear, shiftGroupDate])
+
   // Build schedule lookup map
   const scheduleMap = useMemo(() => {
     const map = new Map<string, Schedule>()
@@ -366,7 +383,26 @@ function SchedulePageContent() {
   // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
     const list = [...workers]
+    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
+
+    const getShiftGroupOrder = (shiftType?: ShiftType | null) => {
+      if (!shiftType) return 5
+      if (shiftType === "DAY") return 0
+      if (shiftType === "NIGHT") return 1
+      if (shiftType === "OFF") return 2
+      if (["VACATION", "SICK", "LEAVE", "TRAINING", "SHUTDOWN"].includes(shiftType)) return 3
+      return 4
+    }
+
     list.sort((a, b) => {
+      if (workerSort === "shift") {
+        const scheduleA = scheduleMap.get(`${a.id}-${shiftDateKey}`)
+        const scheduleB = scheduleMap.get(`${b.id}-${shiftDateKey}`)
+        const groupA = getShiftGroupOrder(scheduleA?.shiftType)
+        const groupB = getShiftGroupOrder(scheduleB?.shiftType)
+        if (groupA !== groupB) return groupA - groupB
+        return (a.name || "").localeCompare(b.name || "")
+      }
       if (workerSort === "name") {
         return (a.name || "").localeCompare(b.name || "")
       }
@@ -395,7 +431,7 @@ function SchedulePageContent() {
       return (a.name || "").localeCompare(b.name || "")
     })
     return list
-  }, [workers, workerSort])
+  }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear])
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -753,6 +789,17 @@ function SchedulePageContent() {
                 className="w-44"
               />
             </div>
+            {workerSort === "shift" && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Shift date:</span>
+                <Input
+                  type="date"
+                  value={shiftGroupDate}
+                  onChange={(e) => setShiftGroupDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Calendar size:</span>
               <Select
