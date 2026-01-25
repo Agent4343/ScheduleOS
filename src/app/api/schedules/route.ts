@@ -304,7 +304,7 @@ async function generateSchedules(
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
   let deletedCount = 0
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line
   await prisma.$transaction(async (tx: any) => {
     // Delete existing schedules for the user(s) ONLY within the date range being generated
     // If clearOverrides is true, delete ALL schedules including manual edits

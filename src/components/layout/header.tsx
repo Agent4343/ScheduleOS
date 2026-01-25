@@ -5,6 +5,7 @@ import { Bell, LogOut, Menu, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { useState } from "react"
+import { Breadcrumbs } from "@/components/layout/breadcrumbs"
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -27,9 +28,9 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Menu className="h-6 w-6" />
         </Button>
 
-        {/* Page title area - can be customized per page */}
+        {/* Breadcrumbs */}
         <div className="hidden lg:block">
-          <h1 className="text-lg font-semibold">Welcome back</h1>
+          <Breadcrumbs />
         </div>
       </div>
 

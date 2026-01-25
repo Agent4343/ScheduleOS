@@ -133,6 +133,9 @@ function SchedulePageContent() {
     }
     return new Date().getFullYear()
   })
+  
+  const [viewMode, setViewMode] = useState<"YEAR" | "MONTH">("YEAR")
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth())
 
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [workers, setWorkers] = useState<Worker[]>([])
@@ -175,8 +178,14 @@ function SchedulePageContent() {
   const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
   const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
 
-  // Get all days for the year
-  const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
+  // Get days based on view mode
+  const yearMonths = useMemo(() => {
+    const allMonths = getYearDays(currentYear)
+    if (viewMode === "MONTH") {
+      return [allMonths[currentMonth]]
+    }
+    return allMonths
+  }, [currentYear, viewMode, currentMonth])
 
   // Combine built-in and custom shift styles
   const SHIFT_STYLES = useMemo(() => {
@@ -627,17 +636,75 @@ function SchedulePageContent() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
-            This Year
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="font-semibold px-4 text-lg">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-4">
+          {/* View Mode Toggle */}
+          <div className="flex rounded-md border bg-muted p-1">
+            <button
+              onClick={() => setViewMode("YEAR")}
+              className={cn(
+                "px-3 py-1 text-sm rounded-sm transition-colors",
+                viewMode === "YEAR" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Year
+            </button>
+            <button
+              onClick={() => setViewMode("MONTH")}
+              className={cn(
+                "px-3 py-1 text-sm rounded-sm transition-colors",
+                viewMode === "MONTH" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Month
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => {
+              setCurrentYear(new Date().getFullYear())
+              setCurrentMonth(new Date().getMonth())
+            }}>
+              Today
+            </Button>
+            
+            {viewMode === "MONTH" ? (
+              <>
+                <Button variant="outline" size="icon" onClick={() => {
+                  if (currentMonth === 0) {
+                    setCurrentMonth(11)
+                    setCurrentYear(currentYear - 1)
+                  } else {
+                    setCurrentMonth(currentMonth - 1)
+                  }
+                }}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-semibold px-4 text-lg w-32 text-center">
+                  {MONTH_NAMES[currentMonth]} {currentYear}
+                </span>
+                <Button variant="outline" size="icon" onClick={() => {
+                  if (currentMonth === 11) {
+                    setCurrentMonth(0)
+                    setCurrentYear(currentYear + 1)
+                  } else {
+                    setCurrentMonth(currentMonth + 1)
+                  }
+                }}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-semibold px-4 text-lg">{currentYear}</span>
+                <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -735,7 +802,7 @@ function SchedulePageContent() {
                           <th
                             key={`${month}-${day}`}
                             className={cn(
-                              "border p-1 text-center font-normal w-8 min-w-[32px]",
+                              "border p-1 text-center font-normal h-10 w-10 min-w-[40px]",
                               isWeekend ? "bg-muted" : "bg-muted/50",
                               isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
                             )}
@@ -786,7 +853,7 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                "border text-center h-10 w-10 min-w-[40px] cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
                                 !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
