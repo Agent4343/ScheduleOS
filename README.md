@@ -1,210 +1,80 @@
 # ShiftSync
 
-AI-Powered Workforce Scheduling Platform
+**The Universal Workforce Scheduling Platform**
 
-## Overview
+ShiftSync is an intelligent scheduling solution designed to handle the complexity of rotating shift work across any industry—from oil rigs and manufacturing plants to healthcare and emergency services. It automates the tedious parts of scheduling so supervisors can focus on production and operations.
 
-ShiftSync is a comprehensive workforce scheduling platform designed for industries with complex rotating shift patterns, including offshore oil and gas, manufacturing, healthcare, and construction.
+## Why Supervisors Love ShiftSync
 
-## Features
+### ⏱️ Saves Hours of Planning Time
+- **One-Click Generation**: Select a start date and pattern, and generate schedules for 5 years in seconds.
+- **Automated Rotations**: No more manual spreadsheet copying. The system handles 2/2, 14/14, day/night swaps, and complex custom patterns automatically.
+- **Visual Calendar**: See the whole year or just this month at a glance with clear, color-coded shifts.
 
-- **Flexible Rotation Templates**: Support for 2 on/2 off, 3 on/3 off, 14 on/14 off, and custom patterns
-- **Crew-Based Scheduling**: Manage Crews A, B, C, D with synchronized rotations
-- **Day/Night Rotation Handling**: Automatic transitions between day and night shifts
-- **Full-Year Calendar View**: Cross-year continuity with spreadsheet-style overview
-- **Staffing Rules & Alerts**: Configurable minimum staffing with red flag alerts
-- **Time Off Management**: Vacation requests with staffing impact checks
-- **Holiday Fairness Tracking**: Automated holiday rotation tracking
+### 🏭 Built for Any Industry
+- **Universal Flexibility**: Whether you work 12-hour shifts on an oil rig, 8-hour rotations in a factory, or 24-hour emergency crew cycles, ShiftSync adapts.
+- **Custom Shift Types**: Create your own shift codes (e.g., "TRAINING", "ON-CALL", "OFFSHORE") to match your industry's language.
+- **Staffing Rules**: Define minimum staffing levels (e.g., "Night shift needs 2 Operators"). The system automatically flags gaps so you never run understaffed.
+
+### 🧠 Smarter Management
+- **Instant Notifications**: Get alerted immediately when schedules change or staffing drops below safe levels.
+- **Crew Management**: Organize workers into Crews (A, B, C, D) and manage them as a unit.
+- **Time Off Tracking**: Workers request leave, you approve it, and the schedule updates automatically—checking for conflicts instantly.
+
+## Key Features
+
+- **Flexible Rotation Templates**: Support for 2 on/2 off, 3 on/3 off, 14 on/14 off, and completely custom patterns.
+- **Staffing Rules Engine**: Set rules like "Must have 1 Supervisor on Day Shift" and get alerts when rules are broken.
+- **Month & Year Views**: Toggle between high-level year planning and detailed monthly execution.
+- **Notifications System**: Built-in alerts for time-off requests, approvals, and staffing warnings.
+- **Export & Reporting**: Download schedules and worker reports for offline use or compliance.
 
 ## Tech Stack
 
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL with Prisma ORM
+- **Backend**: Next.js API Routes, Prisma ORM
+- **Database**: PostgreSQL
 - **Authentication**: NextAuth.js
-- **Hosting**: Railway
+- **Testing**: Vitest for reliable logic
 
-## Deploy to Railway
+## Getting Started
 
-### One-Click Deploy
-
+### Deploy to Railway
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/shiftsync)
 
-### Manual Deployment
+### Local Development
 
-1. **Create a Railway account** at [railway.app](https://railway.app)
-
-2. **Create a new project** and add a PostgreSQL database:
-   - Click "New Project"
-   - Select "Deploy from GitHub repo"
-   - Connect your GitHub repository
-   - Railway will auto-detect Next.js
-
-3. **Add PostgreSQL**:
-   - Click "New" → "Database" → "Add PostgreSQL"
-   - Railway automatically sets `DATABASE_URL`
-
-4. **Set environment variables** in Railway dashboard:
-   ```
-   NEXTAUTH_URL=https://your-app.up.railway.app
-   NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
-   DIRECT_URL=${{Postgres.DATABASE_URL}}
-   ```
-
-5. **Run database migrations** (in Railway shell or locally):
+1. **Clone & Install**:
    ```bash
-   npx prisma db push
+   git clone <repository-url>
+   cd shiftsync
+   npm install
    ```
 
-6. **Seed database** (creates organization, crews, rotation patterns):
+2. **Setup Database**:
    ```bash
+   # Copy env file
+   cp .env.example .env
+   # Add your database URL to .env
+   
+   # Push schema
+   npm run db:push
+   
+   # Seed default patterns
    npm run db:seed
    ```
-   
-   To create demo users (optional), set environment variables:
+
+3. **Run**:
    ```bash
-   SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
+   npm run dev
    ```
+   Open [http://localhost:3000](http://localhost:3000).
 
-7. **Create an admin user** - See "Creating Admin Users" section below for options.
-
-### Railway Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection (auto-set by Railway) | Yes |
-| `DIRECT_URL` | Direct DB connection for migrations | Yes |
-| `NEXTAUTH_URL` | Your Railway app URL | Yes |
-| `NEXTAUTH_SECRET` | Random 32-byte secret | Yes |
-
-## Local Development
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL database (or use Railway's)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd shiftsync
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Set up environment variables:
-```bash
-cp .env.example .env
-# Edit .env with your settings
-```
-
-4. Push database schema:
-```bash
-npm run db:push
-```
-
-5. Seed database (creates organization, crews, rotation patterns):
-```bash
-npm run db:seed
-```
-
-6. Create an admin user (see "Creating Admin Users" below)
-
-7. Start development server:
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Creating Admin Users
-
-For local development, you have several options to create an admin user:
-
-**Option 1: Using Prisma Studio (Recommended)**
-```bash
-npx prisma studio
-```
-Then create a user with role "ADMIN" and a bcrypt-hashed password.
-
-**Option 2: Opt-in Demo Seeding**
-```bash
-SEED_DEMO=true SEED_DEMO_PASSWORD=yourpassword npm run db:seed
-```
-This creates a demo admin (admin@local) and minimal demo workers with your chosen password.
-
-**Option 3: Manual Script**
-```typescript
-import { PrismaClient } from "@prisma/client"
-import bcrypt from "bcryptjs"
-
-const prisma = new PrismaClient()
-const passwordHash = await bcrypt.hash("yourpassword", 12)
-
-await prisma.user.create({
-  data: {
-    email: "admin@yourdomain.com",
-    name: "Admin User",
-    passwordHash,
-    role: "ADMIN",
-    status: "ACTIVE",
-    organizationId: "your-org-id",
-  },
-})
-```
-
-## Project Structure
-
-```
-src/
-├── app/                    # Next.js App Router
-│   ├── (auth)/            # Authentication pages
-│   ├── (dashboard)/       # Dashboard pages
-│   └── api/               # API routes
-├── components/            # React components
-│   ├── ui/               # Base UI components
-│   └── layout/           # Layout components
-├── lib/                   # Utility functions
-│   ├── auth.ts           # Authentication config
-│   ├── prisma.ts         # Database client
-│   ├── scheduling.ts     # Schedule generation
-│   └── validations.ts    # Zod schemas
-└── types/                 # TypeScript types
-```
-
-## API Endpoints
-
-| Endpoint | Methods | Description |
-|----------|---------|-------------|
-| `/api/register` | POST | User registration |
-| `/api/auth/[...nextauth]` | * | Authentication |
-| `/api/users` | GET, POST | User management |
-| `/api/crews` | GET, POST | Crew management |
-| `/api/schedules` | GET, POST | Schedule operations |
-| `/api/time-off` | GET, POST, PATCH | Time off requests |
-| `/api/rotation-patterns` | GET, POST | Rotation patterns |
-| `/api/organization` | GET, PATCH | Organization settings |
-| `/api/dashboard` | GET | Dashboard statistics |
-| `/api/health` | GET | Health check |
-
-## Scripts
-
-```bash
-npm run dev          # Start development server
-npm run build        # Build for production
-npm run start        # Start production server
-npm run lint         # Run ESLint
-npm run db:push      # Push schema to database
-npm run db:migrate   # Run migrations
-npm run db:seed      # Seed demo data
-```
+4. **Run Tests**:
+   ```bash
+   npm test
+   ```
 
 ## License
 
 Proprietary - All rights reserved
-

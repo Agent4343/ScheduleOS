@@ -168,7 +168,7 @@ export default function ReportsPage() {
             View scheduling statistics and workforce metrics
           </p>
         </div>
-        <Button variant="outline" className="gap-2" disabled>
+        <Button variant="outline" className="gap-2" onClick={() => window.open("/api/export?type=all", "_blank")} disabled={isLoading}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>

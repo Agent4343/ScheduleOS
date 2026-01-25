@@ -129,7 +129,46 @@
   @apply bg-purple-500;
 }
 
-/* Animation utilities */
+/* Print styles */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #schedule-print-view, #schedule-print-view * {
+    visibility: visible;
+  }
+  
+  #schedule-print-view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Hide print button */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset colors for print */
+  .bg-muted, .bg-muted\/50 {
+    background-color: transparent !important;
+    border: 1px solid #ccc;
+  }
+
+  th, td {
+    border: 1px solid #000 !important;
+    color: #000 !important;
+  }
+
+  /* Ensure background colors print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
 @layer utilities {
   .animate-in {
     animation-duration: 150ms;
