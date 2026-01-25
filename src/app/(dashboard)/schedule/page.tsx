@@ -62,6 +62,7 @@ interface Worker {
   name: string | null
   email?: string
   position: string | null
+  positionType?: PositionType | null
   phone?: string | null
   role?: UserRole
   hireDate?: string | null
@@ -359,42 +360,105 @@ function SchedulePageContent() {
     return map
   }, [schedules])
 
-  // Calculate daily staffing counts
+  // Calculate daily staffing counts broken down by role/position
   const dailyStaffing = useMemo(() => {
-    const counts = new Map<string, { day: number; night: number }>()
+    // Structure: date -> { role -> { day: count, night: count } }
+    const counts = new Map<string, {
+      operators: { day: number; night: number };
+      controlRoom: { day: number; night: number };
+      other: { day: number; night: number };
+      total: { day: number; night: number };
+    }>()
     
     schedules.forEach(schedule => {
       const dateStr = schedule.date.split("T")[0]
       if (!counts.has(dateStr)) {
-        counts.set(dateStr, { day: 0, night: 0 })
+        counts.set(dateStr, {
+          operators: { day: 0, night: 0 },
+          controlRoom: { day: 0, night: 0 },
+          other: { day: 0, night: 0 },
+          total: { day: 0, night: 0 }
+        })
       }
       
-      const count = counts.get(dateStr)!
-      if (schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY") {
-        count.day++
-      } else if (schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT") {
-        count.night++
+      const dayCounts = counts.get(dateStr)!
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+      
+      if (!isDay && !isNight) return
+
+      // Increment total
+      if (isDay) dayCounts.total.day++
+      else dayCounts.total.night++
+
+      // Increment by position type
+      // Check user position type if available from joined data
+      // Note: The schedule interface has user: { id, name, position }
+      // We need positionType. Let's try to map from workers list if possible.
+      const worker = workers.find(w => w.id === schedule.user.id)
+      
+      // We need to check if we can reliably map position strings to types
+      // For now, let's use a heuristic or see if we can get positionType on the user object
+      // The API return for schedules doesn't seem to include positionType yet.
+      // Let's assume we can match against the 'position' string for now or update the API.
+      // Actually, let's look at the Worker interface in this file.
+      // interface Worker { ... position: string | null ... }
+      // The API /api/users returns positionType. We should update the Worker interface and fetch it.
+      
+      // Let's try to use the worker from the workers array which we fetched from /api/users
+      // We need to update the Worker interface to include positionType first.
+      
+      if (worker) {
+         // We need to cast or check. The workers state is populated from /api/users which DOES return positionType.
+         // Let's update the Worker interface at the top of the file to include positionType.
+         // For now, I'll access it as any to avoid TS error before I update the interface.
+         const posType = (worker as any).positionType
+         
+         if (posType === "OPERATOR") {
+           if (isDay) dayCounts.operators.day++
+           else dayCounts.operators.night++
+         } else if (posType === "ONSHORE_CONTROL_ROOM") {
+           if (isDay) dayCounts.controlRoom.day++
+           else dayCounts.controlRoom.night++
+         } else {
+           if (isDay) dayCounts.other.day++
+           else dayCounts.other.night++
+         }
+      } else {
+         // Fallback if worker not found in list
+         if (isDay) dayCounts.other.day++
+         else dayCounts.other.night++
       }
     })
     
     return counts
-  }, [schedules])
+  }, [schedules, workers])
 
-  // Get minimum staffing requirements from rules (simplified to max requirement found)
+  // Get minimum staffing requirements from rules
   const minRequirements = useMemo(() => {
-    let minDay = 0
-    let minNight = 0
+    // We want rules per position type now
+    let minOpsDay = 0
+    let minOpsNight = 0
+    let minCRDay = 0
+    let minCRNight = 0
     
     staffingRules.forEach(rule => {
-      if ((rule.shiftType === "DAY" || rule.shiftType === "PL_DAY") && rule.minWorkers > minDay) {
-        minDay = rule.minWorkers
-      }
-      if ((rule.shiftType === "NIGHT" || rule.shiftType === "PL_NIGHT") && rule.minWorkers > minNight) {
-        minNight = rule.minWorkers
+      const isDay = rule.shiftType === "DAY" || rule.shiftType === "PL_DAY"
+      const isNight = rule.shiftType === "NIGHT" || rule.shiftType === "PL_NIGHT"
+      
+      if (rule.positionType === "OPERATOR") {
+        if (isDay && rule.minWorkers > minOpsDay) minOpsDay = rule.minWorkers
+        if (isNight && rule.minWorkers > minOpsNight) minOpsNight = rule.minWorkers
+      } else if (rule.positionType === "ONSHORE_CONTROL_ROOM") {
+        if (isDay && rule.minWorkers > minCRDay) minCRDay = rule.minWorkers
+        if (isNight && rule.minWorkers > minCRNight) minCRNight = rule.minWorkers
       }
     })
     
-    return { day: minDay, night: minNight }
+    return {
+      operators: { day: minOpsDay, night: minOpsNight },
+      controlRoom: { day: minCRDay, night: minCRNight }
+    }
   }, [staffingRules])
 
   // Sort workers by custom sortOrder, then by crew name, then by name
@@ -1117,22 +1181,47 @@ function SchedulePageContent() {
                 </tbody>
                 {/* Staffing Summary Footer */}
                 <tfoot className="sticky bottom-0 z-30 bg-muted shadow-[0_-2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_-2px_5px_-2px_rgba(255,255,255,0.1)] font-semibold border-t-2">
-                  <tr>
-                    <td className="p-2 border text-left bg-muted sticky left-0 z-40">Staffing Levels</td>
+                  {/* Operators Row */}
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <td className="p-2 border text-left bg-muted sticky left-0 z-40 text-xs font-bold">Operators (Op)</td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
                         const dateStr = formatDate(currentYear, month, day)
-                        const count = dailyStaffing.get(dateStr) || { day: 0, night: 0 }
-                        const isLowDay = count.day < minRequirements.day
-                        const isLowNight = count.night < minRequirements.night
+                        const count = dailyStaffing.get(dateStr)
+                        const ops = count?.operators || { day: 0, night: 0 }
+                        
+                        const isLowDay = ops.day < minRequirements.operators.day
+                        const isLowNight = ops.night < minRequirements.operators.night
                         
                         return (
-                          <td key={`footer-${month}-${day}`} className="border p-1 text-center text-[10px] h-10 w-10 min-w-[40px]">
-                            <div className={cn("flex flex-col gap-0.5", isLowDay && "text-red-600 font-bold")}>
-                              <span>D:{count.day}</span>
+                          <td key={`footer-ops-${month}-${day}`} className="border p-1 text-center text-[10px] min-w-[40px]">
+                            <div className={cn("flex flex-col gap-0.5")}>
+                              <span className={cn(isLowDay && "text-red-600 font-bold")}>D:{ops.day}</span>
+                              <span className={cn(isLowNight && "text-red-600 font-bold")}>N:{ops.night}</span>
                             </div>
-                            <div className={cn("flex flex-col gap-0.5", isLowNight && "text-red-600 font-bold")}>
-                              <span>N:{count.night}</span>
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  
+                  {/* Control Room Row */}
+                  <tr>
+                    <td className="p-2 border text-left bg-muted sticky left-0 z-40 text-xs font-bold">Control Room (CR)</td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = dailyStaffing.get(dateStr)
+                        const cr = count?.controlRoom || { day: 0, night: 0 }
+                        
+                        const isLowDay = cr.day < minRequirements.controlRoom.day
+                        const isLowNight = cr.night < minRequirements.controlRoom.night
+                        
+                        return (
+                          <td key={`footer-cr-${month}-${day}`} className="border p-1 text-center text-[10px] min-w-[40px]">
+                            <div className={cn("flex flex-col gap-0.5")}>
+                              <span className={cn(isLowDay && "text-red-600 font-bold")}>D:{cr.day}</span>
+                              <span className={cn(isLowNight && "text-red-600 font-bold")}>N:{cr.night}</span>
                             </div>
                           </td>
                         )
