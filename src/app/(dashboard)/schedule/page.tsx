@@ -359,6 +359,44 @@ function SchedulePageContent() {
     return map
   }, [schedules])
 
+  // Calculate daily staffing counts
+  const dailyStaffing = useMemo(() => {
+    const counts = new Map<string, { day: number; night: number }>()
+    
+    schedules.forEach(schedule => {
+      const dateStr = schedule.date.split("T")[0]
+      if (!counts.has(dateStr)) {
+        counts.set(dateStr, { day: 0, night: 0 })
+      }
+      
+      const count = counts.get(dateStr)!
+      if (schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY") {
+        count.day++
+      } else if (schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT") {
+        count.night++
+      }
+    })
+    
+    return counts
+  }, [schedules])
+
+  // Get minimum staffing requirements from rules (simplified to max requirement found)
+  const minRequirements = useMemo(() => {
+    let minDay = 0
+    let minNight = 0
+    
+    staffingRules.forEach(rule => {
+      if ((rule.shiftType === "DAY" || rule.shiftType === "PL_DAY") && rule.minWorkers > minDay) {
+        minDay = rule.minWorkers
+      }
+      if ((rule.shiftType === "NIGHT" || rule.shiftType === "PL_NIGHT") && rule.minWorkers > minNight) {
+        minNight = rule.minWorkers
+      }
+    })
+    
+    return { day: minDay, night: minNight }
+  }, [staffingRules])
+
   // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
     return [...workers].sort((a, b) => {
@@ -886,8 +924,9 @@ function SchedulePageContent() {
       {/* Legend */}
       <div className="flex flex-wrap gap-2">
         {isPaintMode && (
-          <div className="w-full text-sm text-muted-foreground mb-2 animate-in fade-in-0">
-            Select a shift type below, then click or drag on the calendar to apply it.
+          <div className="w-full text-sm text-muted-foreground mb-2 animate-in fade-in-0 flex items-center gap-2">
+            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-xs font-medium">How to use:</span>
+            <span>1. Click a shift type below to select it. 2. Click and drag across the calendar to paint that shift.</span>
           </div>
         )}
         {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
@@ -1053,6 +1092,18 @@ function SchedulePageContent() {
                                 }
                               }}
                               onMouseUp={() => setIsDragging(false)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  if (isPaintMode && paintShiftType) {
+                                    handlePaint(worker.id, formatDate(currentYear, month, day))
+                                  } else {
+                                    openScheduleEditModal(worker, month, day)
+                                  }
+                                }
+                                // Basic arrow key navigation support could be added here
+                                // For now, we enable tabIndex for focus
+                              }}
+                              tabIndex={0}
                             >
                               <span className="text-xs font-bold">
                                 {style ? style.label : ""}
@@ -1064,6 +1115,31 @@ function SchedulePageContent() {
                     </tr>
                   ))}
                 </tbody>
+                {/* Staffing Summary Footer */}
+                <tfoot className="sticky bottom-0 z-30 bg-muted shadow-[0_-2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_-2px_5px_-2px_rgba(255,255,255,0.1)] font-semibold border-t-2">
+                  <tr>
+                    <td className="p-2 border text-left bg-muted sticky left-0 z-40">Staffing Levels</td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = dailyStaffing.get(dateStr) || { day: 0, night: 0 }
+                        const isLowDay = count.day < minRequirements.day
+                        const isLowNight = count.night < minRequirements.night
+                        
+                        return (
+                          <td key={`footer-${month}-${day}`} className="border p-1 text-center text-[10px] h-10 w-10 min-w-[40px]">
+                            <div className={cn("flex flex-col gap-0.5", isLowDay && "text-red-600 font-bold")}>
+                              <span>D:{count.day}</span>
+                            </div>
+                            <div className={cn("flex flex-col gap-0.5", isLowNight && "text-red-600 font-bold")}>
+                              <span>N:{count.night}</span>
+                            </div>
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
