@@ -209,7 +209,7 @@ export default function SettingsPage() {
   const [showRoleForm, setShowRoleForm] = useState(false)
   const [editingRole, setEditingRole] = useState<CustomRole | null>(null)
   const [savingRole, setSavingRole] = useState(false)
-  const [newRole, setNewRole] = useState({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" as const })
+  const [newRole, setNewRole] = useState<{ name: string; description: string; color: string; baseRole: "ADMIN" | "SUPERVISOR" | "WORKER" }>({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" })
 
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
