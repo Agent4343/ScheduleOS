@@ -401,31 +401,36 @@ function SchedulePageContent() {
       const crewName = (schedule.crew?.name || worker?.crew?.name || "").toUpperCase()
       
       // Match against Position Type, Position String, OR Crew Name
-      const isOperator = 
-        posType === "OPERATOR" || 
-        posString.includes("OPERATOR") || 
-        posString.includes("OPS") || 
-        posString.includes("TECH") ||
-        crewName.includes("OPS") ||
-        crewName.includes("OPERATOR")
-
+      
+      // 1. Check Control Room FIRST (to catch "OCR Ops" before it matches generic "Ops")
       const isControlRoom = 
         posType === "ONSHORE_CONTROL_ROOM" || 
+        posString.includes("OCR") || 
         posString.includes("CONTROL") || 
         posString.includes("ROOM") || 
         posString.includes("CO TRIP") || 
-        posString.includes("OCR") ||
         crewName.includes("CONTROL") ||
         crewName.includes("ROOM") ||
-        crewName.includes("CO TRIP") ||
         crewName.includes("OCR")
+
+      // 2. Check Operators (excluding those already matched as Control Room)
+      const isOperator = 
+        !isControlRoom && (
+          posType === "OPERATOR" || 
+          posString.includes("OPERATOR") || 
+          posString.includes("OPS") || 
+          posString.includes("TECH") ||
+          posString.includes("PRODUCTION") ||
+          crewName.includes("OPS") ||
+          crewName.includes("OPERATOR")
+        )
       
-      if (isOperator) {
-        if (isDay) dayCounts.operators.day++
-        else dayCounts.operators.night++
-      } else if (isControlRoom) {
+      if (isControlRoom) {
         if (isDay) dayCounts.controlRoom.day++
         else dayCounts.controlRoom.night++
+      } else if (isOperator) {
+        if (isDay) dayCounts.operators.day++
+        else dayCounts.operators.night++
       } else {
         if (isDay) dayCounts.other.day++
         else dayCounts.other.night++
