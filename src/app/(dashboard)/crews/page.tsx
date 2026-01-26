@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { useToast } from "@/components/ui/toast"
+import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Users2,
   Plus,
@@ -59,6 +60,7 @@ const COLORS = [
 
 export default function CrewsPage() {
   const { addToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [crews, setCrews] = useState<Crew[]>([])
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
@@ -166,29 +168,33 @@ export default function CrewsPage() {
     }
   }
 
-  async function handleDeleteCrew(crewId: string) {
-    if (!confirm("Are you sure you want to delete this crew? This action cannot be undone.")) {
-      return
-    }
+  function handleDeleteCrew(crewId: string) {
     setOpenMenuId(null)
+    confirm({
+      title: "Delete Crew",
+      description: "Are you sure you want to delete this crew? This action cannot be undone.",
+      confirmText: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/crews/${crewId}`, {
+            method: "DELETE",
+          })
 
-    try {
-      const response = await fetch(`/api/crews/${crewId}`, {
-        method: "DELETE",
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setCrews((prev) => prev.filter((c) => c.id !== crewId))
-        addToast({ type: "success", message: "Crew deleted successfully" })
-      } else {
-        addToast({ type: "error", message: data.error || "Failed to delete crew" })
-      }
-    } catch (error) {
-      console.error("Failed to delete crew:", error)
-      addToast({ type: "error", message: "Failed to delete crew" })
-    }
+          if (data.success) {
+            setCrews((prev) => prev.filter((c) => c.id !== crewId))
+            addToast({ type: "success", message: "Crew deleted successfully" })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to delete crew" })
+          }
+        } catch (error) {
+          console.error("Failed to delete crew:", error)
+          addToast({ type: "error", message: "Failed to delete crew" })
+        }
+      },
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -596,6 +602,8 @@ export default function CrewsPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog />
     </div>
   )
 }

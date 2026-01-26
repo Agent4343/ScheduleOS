@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/toast"
+import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Table,
   TableBody,
@@ -67,6 +68,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 export default function WorkersPage() {
   const { addToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [loading, setLoading] = useState(true)
@@ -245,29 +247,33 @@ export default function WorkersPage() {
     }
   }
 
-  async function handleDelete(userId: string) {
-    if (!confirm("Are you sure you want to delete this worker? This action cannot be undone.")) {
-      return
-    }
+  function handleDelete(userId: string) {
     setOpenMenuId(null)
+    confirm({
+      title: "Delete Worker",
+      description: "Are you sure you want to delete this worker? This action cannot be undone.",
+      confirmText: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/users/${userId}`, {
+            method: "DELETE",
+          })
 
-    try {
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setUsers((prev) => prev.filter((u) => u.id !== userId))
-        addToast({ type: "success", message: "Worker deleted successfully" })
-      } else {
-        addToast({ type: "error", message: data.error || "Failed to delete worker" })
-      }
-    } catch (error) {
-      console.error("Failed to delete worker:", error)
-      addToast({ type: "error", message: "Failed to delete worker" })
-    }
+          if (data.success) {
+            setUsers((prev) => prev.filter((u) => u.id !== userId))
+            addToast({ type: "success", message: "Worker deleted successfully" })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to delete worker" })
+          }
+        } catch (error) {
+          console.error("Failed to delete worker:", error)
+          addToast({ type: "error", message: "Failed to delete worker" })
+        }
+      },
+    })
   }
 
   return (
@@ -654,6 +660,8 @@ export default function WorkersPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog />
     </div>
   )
 }
