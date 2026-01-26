@@ -82,6 +82,16 @@ export default function ReportsPage() {
     crews: [],
   })
 
+  const [complianceStats, setComplianceStats] = useState<{
+    operatorCompliance: number
+    ocrCompliance: number
+    understaffedDays: Array<{ date: string; type: "Operator" | "OCR"; actual: number; required: number }>
+  }>({
+    operatorCompliance: 100,
+    ocrCompliance: 100,
+    understaffedDays: []
+  })
+
   const fetchReportData = useCallback(async () => {
     setIsLoading(true)
     try {
