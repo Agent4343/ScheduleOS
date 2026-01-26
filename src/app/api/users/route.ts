@@ -17,42 +17,75 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const role = searchParams.get("role")
 
-    const users = await prisma.user.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        ...(crewId && { crewId }),
-        ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
-        ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        position: true,
-        positionType: true,
-        phone: true,
-        status: true,
-        hireDate: true,
-        createdAt: true,
-        customRoleId: true,
-        crew: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+    const whereClause = {
+      organizationId: session.user.organizationId,
+      ...(crewId && { crewId }),
+      ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
+      ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
+    }
+
+    // Try with customRole first, fall back without it if database hasn't been migrated
+    let users
+    try {
+      users = await prisma.user.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          customRoleId: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+          customRole: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-        customRole: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+        orderBy: [{ name: "asc" }],
+      })
+    } catch {
+      // Fallback: query without customRole if table doesn't exist yet
+      users = await prisma.user.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-      },
-      orderBy: [{ name: "asc" }],
-    })
+        orderBy: [{ name: "asc" }],
+      })
+      // Add null customRole to each user for consistent response shape
+      users = users.map(u => ({ ...u, customRoleId: null, customRole: null }))
+    }
 
     return NextResponse.json({ success: true, data: users })
   } catch (error) {

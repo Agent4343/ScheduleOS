@@ -17,39 +17,72 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        id: params.id,
-        organizationId: session.user.organizationId,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        position: true,
-        positionType: true,
-        phone: true,
-        status: true,
-        hireDate: true,
-        createdAt: true,
-        customRoleId: true,
-        crew: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+    const whereClause = {
+      id: params.id,
+      organizationId: session.user.organizationId,
+    }
+
+    // Try with customRole first, fall back without it if database hasn't been migrated
+    let user
+    try {
+      user = await prisma.user.findFirst({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          customRoleId: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+          customRole: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-        customRole: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+      })
+    } catch {
+      // Fallback without customRole
+      user = await prisma.user.findFirst({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-      },
-    })
+      })
+      if (user) {
+        user = { ...user, customRoleId: null, customRole: null }
+      }
+    }
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
@@ -108,47 +141,86 @@ export async function PATCH(
       }
     }
 
-    const user = await prisma.user.update({
-      where: { id: params.id },
-      data: {
-        name: validatedData.name,
-        email: validatedData.email,
-        role: validatedData.role,
-        position: validatedData.position,
-        positionType: validatedData.positionType,
-        phone: validatedData.phone,
-        crewId: validatedData.crewId,
-        customRoleId: validatedData.customRoleId,
-        hireDate: validatedData.hireDate,
-        status: validatedData.status,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        position: true,
-        positionType: true,
-        phone: true,
-        status: true,
-        hireDate: true,
-        customRoleId: true,
-        crew: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+    // Try with customRoleId first, fall back without it if database hasn't been migrated
+    let user
+    try {
+      user = await prisma.user.update({
+        where: { id: params.id },
+        data: {
+          name: validatedData.name,
+          email: validatedData.email,
+          role: validatedData.role,
+          position: validatedData.position,
+          positionType: validatedData.positionType,
+          phone: validatedData.phone,
+          crewId: validatedData.crewId,
+          customRoleId: validatedData.customRoleId,
+          hireDate: validatedData.hireDate,
+          status: validatedData.status,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          customRoleId: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+          customRole: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-        customRole: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+      })
+    } catch {
+      // Fallback without customRoleId if database hasn't been migrated
+      user = await prisma.user.update({
+        where: { id: params.id },
+        data: {
+          name: validatedData.name,
+          email: validatedData.email,
+          role: validatedData.role,
+          position: validatedData.position,
+          positionType: validatedData.positionType,
+          phone: validatedData.phone,
+          crewId: validatedData.crewId,
+          hireDate: validatedData.hireDate,
+          status: validatedData.status,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-      },
-    })
+      })
+      user = { ...user, customRoleId: null, customRole: null }
+    }
 
     // Log audit event
     await logAudit({
