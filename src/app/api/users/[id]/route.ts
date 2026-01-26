@@ -33,7 +33,15 @@ export async function GET(
         status: true,
         hireDate: true,
         createdAt: true,
+        customRoleId: true,
         crew: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        customRole: {
           select: {
             id: true,
             name: true,
@@ -110,6 +118,7 @@ export async function PATCH(
         positionType: validatedData.positionType,
         phone: validatedData.phone,
         crewId: validatedData.crewId,
+        customRoleId: validatedData.customRoleId,
         hireDate: validatedData.hireDate,
         status: validatedData.status,
       },
@@ -123,7 +132,15 @@ export async function PATCH(
         phone: true,
         status: true,
         hireDate: true,
+        customRoleId: true,
         crew: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        customRole: {
           select: {
             id: true,
             name: true,

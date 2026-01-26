@@ -35,7 +35,15 @@ export async function GET(request: NextRequest) {
         status: true,
         hireDate: true,
         createdAt: true,
+        customRoleId: true,
         crew: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        customRole: {
           select: {
             id: true,
             name: true,
@@ -110,6 +118,7 @@ export async function POST(request: NextRequest) {
         phone: validatedData.phone,
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
+        customRoleId: validatedData.customRoleId,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -122,7 +131,15 @@ export async function POST(request: NextRequest) {
         position: true,
         positionType: true,
         status: true,
+        customRoleId: true,
         crew: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
+        customRole: {
           select: {
             id: true,
             name: true,

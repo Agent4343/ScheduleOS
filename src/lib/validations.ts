@@ -60,6 +60,7 @@ export const createUserSchema = z.object({
   positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   phone: z.string().optional(),
   crewId: z.string().optional(),
+  customRoleId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
   password: z.string().min(8).optional(),
 })

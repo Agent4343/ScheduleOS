@@ -45,12 +45,25 @@ interface User {
     name: string
     color: string
   } | null
+  customRoleId: string | null
+  customRole: {
+    id: string
+    name: string
+    color: string
+  } | null
 }
 
 interface Crew {
   id: string
   name: string
   color: string
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
 }
 
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -71,6 +84,7 @@ export default function WorkersPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -87,6 +101,7 @@ export default function WorkersPage() {
     position: "",
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
     password: "",
   })
@@ -97,6 +112,7 @@ export default function WorkersPage() {
     position: "",
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
   })
@@ -105,16 +121,19 @@ export default function WorkersPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
+          fetch("/api/roles"),
         ])
 
         const usersData = await usersRes.json()
         const crewsData = await crewsRes.json()
+        const rolesData = await rolesRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
+        if (rolesData.success) setCustomRoles(rolesData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -156,6 +175,7 @@ export default function WorkersPage() {
       position: user.position || "",
       phone: user.phone || "",
       crewId: user.crew?.id || "",
+      customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
     })
@@ -175,6 +195,7 @@ export default function WorkersPage() {
           ...formData,
           hireDate: formData.hireDate || undefined,
           crewId: formData.crewId || undefined,
+          customRoleId: formData.customRoleId || undefined,
           password: formData.password || undefined,
         }),
       })
@@ -191,6 +212,7 @@ export default function WorkersPage() {
           position: "",
           phone: "",
           crewId: "",
+          customRoleId: "",
           hireDate: "",
           password: "",
         })
@@ -222,6 +244,7 @@ export default function WorkersPage() {
           position: editFormData.position || null,
           phone: editFormData.phone || null,
           crewId: editFormData.crewId || null,
+          customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
         }),
@@ -389,7 +412,19 @@ export default function WorkersPage() {
                       )}
                     </TableCell>
                     <TableCell>{user.position || "-"}</TableCell>
-                    <TableCell>{ROLE_LABELS[user.role]}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm">{ROLE_LABELS[user.role]}</span>
+                        {user.customRole && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full inline-block w-fit"
+                            style={{ backgroundColor: user.customRole.color, color: "#fff" }}
+                          >
+                            {user.customRole.name}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_BADGES[user.status].variant}>
                         {STATUS_BADGES[user.status].label}
@@ -464,7 +499,7 @@ export default function WorkersPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">System Role</Label>
               <Select
                 value={formData.role}
                 onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
@@ -476,6 +511,20 @@ export default function WorkersPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="customRoleId">Custom Role</Label>
+              <Select
+                value={formData.customRoleId}
+                onChange={(e) => setFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="crewId">Crew</Label>
               <Select
                 value={formData.crewId}
@@ -486,9 +535,6 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
               <Input
@@ -498,6 +544,9 @@ export default function WorkersPage() {
                 placeholder="e.g., Operator, Supervisor"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
               <Input
@@ -507,9 +556,6 @@ export default function WorkersPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="hireDate">Hire Date</Label>
               <Input
@@ -519,16 +565,17 @@ export default function WorkersPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password (Optional)</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                placeholder="Leave blank for invite"
-              />
-            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Password (Optional)</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder="Leave blank for invite"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -577,7 +624,7 @@ export default function WorkersPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-role">Role</Label>
+              <Label htmlFor="edit-role">System Role</Label>
               <Select
                 value={editFormData.role}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
@@ -588,6 +635,20 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-customRoleId">Custom Role</Label>
+              <Select
+                value={editFormData.customRoleId}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-status">Status</Label>
               <Select
@@ -601,9 +662,6 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-crewId">Crew</Label>
               <Select
