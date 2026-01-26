@@ -48,7 +48,7 @@ export default function RegisterPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          organizationName: formData.organizationName || undefined,
+          organizationName: formData.organizationName,
         }),
       })
 
@@ -146,7 +146,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Organization Name (Optional)</Label>
+            <Label htmlFor="organizationName">Organization Name</Label>
             <Input
               id="organizationName"
               name="organizationName"
@@ -154,10 +154,11 @@ export default function RegisterPage() {
               placeholder="Your Company Name"
               value={formData.organizationName}
               onChange={handleChange}
+              required
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Create a new organization or leave blank to join an existing one later
+              You will be the admin of this organization
             </p>
           </div>
 

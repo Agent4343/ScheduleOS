@@ -24,8 +24,7 @@ export const registerSchema = z.object({
   organizationName: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
-    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters")
-    .optional(),
+    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
 })
 
 // Organization validations
