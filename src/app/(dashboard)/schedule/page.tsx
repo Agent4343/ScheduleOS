@@ -43,6 +43,7 @@ interface Schedule {
     id: string
     name: string
     position: string | null
+    positionType?: PositionType | null
   }
   crew: {
     id: string
@@ -392,42 +393,40 @@ function SchedulePageContent() {
       else dayCounts.total.night++
 
       // Increment by position type
-      // Check user position type if available from joined data
-      // Note: The schedule interface has user: { id, name, position }
-      // We need positionType. Let's try to map from workers list if possible.
-      const worker = workers.find(w => w.id === schedule.user.id)
+      const scheduleUser = schedule.user
+      const worker = workers.find(w => w.id === scheduleUser.id)
       
-      // We need to check if we can reliably map position strings to types
-      // For now, let's use a heuristic or see if we can get positionType on the user object
-      // The API return for schedules doesn't seem to include positionType yet.
-      // Let's assume we can match against the 'position' string for now or update the API.
-      // Actually, let's look at the Worker interface in this file.
-      // interface Worker { ... position: string | null ... }
-      // The API /api/users returns positionType. We should update the Worker interface and fetch it.
+      const posType = scheduleUser.positionType || (worker as any)?.positionType
+      const posString = (scheduleUser.position || worker?.position || "").toUpperCase()
+      const crewName = (schedule.crew?.name || worker?.crew?.name || "").toUpperCase()
       
-      // Let's try to use the worker from the workers array which we fetched from /api/users
-      // We need to update the Worker interface to include positionType first.
+      // Match against Position Type, Position String, OR Crew Name
+      const isOperator = 
+        posType === "OPERATOR" || 
+        posString.includes("OPERATOR") || 
+        posString.includes("OPS") || 
+        posString.includes("TECH") ||
+        crewName.includes("OPS") ||
+        crewName.includes("OPERATOR")
+
+      const isControlRoom = 
+        posType === "ONSHORE_CONTROL_ROOM" || 
+        posString.includes("CONTROL") || 
+        posString.includes("ROOM") || 
+        posString.includes("CO TRIP") || 
+        crewName.includes("CONTROL") ||
+        crewName.includes("ROOM") ||
+        crewName.includes("CO TRIP")
       
-      if (worker) {
-         // We need to cast or check. The workers state is populated from /api/users which DOES return positionType.
-         // Let's update the Worker interface at the top of the file to include positionType.
-         // For now, I'll access it as any to avoid TS error before I update the interface.
-         const posType = (worker as any).positionType
-         
-         if (posType === "OPERATOR") {
-           if (isDay) dayCounts.operators.day++
-           else dayCounts.operators.night++
-         } else if (posType === "ONSHORE_CONTROL_ROOM") {
-           if (isDay) dayCounts.controlRoom.day++
-           else dayCounts.controlRoom.night++
-         } else {
-           if (isDay) dayCounts.other.day++
-           else dayCounts.other.night++
-         }
+      if (isOperator) {
+        if (isDay) dayCounts.operators.day++
+        else dayCounts.operators.night++
+      } else if (isControlRoom) {
+        if (isDay) dayCounts.controlRoom.day++
+        else dayCounts.controlRoom.night++
       } else {
-         // Fallback if worker not found in list
-         if (isDay) dayCounts.other.day++
-         else dayCounts.other.night++
+        if (isDay) dayCounts.other.day++
+        else dayCounts.other.night++
       }
     })
     

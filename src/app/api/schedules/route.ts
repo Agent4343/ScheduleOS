@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
             name: true,
             email: true,
             position: true,
+            positionType: true,
           },
         },
         crew: {
