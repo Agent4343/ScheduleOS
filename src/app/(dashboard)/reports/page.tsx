@@ -126,17 +126,23 @@ export default function ReportsPage() {
           const crewName = (s.crew?.name || worker?.crew?.name || "").toUpperCase()
           const posType = s.user.positionType || worker?.positionType
 
+          // 1. Check Control Room FIRST (to catch "OCR Ops" before it matches generic "Ops")
           const isOCR = posType === "ONSHORE_CONTROL_ROOM" || 
                         posString.includes("OCR") || 
                         posString.includes("CONTROL") || 
+                        posString.includes("ROOM") || 
+                        posString.includes("CO TRIP") || 
                         crewName.includes("OCR") ||
-                        crewName.includes("CONTROL")
+                        crewName.includes("CONTROL") ||
+                        crewName.includes("ROOM")
 
+          // 2. Check Operators (excluding those already matched as Control Room)
           const isOp = !isOCR && (
                         posType === "OPERATOR" || 
                         posString.includes("OPS") || 
                         posString.includes("OPERATOR") || 
                         posString.includes("TECH") ||
+                        posString.includes("PRODUCTION") ||
                         crewName.includes("OPS")
                       )
 
@@ -155,9 +161,6 @@ export default function ReportsPage() {
         const end = new Date(endDate)
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toISOString().split("T")[0]
-          // Only check days that have at least one schedule (ignore weekends/shutdowns if no one is scheduled?)
-          // Actually, we should probably check every day if it's a 24/7 operation. 
-          // For now, let's only check days where *someone* is scheduled to avoid flagging empty future dates.
           if (dailyCounts[dateStr]) {
             totalDays++
             const counts = dailyCounts[dateStr]
