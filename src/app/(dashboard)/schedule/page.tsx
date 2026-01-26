@@ -414,9 +414,11 @@ function SchedulePageContent() {
         posString.includes("CONTROL") || 
         posString.includes("ROOM") || 
         posString.includes("CO TRIP") || 
+        posString.includes("OCR") ||
         crewName.includes("CONTROL") ||
         crewName.includes("ROOM") ||
-        crewName.includes("CO TRIP")
+        crewName.includes("CO TRIP") ||
+        crewName.includes("OCR")
       
       if (isOperator) {
         if (isDay) dayCounts.operators.day++
@@ -1206,7 +1208,7 @@ function SchedulePageContent() {
                   
                   {/* Control Room Row */}
                   <tr>
-                    <td className="p-2 border text-left bg-muted sticky left-0 z-40 text-xs font-bold">Control Room (CR)</td>
+                    <td className="p-2 border text-left bg-muted sticky left-0 z-40 text-xs font-bold">Control Room (OCR)</td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
                         const dateStr = formatDate(currentYear, month, day)
