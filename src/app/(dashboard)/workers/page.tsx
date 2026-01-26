@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
+import { useToast } from "@/components/ui/toast"
 import {
   Table,
   TableBody,
@@ -65,6 +66,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export default function WorkersPage() {
+  const { addToast } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [loading, setLoading] = useState(true)
@@ -190,12 +192,13 @@ export default function WorkersPage() {
           hireDate: "",
           password: "",
         })
+        addToast({ type: "success", message: "Worker added successfully" })
       } else {
-        alert(data.error || "Failed to create worker")
+        addToast({ type: "error", message: data.error || "Failed to create worker" })
       }
     } catch (error) {
       console.error("Failed to create worker:", error)
-      alert("Failed to create worker")
+      addToast({ type: "error", message: "Failed to create worker" })
     } finally {
       setSubmitting(false)
     }
@@ -230,12 +233,13 @@ export default function WorkersPage() {
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        addToast({ type: "success", message: "Worker updated successfully" })
       } else {
-        alert(data.error || "Failed to update worker")
+        addToast({ type: "error", message: data.error || "Failed to update worker" })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      alert("Failed to update worker")
+      addToast({ type: "error", message: "Failed to update worker" })
     } finally {
       setSubmitting(false)
     }
@@ -256,12 +260,13 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => prev.filter((u) => u.id !== userId))
+        addToast({ type: "success", message: "Worker deleted successfully" })
       } else {
-        alert(data.error || "Failed to delete worker")
+        addToast({ type: "error", message: data.error || "Failed to delete worker" })
       }
     } catch (error) {
       console.error("Failed to delete worker:", error)
-      alert("Failed to delete worker")
+      addToast({ type: "error", message: "Failed to delete worker" })
     }
   }
 

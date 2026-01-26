@@ -284,10 +284,8 @@ function SchedulePageContent() {
           url += `&crewId=${selectedCrew}`
         }
 
-        console.log("Fetching schedules from:", url)
         const response = await fetch(url)
         const result = await response.json()
-        console.log("Fetch schedules response:", response.status, result)
 
         if (result.success) {
           setSchedules(result.data)
@@ -441,8 +439,6 @@ function SchedulePageContent() {
         clearOverrides: clearOverrides,
       }
 
-      console.log("Generating schedule:", requestBody)
-
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -450,7 +446,6 @@ function SchedulePageContent() {
       })
 
       const result = await response.json()
-      console.log("Generate response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || result.details || "Failed to generate schedule")
@@ -460,12 +455,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - include crew filter to maintain consistent view
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
@@ -548,8 +539,6 @@ function SchedulePageContent() {
           overrideReason: scheduleEditReason || null,
         }
 
-        console.log("Saving schedule:", requestBody)
-
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -557,7 +546,6 @@ function SchedulePageContent() {
         })
 
         const result = await response.json()
-        console.log("Save response:", result)
 
         if (!response.ok) {
           // Extract detailed error message from validation errors if available
@@ -584,12 +572,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - wait for completion
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)

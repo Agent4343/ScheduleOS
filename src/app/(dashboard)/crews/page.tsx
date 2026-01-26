@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
+import { useToast } from "@/components/ui/toast"
 import {
   Users2,
   Plus,
@@ -57,6 +58,7 @@ const COLORS = [
 ]
 
 export default function CrewsPage() {
+  const { addToast } = useToast()
   const [crews, setCrews] = useState<Crew[]>([])
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
@@ -152,12 +154,13 @@ export default function CrewsPage() {
         )
         setIsEditModalOpen(false)
         setEditingCrew(null)
+        addToast({ type: "success", message: "Crew updated successfully" })
       } else {
-        alert(data.error || "Failed to update crew")
+        addToast({ type: "error", message: data.error || "Failed to update crew" })
       }
     } catch (error) {
       console.error("Failed to update crew:", error)
-      alert("Failed to update crew")
+      addToast({ type: "error", message: "Failed to update crew" })
     } finally {
       setSubmitting(false)
     }
@@ -178,12 +181,13 @@ export default function CrewsPage() {
 
       if (data.success) {
         setCrews((prev) => prev.filter((c) => c.id !== crewId))
+        addToast({ type: "success", message: "Crew deleted successfully" })
       } else {
-        alert(data.error || "Failed to delete crew")
+        addToast({ type: "error", message: data.error || "Failed to delete crew" })
       }
     } catch (error) {
       console.error("Failed to delete crew:", error)
-      alert("Failed to delete crew")
+      addToast({ type: "error", message: "Failed to delete crew" })
     }
   }
 
@@ -212,12 +216,13 @@ export default function CrewsPage() {
           color: "#3B82F6",
           rotationPatternId: "",
         })
+        addToast({ type: "success", message: "Crew created successfully" })
       } else {
-        alert(data.error || "Failed to create crew")
+        addToast({ type: "error", message: data.error || "Failed to create crew" })
       }
     } catch (error) {
       console.error("Failed to create crew:", error)
-      alert("Failed to create crew")
+      addToast({ type: "error", message: "Failed to create crew" })
     } finally {
       setSubmitting(false)
     }
@@ -226,7 +231,7 @@ export default function CrewsPage() {
   async function handleGenerateSchedule(crewId: string) {
     const crew = crews.find((c) => c.id === crewId)
     if (!crew?.rotationPattern) {
-      alert("Please assign a rotation pattern to this crew first")
+      addToast({ type: "warning", message: "Please assign a rotation pattern to this crew first" })
       return
     }
 
@@ -250,13 +255,13 @@ export default function CrewsPage() {
       const data = await response.json()
 
       if (data.success) {
-        alert(`Schedule generated: ${data.message}`)
+        addToast({ type: "success", message: `Schedule generated: ${data.message}` })
       } else {
-        alert(data.error || "Failed to generate schedule")
+        addToast({ type: "error", message: data.error || "Failed to generate schedule" })
       }
     } catch (error) {
       console.error("Failed to generate schedule:", error)
-      alert("Failed to generate schedule")
+      addToast({ type: "error", message: "Failed to generate schedule" })
     }
   }
 
