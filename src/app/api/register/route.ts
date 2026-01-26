@@ -191,8 +191,10 @@ export async function POST(request: NextRequest) {
     console.error("Registration error:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      // @ts-expect-error - ZodError has issues property
+      const issues = error.issues?.map((i: any) => `${i.path.join('.')}: ${i.message}`).join(', ') || "Validation failed"
       return NextResponse.json(
-        { error: "Invalid input data" },
+        { error: `Invalid input data: ${issues}` },
         { status: 400 }
       )
     }
