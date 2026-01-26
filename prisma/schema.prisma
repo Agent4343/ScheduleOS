@@ -71,6 +71,7 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
+  customRoles      CustomRole[]
 }
 
 model User {
@@ -96,6 +97,10 @@ model User {
   // Crew assignment
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
+
+  // Custom role (optional, for display/organization purposes)
+  customRoleId String?
+  customRole   CustomRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   // Relations
   accounts        Account[]
@@ -223,6 +228,27 @@ enum ShiftType {
   TRAINING
   SHUTDOWN
   CUSTOM
+}
+
+// Custom roles that organizations can create
+model CustomRole {
+  id           String   @id @default(cuid())
+  name         String   // Role name like "Team Lead", "Senior Operator"
+  description  String?
+  color        String   @default("#6b7280") // Hex color for display
+  baseRole     UserRole @default(WORKER)    // Base permission level
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Users with this role
+  users User[]
+
+  @@unique([organizationId, name])
 }
 
 // Custom shift types that organizations can create

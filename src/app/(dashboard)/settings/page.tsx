@@ -110,6 +110,16 @@ interface Holiday {
   isRecurring: boolean
 }
 
+interface CustomRole {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+  isActive: boolean
+  _count: { users: number }
+}
+
 const DEFAULT_SHIFT_COLORS = {
   DAY: { bg: "#22c55e", text: "#ffffff" },
   NIGHT: { bg: "#3b82f6", text: "#ffffff" },
@@ -194,6 +204,13 @@ export default function SettingsPage() {
   const [newHoliday, setNewHoliday] = useState({ name: "", date: "", recurring: true })
   const [savingHoliday, setSavingHoliday] = useState(false)
 
+  // Custom roles state
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
+  const [showRoleForm, setShowRoleForm] = useState(false)
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null)
+  const [savingRole, setSavingRole] = useState(false)
+  const [newRole, setNewRole] = useState({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" as const })
+
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
@@ -210,17 +227,19 @@ export default function SettingsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [orgRes, patternsRes, shiftTypesRes, holidaysRes] = await Promise.all([
+      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes] = await Promise.all([
         fetch("/api/organization"),
         fetch("/api/rotation-patterns"),
         fetch("/api/custom-shift-types"),
         fetch("/api/holidays"),
+        fetch("/api/roles"),
       ])
 
       const orgData = await orgRes.json()
       const patternsData = await patternsRes.json()
       const shiftTypesData = await shiftTypesRes.json()
       const holidaysData = await holidaysRes.json()
+      const rolesData = await rolesRes.json()
 
       if (orgData.success) {
         setOrganization(orgData.data)
@@ -231,6 +250,7 @@ export default function SettingsPage() {
       if (patternsData.success) setPatterns(patternsData.data)
       if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
       if (holidaysData.success) setHolidays(holidaysData.data)
+      if (rolesData.success) setCustomRoles(rolesData.data)
     } catch (error) {
       console.error("Failed to fetch data:", error)
     } finally {
@@ -427,6 +447,80 @@ export default function SettingsPage() {
       if (data.success) {
         setCustomShiftTypes(customShiftTypes.filter(st => st.id !== shiftTypeId))
         showMessage("Shift type deleted")
+      } else {
+        showMessage(data.error || "Failed to delete")
+      }
+    } catch {
+      showMessage("Failed to delete")
+    }
+  }
+
+  // Custom role handlers
+  const resetRoleForm = () => {
+    setNewRole({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" })
+    setEditingRole(null)
+    setShowRoleForm(false)
+  }
+
+  const startEditRole = (role: CustomRole) => {
+    setEditingRole(role)
+    setNewRole({
+      name: role.name,
+      description: role.description || "",
+      color: role.color,
+      baseRole: role.baseRole,
+    })
+    setShowRoleForm(true)
+  }
+
+  const handleSaveRole = async () => {
+    if (!newRole.name.trim()) {
+      showMessage("Role name is required")
+      return
+    }
+
+    setSavingRole(true)
+
+    try {
+      const url = editingRole
+        ? `/api/roles/${editingRole.id}`
+        : "/api/roles"
+
+      const response = await fetch(url, {
+        method: editingRole ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRole),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        const rolesRes = await fetch("/api/roles")
+        const rolesData = await rolesRes.json()
+        if (rolesData.success) setCustomRoles(rolesData.data)
+
+        showMessage(editingRole ? "Role updated" : "Role created")
+        resetRoleForm()
+      } else {
+        showMessage(data.error || "Failed to save role")
+      }
+    } catch {
+      showMessage("Failed to save role")
+    } finally {
+      setSavingRole(false)
+    }
+  }
+
+  const handleDeleteRole = async (roleId: string) => {
+    if (!confirm("Delete this role?")) return
+
+    try {
+      const response = await fetch(`/api/roles/${roleId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setCustomRoles(customRoles.filter(r => r.id !== roleId))
+        showMessage("Role deleted")
       } else {
         showMessage(data.error || "Failed to delete")
       }
@@ -1444,6 +1538,141 @@ export default function SettingsPage() {
               ))}
               {customShiftTypes.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">No custom shift types</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Custom Roles */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Custom Roles
+                </CardTitle>
+                <CardDescription>Create custom roles for your organization</CardDescription>
+              </div>
+              {isAdmin && !showRoleForm && (
+                <Button size="sm" onClick={() => setShowRoleForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Role
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <strong>System Roles:</strong> Admin, Supervisor, Worker (control permissions)
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Custom roles are for organizational titles and can be assigned to users alongside system roles.
+              </p>
+            </div>
+
+            {showRoleForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">{editingRole ? "Edit" : "New"} Role</h4>
+                  <Button variant="ghost" size="sm" onClick={resetRoleForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="role-name">Name</Label>
+                    <Input
+                      id="role-name"
+                      placeholder="e.g., Team Lead"
+                      value={newRole.name}
+                      onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-base">Base Permission Level</Label>
+                    <Select
+                      value={newRole.baseRole}
+                      onChange={(e) => setNewRole({ ...newRole, baseRole: e.target.value as "ADMIN" | "SUPERVISOR" | "WORKER" })}
+                      options={[
+                        { value: "WORKER", label: "Worker" },
+                        { value: "SUPERVISOR", label: "Supervisor" },
+                        { value: "ADMIN", label: "Admin" },
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-color">Color</Label>
+                    <div className="flex gap-2">
+                      <input
+                        id="role-color"
+                        type="color"
+                        value={newRole.color}
+                        onChange={(e) => setNewRole({ ...newRole, color: e.target.value })}
+                        className="w-10 h-10 rounded cursor-pointer"
+                      />
+                      <Input
+                        value={newRole.color}
+                        onChange={(e) => setNewRole({ ...newRole, color: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-description">Description</Label>
+                    <Input
+                      id="role-description"
+                      placeholder="Optional description"
+                      value={newRole.description}
+                      onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetRoleForm}>Cancel</Button>
+                  <Button onClick={handleSaveRole} disabled={savingRole}>
+                    {savingRole ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {editingRole ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {customRoles.map((role) => (
+                <div key={role.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: role.color }}
+                    />
+                    <div>
+                      <p className="font-medium">{role.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Base: {role.baseRole} • {role._count.users} user{role._count.users !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditRole(role)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteRole(role.id)}
+                        disabled={role._count.users > 0}
+                        title={role._count.users > 0 ? "Cannot delete: users assigned" : "Delete role"}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {customRoles.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No custom roles</p>
               )}
             </div>
           </CardContent>
