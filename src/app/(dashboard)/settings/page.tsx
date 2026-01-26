@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Modal } from "@/components/ui/modal"
+import { StaffingRulesCard } from "@/components/settings/staffing-rules-card"
+
 import { Select } from "@/components/ui/select"
 import {
   Building2,
@@ -1259,6 +1261,9 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Staffing Rules */}
+        <StaffingRulesCard />
 
         {/* Custom Shift Types */}
         <Card className="md:col-span-2">

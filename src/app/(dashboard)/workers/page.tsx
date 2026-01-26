@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { toast } from "sonner"
 import {
   Users,
   Plus,
@@ -190,12 +191,13 @@ export default function WorkersPage() {
           hireDate: "",
           password: "",
         })
+        toast.success("Worker created successfully")
       } else {
-        alert(data.error || "Failed to create worker")
+        toast.error(data.error || "Failed to create worker")
       }
     } catch (error) {
       console.error("Failed to create worker:", error)
-      alert("Failed to create worker")
+      toast.error("Failed to create worker")
     } finally {
       setSubmitting(false)
     }
@@ -230,12 +232,13 @@ export default function WorkersPage() {
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        toast.success("Worker updated successfully")
       } else {
-        alert(data.error || "Failed to update worker")
+        toast.error(data.error || "Failed to update worker")
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      alert("Failed to update worker")
+      toast.error("Failed to update worker")
     } finally {
       setSubmitting(false)
     }
@@ -256,12 +259,13 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => prev.filter((u) => u.id !== userId))
+        toast.success("Worker deleted successfully")
       } else {
-        alert(data.error || "Failed to delete worker")
+        toast.error(data.error || "Failed to delete worker")
       }
     } catch (error) {
       console.error("Failed to delete worker:", error)
-      alert("Failed to delete worker")
+      toast.error("Failed to delete worker")
     }
   }
 

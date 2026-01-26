@@ -16,6 +16,8 @@ import {
   Sun,
   Moon,
   CalendarOff,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react"
 
 interface ScheduleStats {
@@ -80,16 +82,118 @@ export default function ReportsPage() {
     crews: [],
   })
 
+  const [complianceStats, setComplianceStats] = useState<{
+    operatorCompliance: number
+    ocrCompliance: number
+    understaffedDays: Array<{ date: string; type: "Operator" | "OCR"; actual: number; required: number }>
+  }>({
+    operatorCompliance: 100,
+    ocrCompliance: 100,
+    understaffedDays: []
+  })
+
   const fetchReportData = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Fetch schedules for date range
-      const schedulesRes = await fetch(
-        `/api/schedules?startDate=${startDate}&endDate=${endDate}`
-      )
+      // Fetch schedules, workers, and staffing rules
+      const [schedulesRes, workersRes, rulesRes] = await Promise.all([
+        fetch(`/api/schedules?startDate=${startDate}&endDate=${endDate}`),
+        fetch("/api/users"),
+        fetch("/api/staffing-rules?isActive=true")
+      ])
+      
       const schedulesData = await schedulesRes.json()
+      const workersData = await workersRes.json()
+      const rulesData = await rulesRes.json()
 
-      if (schedulesData.success && schedulesData.data) {
+      // Process Staffing Compliance
+      if (schedulesData.success && workersData.success && rulesData.success) {
+        const schedules = schedulesData.data
+        const workers = workersData.data
+        const rules = rulesData.data
+
+        // Default requirements if no rules set
+        let minOperators = 2
+        let minOCR = 1
+
+        // Override with actual rules if found
+        rules.forEach((r: any) => {
+          if (r.positionType === "OPERATOR") minOperators = r.minWorkers
+          if (r.positionType === "ONSHORE_CONTROL_ROOM") minOCR = r.minWorkers
+        })
+
+        const dailyCounts: Record<string, { ops: number; ocr: number }> = {}
+        
+        // Count staff per day
+        schedules.forEach((s: any) => {
+          if (s.shiftType !== "DAY" && s.shiftType !== "NIGHT") return
+          const date = s.date.split("T")[0]
+          if (!dailyCounts[date]) dailyCounts[date] = { ops: 0, ocr: 0 }
+
+          // Use same matching logic as Schedule Page for consistency
+          const worker = workers.find((w: any) => w.id === s.user.id)
+          const posString = (s.user.position || worker?.position || "").toUpperCase()
+          const crewName = (s.crew?.name || worker?.crew?.name || "").toUpperCase()
+          const posType = s.user.positionType || worker?.positionType
+
+          // 1. Check Control Room FIRST (to catch "OCR Ops" before it matches generic "Ops")
+          const isOCR = posType === "ONSHORE_CONTROL_ROOM" || 
+                        posString.includes("OCR") || 
+                        posString.includes("CONTROL") || 
+                        posString.includes("ROOM") || 
+                        posString.includes("CO TRIP") || 
+                        crewName.includes("OCR") ||
+                        crewName.includes("CONTROL") ||
+                        crewName.includes("ROOM")
+
+          // 2. Check Operators (excluding those already matched as Control Room)
+          const isOp = !isOCR && (
+                        posType === "OPERATOR" || 
+                        posString.includes("OPS") || 
+                        posString.includes("OPERATOR") || 
+                        posString.includes("TECH") ||
+                        posString.includes("PRODUCTION") ||
+                        crewName.includes("OPS") ||
+                        crewName.includes("OPERATOR")
+                      )
+
+          if (isOCR) dailyCounts[date].ocr++
+          if (isOp) dailyCounts[date].ops++
+        })
+
+        // Calculate Compliance
+        const understaffed: Array<{ date: string; type: "Operator" | "OCR"; actual: number; required: number }> = []
+        let totalDays = 0
+        let compliantOpsDays = 0
+        let compliantOCRDays = 0
+
+        // Iterate through date range
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split("T")[0]
+          if (dailyCounts[dateStr]) {
+            totalDays++
+            const counts = dailyCounts[dateStr]
+            
+            if (counts.ops >= minOperators) compliantOpsDays++
+            else understaffed.push({ date: dateStr, type: "Operator", actual: counts.ops, required: minOperators })
+
+            if (counts.ocr >= minOCR) compliantOCRDays++
+            else understaffed.push({ date: dateStr, type: "OCR", actual: counts.ocr, required: minOCR })
+          }
+        }
+
+        setComplianceStats({
+          operatorCompliance: totalDays > 0 ? Math.round((compliantOpsDays / totalDays) * 100) : 100,
+          ocrCompliance: totalDays > 0 ? Math.round((compliantOCRDays / totalDays) * 100) : 100,
+          understaffedDays: understaffed.sort((a, b) => a.date.localeCompare(b.date))
+        })
+      }
+
+      // Existing logic for basic stats...
+      if (schedulesData.success) {
+        // ... (rest of existing logic using schedulesData)
         const schedules = schedulesData.data
         const stats: ScheduleStats = {
           totalSchedules: schedules.length,
@@ -102,43 +206,43 @@ export default function ReportsPage() {
         setScheduleStats(stats)
       }
 
-      // Fetch workers
-      const workersRes = await fetch("/api/users")
-      const workersData = await workersRes.json()
-
-      if (workersData.success && workersData.data) {
-        const workers = workersData.data
-        const positions: Record<string, number> = {}
-        workers.forEach((w: { position: string | null }) => {
-          const pos = w.position || "Unassigned"
-          positions[pos] = (positions[pos] || 0) + 1
-        })
-
-        setWorkerStats({
-          totalWorkers: workers.length,
-          activeWorkers: workers.filter((w: { status: string }) => w.status === "ACTIVE").length,
-          onLeave: workers.filter((w: { status: string }) => w.status === "ON_LEAVE").length,
-          byPosition: positions,
-        })
+      // Fetch workers logic...
+      if (workersData.success) {
+         // ... (rest of existing worker logic)
+         const workers = workersData.data
+         // ... existing worker stats logic
+         const positions: Record<string, number> = {}
+         workers.forEach((w: { position: string | null }) => {
+           const pos = w.position || "Unassigned"
+           positions[pos] = (positions[pos] || 0) + 1
+         })
+ 
+         setWorkerStats({
+           totalWorkers: workers.length,
+           activeWorkers: workers.filter((w: { status: string }) => w.status === "ACTIVE").length,
+           onLeave: workers.filter((w: { status: string }) => w.status === "ON_LEAVE").length,
+           byPosition: positions,
+         })
       }
+
 
       // Fetch crews
-      const crewsRes = await fetch("/api/crews")
+      const crewsRes = await fetch("/api/crews") 
       const crewsData = await crewsRes.json()
-
-      if (crewsData.success && crewsData.data) {
-        const crews = crewsData.data
-        setCrewStats({
-          totalCrews: crews.length,
-          crews: crews.map((c: { id: string; name: string; color: string; _count?: { workers: number } }) => ({
-            id: c.id,
-            name: c.name,
-            color: c.color,
-            workerCount: c._count?.workers || 0,
-            scheduledDays: 0,
-          })),
-        })
+      if (crewsData.success) {
+         const crews = crewsData.data
+         setCrewStats({
+           totalCrews: crews.length,
+           crews: crews.map((c: { id: string; name: string; color: string; _count?: { workers: number } }) => ({
+             id: c.id,
+             name: c.name,
+             color: c.color,
+             workerCount: c._count?.workers || 0,
+             scheduledDays: 0,
+           })),
+         })
       }
+
     } catch (error) {
       console.error("Failed to fetch report data:", error)
     } finally {
@@ -168,7 +272,7 @@ export default function ReportsPage() {
             View scheduling statistics and workforce metrics
           </p>
         </div>
-        <Button variant="outline" className="gap-2" disabled>
+        <Button variant="outline" className="gap-2" onClick={() => window.open("/api/export?type=all", "_blank")} disabled={isLoading}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
@@ -217,6 +321,85 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
+          {/* Staffing Compliance Section */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Staffing Compliance
+                </CardTitle>
+                <CardDescription>Percentage of shifts meeting minimum requirements</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Operators</span>
+                      <span className={complianceStats.operatorCompliance < 90 ? "text-red-500 font-bold" : "text-green-600"}>
+                        {complianceStats.operatorCompliance}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${complianceStats.operatorCompliance < 90 ? "bg-red-500" : "bg-green-500"}`}
+                        style={{ width: `${complianceStats.operatorCompliance}%` }} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Control Room (OCR)</span>
+                      <span className={complianceStats.ocrCompliance < 90 ? "text-red-500 font-bold" : "text-green-600"}>
+                        {complianceStats.ocrCompliance}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${complianceStats.ocrCompliance < 90 ? "bg-red-500" : "bg-green-500"}`}
+                        style={{ width: `${complianceStats.ocrCompliance}%` }} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                  Recent Gaps
+                </CardTitle>
+                <CardDescription>Days with insufficient staffing</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {complianceStats.understaffedDays.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                    <CheckCircle2 className="h-8 w-8 mb-2 text-green-500" />
+                    <p>No staffing gaps found in this period!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+                    {complianceStats.understaffedDays.map((gap, i) => (
+                      <div key={i} className="flex items-center justify-between text-sm p-2 bg-red-50 dark:bg-red-950/20 rounded border border-red-100 dark:border-red-900">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-red-500" />
+                          <span>{new Date(gap.date).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{gap.type}</span>
+                          <span className="text-red-600 font-bold">{gap.actual}/{gap.required}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Overview Stats */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
