@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     console.error("Reset password error:", error)
 
     if (error instanceof z.ZodError) {
-      const issues = error.errors.map((e) => e.message).join(", ")
+      const issues = error.issues.map((e) => e.message).join(", ")
       return NextResponse.json(
         { error: issues },
         { status: 400 }
