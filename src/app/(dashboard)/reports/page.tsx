@@ -153,7 +153,8 @@ export default function ReportsPage() {
                         posString.includes("OPERATOR") || 
                         posString.includes("TECH") ||
                         posString.includes("PRODUCTION") ||
-                        crewName.includes("OPS")
+                        crewName.includes("OPS") ||
+                        crewName.includes("OPERATOR")
                       )
 
           if (isOCR) dailyCounts[date].ocr++

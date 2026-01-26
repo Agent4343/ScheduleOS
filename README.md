@@ -1,80 +1,101 @@
-# ShiftSync
+# ShiftSync: The Ultimate Workforce Scheduling Platform
 
-**The Universal Workforce Scheduling Platform**
+**ShiftSync** is a powerful, industry-agnostic scheduling engine designed to automate complex shift rotations. It replaces spreadsheets with intelligent automation, ensuring compliance, safety, and efficiency for workforces in oil & gas, manufacturing, healthcare, and beyond.
 
-ShiftSync is an intelligent scheduling solution designed to handle the complexity of rotating shift work across any industry—from oil rigs and manufacturing plants to healthcare and emergency services. It automates the tedious parts of scheduling so supervisors can focus on production and operations.
+---
 
-## Why Supervisors Love ShiftSync
+## 🚀 Key Capabilities (What it Does)
 
-### ⏱️ Saves Hours of Planning Time
-- **One-Click Generation**: Select a start date and pattern, and generate schedules for 5 years in seconds.
-- **Automated Rotations**: No more manual spreadsheet copying. The system handles 2/2, 14/14, day/night swaps, and complex custom patterns automatically.
-- **Visual Calendar**: See the whole year or just this month at a glance with clear, color-coded shifts.
+### 1. **Automated Schedule Generation**
+*   **The Problem:** Manually filling out a calendar for 50+ workers on different rotations (14/14, 2/2, 3/3) takes hours and leads to errors.
+*   **The ShiftSync Solution:**
+    *   **One-Click Generation:** Select a worker, choose a pattern (e.g., "14 Days On / 14 Days Off"), pick a start date, and the system instantly fills the calendar for 5 years.
+    *   **Smart Rotations:** Automatically handles complex logic like switching between Day and Night shifts mid-rotation or alternating every cycle.
 
-### 🏭 Built for Any Industry
-- **Universal Flexibility**: Whether you work 12-hour shifts on an oil rig, 8-hour rotations in a factory, or 24-hour emergency crew cycles, ShiftSync adapts.
-- **Custom Shift Types**: Create your own shift codes (e.g., "TRAINING", "ON-CALL", "OFFSHORE") to match your industry's language.
-- **Staffing Rules**: Define minimum staffing levels (e.g., "Night shift needs 2 Operators"). The system automatically flags gaps so you never run understaffed.
+### 2. **Staffing Compliance & Safety**
+*   **The Problem:** Running a shift understaffed (e.g., "Night Shift has 0 Operators") is a safety risk and compliance violation.
+*   **The ShiftSync Solution:**
+    *   **Real-Time Validation:** Every time you edit the schedule, the system checks your **Staffing Rules**.
+    *   **Visual Alerts:** If you remove a worker and leave a shift short-handed, you get an immediate warning: *"Leaving Night Shift understaffed (Min: 2 Operators)."*
+    *   **Daily Summaries:** The schedule view shows a live count of Operators and Control Room staff for every single day. If numbers drop below safe levels, they turn **RED**.
 
-### 🧠 Smarter Management
-- **Instant Notifications**: Get alerted immediately when schedules change or staffing drops below safe levels.
-- **Crew Management**: Organize workers into Crews (A, B, C, D) and manage them as a unit.
-- **Time Off Tracking**: Workers request leave, you approve it, and the schedule updates automatically—checking for conflicts instantly.
+### 3. **Intelligent Role Tracking**
+*   **The Problem:** Workers have different titles ("Ops A", "Tech", "Lead"), making it hard to count "How many *Operators* do I have?"
+*   **The ShiftSync Solution:**
+    *   **Smart Matching:** The system intelligently categorizes workers into roles (Operator vs. Control Room) by analyzing their:
+        *   **Position Type:** (Database Code)
+        *   **Job Title:** (e.g., "Ops Tech", "Production Lead")
+        *   **Crew Name:** (e.g., "Onshore Control Room Shift A")
+    *   This ensures 100% accurate staffing counts even if data is messy.
 
-## Key Features
+### 4. **Visual Management**
+*   **The Problem:** Spreadsheets are cluttered and hard to read on mobile or print.
+*   **The ShiftSync Solution:**
+    *   **Paint Mode:** Rapidly assign shifts by clicking and dragging across the calendar (like painting cells in Excel).
+    *   **Print View:** A clean, stripped-down view optimized for printing daily schedules for the bulletin board.
+    *   **Year vs. Month:** Toggle between a high-level annual view and a detailed monthly execution view.
 
-- **Flexible Rotation Templates**: Support for 2 on/2 off, 3 on/3 off, 14 on/14 off, and completely custom patterns.
-- **Staffing Rules Engine**: Set rules like "Must have 1 Supervisor on Day Shift" and get alerts when rules are broken.
-- **Month & Year Views**: Toggle between high-level year planning and detailed monthly execution.
-- **Notifications System**: Built-in alerts for time-off requests, approvals, and staffing warnings.
-- **Export & Reporting**: Download schedules and worker reports for offline use or compliance.
+---
 
-## Tech Stack
+## 🛠️ Configuration Guide (What You Can Change)
 
-- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, Prisma ORM
-- **Database**: PostgreSQL
-- **Authentication**: NextAuth.js
-- **Testing**: Vitest for reliable logic
+### **1. Rotation Patterns (`/settings`)**
+*   **What it is:** The blueprints for your shifts.
+*   **How to change:** Go to **Settings > Rotation Patterns**.
+*   **Examples:**
+    *   *Standard:* 14 Days On, 14 Days Off.
+    *   *Alternating:* 2 Days / 2 Nights / 4 Off.
+    *   *Custom:* Create any sequence you need.
 
-## Getting Started
+### **2. Staffing Rules (`/settings`)**
+*   **What it is:** The safety limits for your workforce.
+*   **How to change:** Go to **Settings > Staffing Rules**.
+*   **Actions:**
+    *   Set **Minimum Workers** for specific roles (e.g., "Must have 2 Operators on Night Shift").
+    *   Define which roles (Operator, Control Room, Other) the rule applies to.
 
-### Deploy to Railway
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/shiftsync)
+### **3. Custom Shift Types (`/settings`)**
+*   **What it is:** The codes you see on the calendar.
+*   **How to change:** Go to **Settings > Custom Shift Types**.
+*   **Actions:**
+    *   Create codes like **TRN** (Training), **MED** (Medical), **OFFSHORE**.
+    *   Assign custom colors (e.g., Purple for Training) for instant visual recognition.
 
-### Local Development
+### **4. Workers & Crews (`/workers`, `/crews`)**
+*   **What it is:** Your people and teams.
+*   **How to change:**
+    *   **Workers:** Add/Edit users, assign them to Crews, and set their Job Titles. *Note: Job Titles containing "Ops", "Tech", or "Control" automatically trigger staffing logic.*
+    *   **Crews:** Group workers (e.g., "Crew A", "OCR Shift B") to filter the schedule view.
 
-1. **Clone & Install**:
-   ```bash
-   git clone <repository-url>
-   cd shiftsync
-   npm install
-   ```
+---
 
-2. **Setup Database**:
-   ```bash
-   # Copy env file
-   cp .env.example .env
-   # Add your database URL to .env
-   
-   # Push schema
-   npm run db:push
-   
-   # Seed default patterns
-   npm run db:seed
-   ```
+## 💻 Technical Overview (For Developers)
 
-3. **Run**:
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000).
+### **Stack**
+*   **Framework:** Next.js 14 (App Router)
+*   **Database:** PostgreSQL (via Prisma ORM)
+*   **Auth:** NextAuth.js
+*   **State:** React Query (TanStack)
+*   **Testing:** Vitest
 
-4. **Run Tests**:
-   ```bash
-   npm test
-   ```
+### **Key Logic Files**
+*   `src/lib/scheduling.ts`: Core algorithm for generating future dates based on rotation patterns.
+*   `src/app/(dashboard)/schedule/page.tsx`: The heavy lifter. Contains the calendar grid, **Paint Mode** logic, and **Staffing Compliance** calculations.
+*   `src/components/settings/staffing-rules-card.tsx`: UI for configuring safety rules.
 
-## License
+### **API Routes**
+*   `POST /api/schedules`: Generates or updates shifts. Handles transactions for bulk updates.
+*   `GET /api/reports`: Aggregates data for the compliance dashboard.
 
-Proprietary - All rights reserved
+---
+
+## 🚀 Getting Started
+
+1.  **Deploy:** Click the Railway button in the main repo to launch your own instance.
+2.  **Seed:** Use `npm run db:seed` to populate default patterns (2/2, 14/14, etc.).
+3.  **Configure:** Log in as Admin, go to **Settings**, and define your **Staffing Rules**.
+4.  **Schedule:** Go to **Schedule**, select a worker, and click **Generate**.
+
+---
+
+**ShiftSync** transforms scheduling from a chore into a strategic advantage.

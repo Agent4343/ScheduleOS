@@ -34,6 +34,7 @@ export default withAuth(
         const publicPaths = [
           "/login",
           "/register",
+          "/api/register",
           "/api/auth",
           "/api/health",
           "/api/setup",
@@ -67,6 +68,6 @@ export const config = {
      * - api/setup (database setup - must work before auth is configured)
      * - api/migrate (database migrations - must work before auth is configured)
      */
-    "/((?!_next/static|_next/image|favicon.ico|public/|api/health|api/setup|api/migrate).*)",
+    "/((?!_next/static|_next/image|favicon.ico|public/|api/health|api/setup|api/migrate|api/register).*)",
   ],
 }
