@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
-import { ShiftType } from "@/types"
+import { ShiftType, UserStatus } from "@/types"
 
 // Tool definitions for the AI assistant
 const tools: Anthropic.Tool[] = [
@@ -369,7 +369,7 @@ async function executeTool(
           organizationId: string
           name?: { contains: string; mode: "insensitive" }
           crewId?: string
-          status?: string
+          status?: UserStatus
         } = { organizationId }
 
         if (input.search) {
@@ -379,7 +379,7 @@ async function executeTool(
           whereClause.crewId = input.crewId
         }
         if (input.status) {
-          whereClause.status = input.status
+          whereClause.status = input.status as UserStatus
         }
 
         const workers = await prisma.user.findMany({
