@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
+import { ShiftType } from "@/types"
 
 // Tool definitions for the AI assistant
 const tools: Anthropic.Tool[] = [
@@ -262,7 +263,7 @@ interface ToolInput {
   workerId?: string
   crewId?: string
   date?: string
-  shiftType?: string
+  shiftType?: ShiftType
   search?: string
   status?: string
   name?: string
