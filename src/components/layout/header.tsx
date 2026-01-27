@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession, signOut } from "next-auth/react"
-import { Bell, LogOut, Menu, User, Settings, Check, CheckCheck } from "lucide-react"
+import { Bell, LogOut, Menu, User, Settings, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { useState, useEffect, useRef } from "react"
