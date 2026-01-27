@@ -23,7 +23,7 @@ export async function GET() {
       try {
         await prisma.customRole.count()
         response.customRoleTable = "exists"
-      } catch (tableError) {
+      } catch {
         response.customRoleTable = "missing"
         response.status = "degraded"
       }
