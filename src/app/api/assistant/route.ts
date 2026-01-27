@@ -358,7 +358,6 @@ async function executeTool(
               date: new Date(input.date!),
               shiftType: input.shiftType!,
               crewId: worker.crewId,
-              organizationId,
             },
           })
           return `Created ${input.shiftType} shift for ${worker.name} on ${input.date}.`
@@ -549,7 +548,6 @@ async function executeTool(
                 userId: request.userId,
                 date: new Date(currentDate),
                 shiftType: request.leaveType === "VACATION" ? "VACATION" : "LEAVE",
-                organizationId,
               },
             })
             currentDate.setDate(currentDate.getDate() + 1)
@@ -717,7 +715,6 @@ async function executeTool(
               userId: input.workerId!,
               date: new Date(currentDate),
               shiftType: input.shiftType!,
-              organizationId,
               crewId: worker.crewId,
             },
           })
