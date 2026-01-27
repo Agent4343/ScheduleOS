@@ -458,16 +458,16 @@ async function executeTool(
         const crews = await prisma.crew.findMany({
           where: { organizationId },
           include: {
-            _count: { select: { members: true } },
+            _count: { select: { workers: true } },
           },
           orderBy: { name: "asc" },
         })
 
-        const formatted = crews.map((c: { id: string; name: string; color: string; _count: { members: number } }) => ({
+        const formatted = crews.map((c: { id: string; name: string; color: string; _count: { workers: number } }) => ({
           id: c.id,
           name: c.name,
           color: c.color,
-          memberCount: c._count.members,
+          memberCount: c._count.workers,
         }))
 
         return JSON.stringify(formatted, null, 2)
