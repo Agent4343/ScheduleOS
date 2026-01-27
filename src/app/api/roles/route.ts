@@ -22,20 +22,26 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const roles = await prisma.customRole.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        isActive: true,
-      },
-      include: {
-        _count: {
-          select: { users: true },
+    try {
+      const roles = await prisma.customRole.findMany({
+        where: {
+          organizationId: session.user.organizationId,
+          isActive: true,
         },
-      },
-      orderBy: { name: "asc" },
-    })
+        include: {
+          _count: {
+            select: { users: true },
+          },
+        },
+        orderBy: { name: "asc" },
+      })
 
-    return NextResponse.json({ success: true, data: roles })
+      return NextResponse.json({ success: true, data: roles })
+    } catch (dbError) {
+      // If table doesn't exist, return empty array
+      console.error("CustomRole table may not exist:", dbError)
+      return NextResponse.json({ success: true, data: [] })
+    }
   } catch (error) {
     console.error("Error fetching roles:", error)
     return NextResponse.json({ error: "Failed to fetch roles" }, { status: 500 })
@@ -99,6 +105,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Invalid input data", details: error.issues },
         { status: 400 }
+      )
+    }
+
+    // Check if it's a database error (table doesn't exist)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes("does not exist") || errorMessage.includes("CustomRole")) {
+      return NextResponse.json(
+        { error: "Custom roles feature requires database migration. Please run: npx prisma db push" },
+        { status: 500 }
       )
     }
 
