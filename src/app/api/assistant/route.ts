@@ -437,12 +437,13 @@ async function executeTool(
       }
 
       case "update_worker": {
-        const updateData: { name?: string; position?: string; phone?: string; crewId?: string; status?: string } = {}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const updateData: Record<string, any> = {}
         if (input.name) updateData.name = input.name
         if (input.position) updateData.position = input.position
         if (input.phone) updateData.phone = input.phone
-        if (input.crewId) updateData.crewId = input.crewId
-        if (input.status) updateData.status = input.status
+        if (input.crewId) updateData.crew = { connect: { id: input.crewId } }
+        if (input.status) updateData.status = input.status as UserStatus
 
         const worker = await prisma.user.update({
           where: { id: input.workerId! },
