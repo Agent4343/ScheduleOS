@@ -64,19 +64,32 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = createRoleSchema.parse(body)
 
-    // Check if role name already exists
-    const existingRole = await prisma.customRole.findFirst({
-      where: {
-        organizationId: session.user.organizationId,
-        name: validatedData.name,
-      },
-    })
+    // Try to check if role name already exists - this will fail if table doesn't exist
+    try {
+      const existingRole = await prisma.customRole.findFirst({
+        where: {
+          organizationId: session.user.organizationId,
+          name: validatedData.name,
+        },
+      })
 
-    if (existingRole) {
-      return NextResponse.json(
-        { error: "A role with this name already exists" },
-        { status: 400 }
-      )
+      if (existingRole) {
+        return NextResponse.json(
+          { error: "A role with this name already exists" },
+          { status: 400 }
+        )
+      }
+    } catch (dbCheckError) {
+      const errorMsg = dbCheckError instanceof Error ? dbCheckError.message : String(dbCheckError)
+      console.error("Database check error:", errorMsg)
+
+      if (errorMsg.includes("does not exist") || errorMsg.includes("relation") || errorMsg.includes("CustomRole")) {
+        return NextResponse.json(
+          { error: "Custom roles table not found. Please redeploy the application to run database migrations." },
+          { status: 503 }
+        )
+      }
+      throw dbCheckError
     }
 
     const role = await prisma.customRole.create({
@@ -110,10 +123,10 @@ export async function POST(request: NextRequest) {
 
     // Check if it's a database error (table doesn't exist)
     const errorMessage = error instanceof Error ? error.message : String(error)
-    if (errorMessage.includes("does not exist") || errorMessage.includes("CustomRole")) {
+    if (errorMessage.includes("does not exist") || errorMessage.includes("relation") || errorMessage.includes("CustomRole")) {
       return NextResponse.json(
-        { error: "Custom roles feature requires database migration. Please run: npx prisma db push" },
-        { status: 500 }
+        { error: "Custom roles table not found. Please redeploy the application to run database migrations." },
+        { status: 503 }
       )
     }
 

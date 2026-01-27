@@ -499,13 +499,22 @@ export default function SettingsPage() {
         const rolesData = await rolesRes.json()
         if (rolesData.success) setCustomRoles(rolesData.data)
 
-        showMessage(editingRole ? "Role updated" : "Role created")
+        showMessage(editingRole ? "Role updated successfully" : "Role created successfully")
         resetRoleForm()
       } else {
-        showMessage(data.error || "Failed to save role")
+        // Show error message longer for database issues
+        const errorMsg = data.error || "Failed to save role"
+        setMessage(errorMsg)
+        if (errorMsg.includes("table") || errorMsg.includes("migration") || errorMsg.includes("redeploy")) {
+          // Keep error visible longer for database migration issues
+          setTimeout(() => setMessage(""), 10000)
+        } else {
+          setTimeout(() => setMessage(""), 3000)
+        }
       }
-    } catch {
-      showMessage("Failed to save role")
+    } catch (err) {
+      console.error("Error saving role:", err)
+      showMessage("Failed to save role. Please try again.")
     } finally {
       setSavingRole(false)
     }
