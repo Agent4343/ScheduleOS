@@ -5,6 +5,7 @@ export async function GET() {
     status: string
     timestamp: string
     database?: string
+    customRoleTable?: string
     error?: string
   } = {
     status: "healthy",
@@ -17,6 +18,15 @@ export async function GET() {
       const { prisma } = await import("@/lib/prisma")
       await prisma.$queryRaw`SELECT 1`
       response.database = "connected"
+
+      // Check if CustomRole table exists
+      try {
+        await prisma.customRole.count()
+        response.customRoleTable = "exists"
+      } catch (tableError) {
+        response.customRoleTable = "missing"
+        response.status = "degraded"
+      }
     } catch (error) {
       console.error("Database check failed:", error)
       response.database = "disconnected"
