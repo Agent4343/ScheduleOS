@@ -52,6 +52,12 @@ interface Worker {
   position: string | null
   phone?: string | null
   role?: UserRole
+  customRoleId?: string | null
+  customRole?: {
+    id: string
+    name: string
+    color: string
+  } | null
   hireDate?: string | null
   sortOrder?: number
   crew: {
@@ -67,6 +73,7 @@ interface WorkerEditForm {
   phone: string
   crewId: string
   role: UserRole
+  customRoleId: string
   hireDate: string
 }
 
@@ -88,6 +95,14 @@ interface CustomShiftType {
   textColor: string
   description: string | null
   isActive: boolean
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
 }
 
 // Built-in shift colors for the Excel-like cells
@@ -141,6 +156,7 @@ function SchedulePageContent() {
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -151,6 +167,7 @@ function SchedulePageContent() {
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
+    customRoleId: "",
     hireDate: "",
   })
   const [saving, setSaving] = useState(false)
@@ -239,6 +256,22 @@ function SchedulePageContent() {
       }
     }
     fetchCustomShiftTypes()
+  }, [])
+
+  // Fetch custom roles
+  useEffect(() => {
+    async function fetchCustomRoles() {
+      try {
+        const response = await fetch("/api/roles")
+        const result = await response.json()
+        if (result.success) {
+          setCustomRoles(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom roles:", error)
+      }
+    }
+    fetchCustomRoles()
   }, [])
 
   // Fetch workers
@@ -347,6 +380,7 @@ function SchedulePageContent() {
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
+      customRoleId: worker.customRoleId || "",
       hireDate: hireDateStr,
     })
     setSelectedPatternId("")
@@ -380,6 +414,7 @@ function SchedulePageContent() {
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
+          customRoleId: editForm.customRoleId || null,
           hireDate: editForm.hireDate || null,
         }),
       })
@@ -399,6 +434,10 @@ function SchedulePageContent() {
                 position: editForm.position || null,
                 phone: editForm.phone || null,
                 role: editForm.role,
+                customRoleId: editForm.customRoleId || null,
+                customRole: editForm.customRoleId
+                  ? customRoles.find((r) => r.id === editForm.customRoleId) || null
+                  : null,
                 hireDate: editForm.hireDate || null,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
@@ -868,6 +907,21 @@ function SchedulePageContent() {
               ]}
             />
           </div>
+
+          {customRoles.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="customRole">Custom Role</Label>
+              <Select
+                id="customRole"
+                value={editForm.customRoleId}
+                onChange={(e) => setEditForm({ ...editForm, customRoleId: e.target.value })}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="hireDate">Hire Date</Label>
