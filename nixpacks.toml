@@ -8,6 +8,7 @@ cmds = ["npm ci"]
 
 [phases.build]
 cmds = [
+  "npx prisma db push --skip-generate",
   "npm run build",
   "mkdir -p .next/standalone/.next",
   "cp -r .next/static .next/standalone/.next/",
