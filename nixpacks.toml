@@ -8,7 +8,7 @@ cmds = ["npm ci"]
 
 [phases.build]
 cmds = [
-  "npx prisma db push --skip-generate",
+  "npx prisma generate",
   "npm run build",
   "mkdir -p .next/standalone/.next",
   "cp -r .next/static .next/standalone/.next/",
@@ -17,4 +17,4 @@ cmds = [
 ]
 
 [start]
-cmd = "HOSTNAME=0.0.0.0 PORT=${PORT:-8080} node .next/standalone/server.js"
+cmd = "npx prisma db push --skip-generate --accept-data-loss && HOSTNAME=0.0.0.0 PORT=${PORT:-8080} node .next/standalone/server.js"
