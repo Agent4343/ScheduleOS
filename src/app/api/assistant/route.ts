@@ -437,12 +437,30 @@ async function executeTool(
       }
 
       case "update_worker": {
+        // SECURITY: Verify worker belongs to this organization first
+        const existingWorker = await prisma.user.findFirst({
+          where: { id: input.workerId!, organizationId },
+        })
+
+        if (!existingWorker) {
+          return "Worker not found or access denied."
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updateData: Record<string, any> = {}
         if (input.name) updateData.name = input.name
         if (input.position) updateData.position = input.position
         if (input.phone) updateData.phone = input.phone
-        if (input.crewId) updateData.crew = { connect: { id: input.crewId } }
+        if (input.crewId) {
+          // SECURITY: Verify crew belongs to this organization
+          const crew = await prisma.crew.findFirst({
+            where: { id: input.crewId, organizationId },
+          })
+          if (!crew) {
+            return "Crew not found or access denied."
+          }
+          updateData.crew = { connect: { id: input.crewId } }
+        }
         if (input.status) updateData.status = input.status as UserStatus
 
         const worker = await prisma.user.update({
@@ -514,6 +532,18 @@ async function executeTool(
       }
 
       case "update_time_off_request": {
+        // SECURITY: Verify request belongs to a user in this organization
+        const existingRequest = await prisma.timeOffRequest.findFirst({
+          where: {
+            id: input.requestId!,
+            user: { organizationId },
+          },
+        })
+
+        if (!existingRequest) {
+          return "Time off request not found or access denied."
+        }
+
         const updateData: { status: RequestStatus; reviewNotes?: string; reviewedAt: Date } = {
           status: input.status as RequestStatus,
           reviewedAt: new Date(),
@@ -655,6 +685,16 @@ async function executeTool(
       }
 
       case "swap_shifts": {
+        // SECURITY: Verify both workers belong to this organization
+        const [worker1, worker2] = await Promise.all([
+          prisma.user.findFirst({ where: { id: input.worker1Id!, organizationId } }),
+          prisma.user.findFirst({ where: { id: input.worker2Id!, organizationId } }),
+        ])
+
+        if (!worker1 || !worker2) {
+          return "One or both workers not found or access denied."
+        }
+
         const schedule1 = await prisma.schedule.findFirst({
           where: {
             userId: input.worker1Id!,
@@ -769,6 +809,19 @@ export async function POST(request: NextRequest) {
     // Handle session persistence
     let activeSessionId = sessionId
     if (sessionId && userMessage) {
+      // SECURITY: Verify session belongs to current user and organization
+      const existingSession = await prisma.aIChatSession.findFirst({
+        where: {
+          id: sessionId,
+          userId: session.user.id,
+          organizationId: session.user.organizationId,
+        },
+      })
+
+      if (!existingSession) {
+        return NextResponse.json({ error: "Session not found or access denied" }, { status: 403 })
+      }
+
       // Save user message to existing session
       await prisma.aIChatMessage.create({
         data: {
