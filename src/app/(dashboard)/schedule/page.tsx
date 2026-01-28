@@ -20,6 +20,8 @@ import {
   CalendarPlus,
   RotateCcw,
   Download,
+  Maximize2,
+  Minimize2,
 } from "lucide-react"
 import { ShiftType, UserRole, PositionType } from "@/types"
 
@@ -212,6 +214,9 @@ function SchedulePageContent() {
   const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
   const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
   const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
+
+  // Focus mode - hides legend and summary for bigger schedule view
+  const [focusMode, setFocusMode] = useState(false)
 
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
@@ -806,6 +811,15 @@ function SchedulePageContent() {
 
         <div className="flex items-center gap-2">
           <Button
+            variant={focusMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFocusMode(!focusMode)}
+            title={focusMode ? "Exit focus mode" : "Enter focus mode - hide legend and summary"}
+          >
+            {focusMode ? <Minimize2 className="h-4 w-4 mr-2" /> : <Maximize2 className="h-4 w-4 mr-2" />}
+            {focusMode ? "Exit Focus" : "Focus Mode"}
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => {
@@ -813,7 +827,7 @@ function SchedulePageContent() {
             }}
           >
             <Download className="h-4 w-4 mr-2" />
-            Export to Excel
+            Export
           </Button>
           <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
             This Year
@@ -844,29 +858,31 @@ function SchedulePageContent() {
         />
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: style.bg, color: style.text }}
-          >
-            <span className="font-bold">{style.label}</span>
-            <span>= {type.replace("_", " ")}</span>
-          </div>
-        ))}
-        {customShiftTypes.filter(t => t.isActive).map((t) => (
-          <div
-            key={t.code}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: t.color, color: t.textColor }}
-          >
-            <span className="font-bold">{t.code}</span>
-            <span>= {t.name}</span>
-          </div>
-        ))}
-      </div>
+      {/* Legend - hidden in focus mode */}
+      {!focusMode && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+            <div
+              key={type}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: style.bg, color: style.text }}
+            >
+              <span className="font-bold">{style.label}</span>
+              <span>= {type.replace("_", " ")}</span>
+            </div>
+          ))}
+          {customShiftTypes.filter(t => t.isActive).map((t) => (
+            <div
+              key={t.code}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: t.color, color: t.textColor }}
+            >
+              <span className="font-bold">{t.code}</span>
+              <span>= {t.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Schedule Table */}
       <Card>
@@ -891,7 +907,7 @@ function SchedulePageContent() {
               <p>No workers found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+            <div className={cn("overflow-x-auto overflow-y-auto", focusMode ? "max-h-[90vh]" : "max-h-[70vh]")}>
               <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
                 <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
                   {/* Month headers */}
@@ -1312,8 +1328,8 @@ function SchedulePageContent() {
         </CardContent>
       </Card>
 
-      {/* Worker Count Summary */}
-      {!loading && sortedWorkers.length > 0 && (
+      {/* Worker Count Summary - hidden in focus mode */}
+      {!loading && sortedWorkers.length > 0 && !focusMode && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
