@@ -1,115 +1,172 @@
 import { Metadata } from "next"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "Privacy Policy",
-  description: "ShiftSync Privacy Policy - How we collect, use, and protect your data.",
+  title: "Privacy Policy | ShiftSync",
+  description: "Privacy Policy for ShiftSync workforce scheduling platform",
 }
 
 export default function PrivacyPolicyPage() {
+  const lastUpdated = "January 28, 2026"
+
   return (
-    <article className="prose prose-slate dark:prose-invert max-w-none">
-      <h1>Privacy Policy</h1>
-      <p className="lead">
-        Last updated: January 17, 2026
-      </p>
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-4xl mx-auto py-12 px-4">
+        <Link
+          href="/"
+          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-8"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Home
+        </Link>
 
-      <p>
-        ShiftSync (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
-        This Privacy Policy explains how we collect, use, disclose, and safeguard your information
-        when you use our workforce scheduling platform.
-      </p>
+        <h1 className="text-4xl font-bold mb-4">Privacy Policy</h1>
+        <p className="text-muted-foreground mb-8">Last updated: {lastUpdated}</p>
 
-      <h2>Information We Collect</h2>
+        <div className="prose prose-neutral dark:prose-invert max-w-none space-y-8">
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              ShiftSync (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy.
+              This Privacy Policy explains how we collect, use, disclose, and safeguard your
+              information when you use our workforce scheduling platform.
+            </p>
+          </section>
 
-      <h3>Personal Information</h3>
-      <p>We may collect personal information that you voluntarily provide when using ShiftSync, including:</p>
-      <ul>
-        <li>Name and contact information (email address, phone number)</li>
-        <li>Account credentials (username, password)</li>
-        <li>Employment information (job title, department, crew assignment)</li>
-        <li>Schedule and availability data</li>
-        <li>Time-off requests and approvals</li>
-      </ul>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">2. Information We Collect</h2>
+            <h3 className="text-xl font-medium mb-2">2.1 Personal Information</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              We collect information you provide directly to us, including:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+              <li>Name and email address</li>
+              <li>Phone number (optional)</li>
+              <li>Organization/company name</li>
+              <li>Job title and role information</li>
+              <li>Work schedule and time-off requests</li>
+            </ul>
 
-      <h3>Automatically Collected Information</h3>
-      <p>When you access ShiftSync, we may automatically collect:</p>
-      <ul>
-        <li>Device information (browser type, operating system)</li>
-        <li>IP address and location data</li>
-        <li>Usage data (pages visited, features used, time spent)</li>
-        <li>Cookies and similar tracking technologies</li>
-      </ul>
+            <h3 className="text-xl font-medium mb-2 mt-6">2.2 Automatically Collected Information</h3>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              When you use our service, we automatically collect:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+              <li>Log data (IP address, browser type, pages visited)</li>
+              <li>Device information</li>
+              <li>Cookies and similar tracking technologies</li>
+            </ul>
+          </section>
 
-      <h2>How We Use Your Information</h2>
-      <p>We use the collected information to:</p>
-      <ul>
-        <li>Provide and maintain our scheduling services</li>
-        <li>Process and manage your account</li>
-        <li>Send notifications about schedule changes and updates</li>
-        <li>Respond to your inquiries and support requests</li>
-        <li>Improve our services and develop new features</li>
-        <li>Ensure compliance with legal obligations</li>
-      </ul>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">3. How We Use Your Information</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              We use the information we collect to:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+              <li>Provide, maintain, and improve our services</li>
+              <li>Process and manage work schedules</li>
+              <li>Send notifications about schedule changes</li>
+              <li>Respond to your comments and questions</li>
+              <li>Analyze usage patterns to improve user experience</li>
+              <li>Comply with legal obligations</li>
+            </ul>
+          </section>
 
-      <h2>Data Sharing and Disclosure</h2>
-      <p>We may share your information with:</p>
-      <ul>
-        <li><strong>Your Organization:</strong> Administrators and supervisors within your organization can access scheduling data</li>
-        <li><strong>Service Providers:</strong> Third-party vendors who help us operate our platform (hosting, analytics)</li>
-        <li><strong>Legal Requirements:</strong> When required by law or to protect our rights</li>
-      </ul>
-      <p>We do not sell your personal information to third parties.</p>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">4. Data Sharing and Disclosure</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              We do not sell your personal information. We may share your information with:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+              <li>Your organization&apos;s administrators (for workplace scheduling purposes)</li>
+              <li>Service providers who assist in our operations</li>
+              <li>Legal authorities when required by law</li>
+            </ul>
+          </section>
 
-      <h2>Data Security</h2>
-      <p>
-        We implement appropriate technical and organizational measures to protect your personal
-        information against unauthorized access, alteration, disclosure, or destruction. This includes:
-      </p>
-      <ul>
-        <li>Encryption of data in transit and at rest</li>
-        <li>Regular security assessments</li>
-        <li>Access controls and authentication</li>
-        <li>Employee training on data protection</li>
-      </ul>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">5. Data Security</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              We implement appropriate technical and organizational measures to protect your
+              personal information, including encryption in transit and at rest, access controls,
+              and regular security assessments.
+            </p>
+          </section>
 
-      <h2>Data Retention</h2>
-      <p>
-        We retain your personal information for as long as necessary to provide our services and
-        fulfill the purposes outlined in this policy. When data is no longer needed, we securely
-        delete or anonymize it.
-      </p>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">6. Data Retention</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              We retain your personal information for as long as your account is active or as
+              needed to provide you services. You may request deletion of your data at any time
+              through your account settings.
+            </p>
+          </section>
 
-      <h2>Your Rights</h2>
-      <p>Depending on your location, you may have the right to:</p>
-      <ul>
-        <li>Access your personal information</li>
-        <li>Correct inaccurate data</li>
-        <li>Delete your personal information</li>
-        <li>Object to or restrict processing</li>
-        <li>Data portability</li>
-        <li>Withdraw consent</li>
-      </ul>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">7. Your Rights (GDPR/CCPA)</h2>
+            <p className="text-muted-foreground leading-relaxed mb-4">
+              Depending on your location, you may have the following rights:
+            </p>
+            <ul className="list-disc pl-6 text-muted-foreground space-y-2">
+              <li><strong>Access:</strong> Request a copy of your personal data</li>
+              <li><strong>Correction:</strong> Request correction of inaccurate data</li>
+              <li><strong>Deletion:</strong> Request deletion of your personal data</li>
+              <li><strong>Portability:</strong> Request your data in a portable format</li>
+              <li><strong>Objection:</strong> Object to certain processing of your data</li>
+            </ul>
+            <p className="text-muted-foreground leading-relaxed mt-4">
+              To exercise these rights, please visit your account settings or contact us.
+            </p>
+          </section>
 
-      <h2>Canadian Privacy Laws (PIPEDA)</h2>
-      <p>
-        For users in Canada, we comply with the Personal Information Protection and Electronic
-        Documents Act (PIPEDA). You have the right to access your personal information and
-        challenge its accuracy. Contact us to make a request.
-      </p>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">8. International Data Transfers</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Your information may be transferred to and processed in countries other than your
+              own. We ensure appropriate safeguards are in place to protect your information
+              in compliance with applicable data protection laws.
+            </p>
+          </section>
 
-      <h2>Changes to This Policy</h2>
-      <p>
-        We may update this Privacy Policy from time to time. We will notify you of any changes
-        by posting the new policy on this page and updating the &quot;Last updated&quot; date.
-      </p>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">9. Children&apos;s Privacy</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Our service is not intended for individuals under the age of 16. We do not
+              knowingly collect personal information from children.
+            </p>
+          </section>
 
-      <h2>Contact Us</h2>
-      <p>
-        If you have questions about this Privacy Policy or our data practices, please contact us at:
-      </p>
-      <p>
-        <strong>Email:</strong> privacy@shiftsync.app
-      </p>
-    </article>
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">10. Changes to This Policy</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              We may update this Privacy Policy from time to time. We will notify you of any
+              changes by posting the new Privacy Policy on this page and updating the
+              &quot;Last updated&quot; date.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-2xl font-semibold mb-4">11. Contact Us</h2>
+            <p className="text-muted-foreground leading-relaxed">
+              If you have any questions about this Privacy Policy, please contact us at:
+            </p>
+            <p className="text-muted-foreground mt-2">
+              Email: privacy@shiftsync.com
+            </p>
+          </section>
+        </div>
+
+        <div className="mt-12 pt-8 border-t">
+          <Link
+            href="/terms"
+            className="text-primary hover:underline"
+          >
+            View Terms of Service
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }

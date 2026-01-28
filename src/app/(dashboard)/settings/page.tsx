@@ -218,6 +218,7 @@ export default function SettingsPage() {
 
   // Export state
   const [exporting, setExporting] = useState(false)
+  const [exportingPersonalData, setExportingPersonalData] = useState(false)
 
   // Shift colors state
   const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
@@ -719,6 +720,31 @@ export default function SettingsPage() {
       showMessage("Failed to save settings")
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Personal data export handler (GDPR)
+  const handleExportPersonalData = async () => {
+    setExportingPersonalData(true)
+
+    try {
+      const response = await fetch("/api/user/export-data")
+      const blob = await response.blob()
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `my-data-export-${new Date().toISOString().split("T")[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+
+      showMessage("Personal data exported successfully")
+    } catch {
+      showMessage("Failed to export personal data")
+    } finally {
+      setExportingPersonalData(false)
     }
   }
 
@@ -1716,10 +1742,18 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex gap-2 pt-4 border-t">
+            <div className="flex flex-wrap gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
                 <Key className="h-4 w-4 mr-2" />
                 Change Password
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportPersonalData}
+                disabled={exportingPersonalData}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {exportingPersonalData ? "Exporting..." : "Download My Data"}
               </Button>
               <Button
                 variant="outline"
@@ -1730,8 +1764,25 @@ export default function SettingsPage() {
                 Delete Account
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground pt-2">
+              Your rights under GDPR/CCPA: You can download all your personal data or delete your account at any time.
+            </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Legal Links */}
+      <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+        <p>
+          By using ShiftSync, you agree to our{" "}
+          <a href="/terms" className="text-primary hover:underline">
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a href="/privacy" className="text-primary hover:underline">
+            Privacy Policy
+          </a>
+        </p>
       </div>
 
       {/* Password Change Modal */}
