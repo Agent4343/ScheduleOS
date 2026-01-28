@@ -500,12 +500,12 @@ async function executeTool(
           return "No time off requests found."
         }
 
-        const formatted = requests.map((r: { id: string; user: { name: string | null; email: string }; startDate: Date; endDate: Date; leaveType: string; status: string; reason: string | null }) => ({
+        const formatted = requests.map((r: { id: string; user: { name: string | null; email: string }; startDate: Date; endDate: Date; type: string; status: string; reason: string | null }) => ({
           id: r.id,
           worker: r.user.name || r.user.email,
           startDate: r.startDate.toISOString().split("T")[0],
           endDate: r.endDate.toISOString().split("T")[0],
-          type: r.leaveType,
+          type: r.type,
           status: r.status,
           reason: r.reason || "No reason provided",
         }))
@@ -543,12 +543,12 @@ async function executeTool(
                 },
               },
               update: {
-                shiftType: request.leaveType === "VACATION" ? "VACATION" : "LEAVE",
+                shiftType: request.type === "VACATION" ? "VACATION" : "LEAVE",
               },
               create: {
                 userId: request.userId,
                 date: new Date(currentDate),
-                shiftType: request.leaveType === "VACATION" ? "VACATION" : "LEAVE",
+                shiftType: request.type === "VACATION" ? "VACATION" : "LEAVE",
               },
             })
             currentDate.setDate(currentDate.getDate() + 1)
