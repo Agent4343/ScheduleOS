@@ -396,6 +396,57 @@ function SchedulePageContent() {
     return Object.values(counts).sort((a, b) => a.name.localeCompare(b.name))
   }, [workers])
 
+  // Calculate daily staffing counts by position type and shift
+  const dailyStaffingCounts = useMemo(() => {
+    // Create a map of date -> position type -> shift type -> count
+    const counts: Record<string, {
+      dayOps: number;
+      dayOCR: number;
+      nightOps: number;
+      nightOCR: number;
+      totalOnDuty: number;
+    }> = {}
+
+    // Create worker position lookup
+    const workerPositions: Record<string, PositionType> = {}
+    for (const worker of workers) {
+      workerPositions[worker.id] = worker.positionType || "OTHER"
+    }
+
+    // Count schedules
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!counts[dateStr]) {
+        counts[dateStr] = { dayOps: 0, dayOCR: 0, nightOps: 0, nightOCR: 0, totalOnDuty: 0 }
+      }
+
+      const posType = workerPositions[schedule.user.id] || "OTHER"
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+      const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
+
+      if (isOnDuty) {
+        counts[dateStr].totalOnDuty++
+      }
+
+      if (isDay) {
+        if (posType === "OPERATOR") counts[dateStr].dayOps++
+        if (posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
+      } else if (isNight) {
+        if (posType === "OPERATOR") counts[dateStr].nightOps++
+        if (posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
+      }
+    }
+
+    return counts
+  }, [schedules, workers])
+
+  // Helper to get daily count for a specific date
+  function getDailyCount(month: number, day: number, field: keyof typeof dailyStaffingCounts[string]): number {
+    const dateStr = formatDate(currentYear, month, day)
+    return dailyStaffingCounts[dateStr]?.[field] || 0
+  }
+
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
 
@@ -866,6 +917,98 @@ function SchedulePageContent() {
                       )}
                     </tr>
                   ))}
+
+                  {/* Daily Staffing Summary Rows */}
+                  <tr className="bg-muted/30 border-t-2 border-primary/20">
+                    <td className="border p-2 sticky left-0 bg-green-50 dark:bg-green-950 z-20 font-semibold text-green-700 dark:text-green-300 text-xs">
+                      Day - Ops
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "dayOps")
+                        return (
+                          <td
+                            key={`day-ops-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-green-50 dark:bg-green-950 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-blue-50 dark:bg-blue-950 z-20 font-semibold text-blue-700 dark:text-blue-300 text-xs">
+                      Day - OCR
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "dayOCR")
+                        return (
+                          <td
+                            key={`day-ocr-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-blue-50 dark:bg-blue-950 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-green-100 dark:bg-green-900 z-20 font-semibold text-green-800 dark:text-green-200 text-xs">
+                      Night - Ops
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "nightOps")
+                        return (
+                          <td
+                            key={`night-ops-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-green-100 dark:bg-green-900 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-blue-100 dark:bg-blue-900 z-20 font-semibold text-blue-800 dark:text-blue-200 text-xs">
+                      Night - OCR
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "nightOCR")
+                        return (
+                          <td
+                            key={`night-ocr-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-blue-100 dark:bg-blue-900 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/50 border-t-2 border-primary/30">
+                    <td className="border p-2 sticky left-0 bg-muted z-20 font-bold text-xs">
+                      Total On Duty
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "totalOnDuty")
+                        return (
+                          <td
+                            key={`total-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-muted text-xs font-bold"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
                 </tbody>
               </table>
             </div>
