@@ -191,8 +191,19 @@ export async function POST(request: NextRequest) {
     console.error("Registration error:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      // Extract specific validation errors
+      const zodError = error as { errors?: Array<{ path: string[]; message: string }> }
+      const validationErrors = zodError.errors?.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      })) || []
+
       return NextResponse.json(
-        { error: "Invalid input data" },
+        {
+          error: "Invalid input data",
+          details: validationErrors,
+          hint: "Password must be at least 12 characters with uppercase, lowercase, number, and special character"
+        },
         { status: 400 }
       )
     }

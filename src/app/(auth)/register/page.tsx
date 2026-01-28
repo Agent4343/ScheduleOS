@@ -55,7 +55,15 @@ export default function RegisterPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || "Registration failed")
+        // Show detailed validation errors if available
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const errorMessages = data.details.map((d: { field: string; message: string }) => d.message).join(". ")
+          setError(errorMessages || data.error || "Registration failed")
+        } else if (data.hint) {
+          setError(`${data.error}. ${data.hint}`)
+        } else {
+          setError(data.error || "Registration failed")
+        }
         return
       }
 
@@ -122,13 +130,16 @@ export default function RegisterPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               value={formData.password}
               onChange={handleChange}
               required
-              minLength={8}
+              minLength={12}
               disabled={isLoading}
             />
+            <p className="text-xs text-muted-foreground">
+              Must include uppercase, lowercase, number, and special character
+            </p>
           </div>
 
           <div className="space-y-2">
