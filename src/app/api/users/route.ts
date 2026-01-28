@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Try with customRole first, fall back without it if database hasn't been migrated
-    let users
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let users: any[]
     try {
       users = await prisma.user.findMany({
         where: whereClause,
