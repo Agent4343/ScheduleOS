@@ -277,7 +277,13 @@ export default function WorkersPage() {
         setEditingUser(null)
         addToast({ type: "success", message: "Worker updated successfully" })
       } else {
-        addToast({ type: "error", message: data.error || "Failed to update worker" })
+        // Show detailed validation errors if available
+        let errorMessage = data.error || "Failed to update worker"
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const fieldErrors = data.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        addToast({ type: "error", message: errorMessage })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)

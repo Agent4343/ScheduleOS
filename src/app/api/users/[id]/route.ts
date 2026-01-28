@@ -260,8 +260,20 @@ export async function PATCH(
     console.error("Error updating user:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      // Extract specific validation errors
+      const zodError = error as { errors?: Array<{ path: string[]; message: string }> }
+      const validationErrors = zodError.errors?.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      })) || []
+
+      console.error("Validation errors:", validationErrors)
+
       return NextResponse.json(
-        { error: "Invalid input data" },
+        {
+          error: "Invalid input data",
+          details: validationErrors
+        },
         { status: 400 }
       )
     }

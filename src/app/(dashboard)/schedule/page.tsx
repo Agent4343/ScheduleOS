@@ -561,7 +561,13 @@ function SchedulePageContent() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to update worker")
+        // Show detailed validation errors if available
+        let errorMessage = result.error || "Failed to update worker"
+        if (result.details && Array.isArray(result.details) && result.details.length > 0) {
+          const fieldErrors = result.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        throw new Error(errorMessage)
       }
 
       setWorkers((prev) =>
