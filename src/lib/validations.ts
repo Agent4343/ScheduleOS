@@ -20,7 +20,7 @@ export const registerSchema = z.object({
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   organizationName: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
@@ -50,7 +50,7 @@ export const createUserSchema = z.object({
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string()
