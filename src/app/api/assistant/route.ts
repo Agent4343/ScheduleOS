@@ -760,10 +760,44 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { messages } = body
+    const { messages, sessionId, userMessage } = body
 
     if (!messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Messages array is required" }, { status: 400 })
+    }
+
+    // Handle session persistence
+    let activeSessionId = sessionId
+    if (sessionId && userMessage) {
+      // Save user message to existing session
+      await prisma.aIChatMessage.create({
+        data: {
+          sessionId,
+          role: "user",
+          content: userMessage,
+        },
+      })
+      // Update session timestamp
+      await prisma.aIChatSession.update({
+        where: { id: sessionId },
+        data: { updatedAt: new Date() },
+      })
+    } else if (userMessage && !sessionId) {
+      // Create new session with user message
+      const newSession = await prisma.aIChatSession.create({
+        data: {
+          title: userMessage.slice(0, 50) + (userMessage.length > 50 ? "..." : ""),
+          userId: session.user.id,
+          organizationId: session.user.organizationId,
+          messages: {
+            create: {
+              role: "user",
+              content: userMessage,
+            },
+          },
+        },
+      })
+      activeSessionId = newSession.id
     }
 
     // Limit messages to prevent token overflow (keep last 10 messages)
@@ -870,9 +904,24 @@ Important: When the user asks to change a schedule, you must:
       (block): block is Anthropic.TextBlock => block.type === "text"
     )
 
+    const assistantContent = textContent?.text || "I apologize, but I couldn't generate a response."
+
+    // Save assistant response to session
+    if (activeSessionId) {
+      await prisma.aIChatMessage.create({
+        data: {
+          sessionId: activeSessionId,
+          role: "assistant",
+          content: assistantContent,
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+      })
+    }
+
     return NextResponse.json({
-      content: textContent?.text || "I apologize, but I couldn't generate a response.",
+      content: assistantContent,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      sessionId: activeSessionId,
     })
   } catch (error) {
     console.error("Assistant API error:", error)
