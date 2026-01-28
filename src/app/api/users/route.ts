@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
           status: true,
           hireDate: true,
           createdAt: true,
+          sortOrder: true,
+          isControlRoomTrained: true,
           customRoleId: true,
           crew: {
             select: {
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       })
     } catch {
       // Fallback: query without customRole if table doesn't exist yet
@@ -73,6 +75,8 @@ export async function GET(request: NextRequest) {
           status: true,
           hireDate: true,
           createdAt: true,
+          sortOrder: true,
+          isControlRoomTrained: true,
           crew: {
             select: {
               id: true,
@@ -81,10 +85,10 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-        orderBy: [{ name: "asc" }],
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       })
       // Add null customRole to each user for consistent response shape
-      users = users.map(u => ({ ...u, customRoleId: null, customRole: null }))
+      users = users.map((u: typeof users[number]) => ({ ...u, customRoleId: null, customRole: null }))
     }
 
     return NextResponse.json({ success: true, data: users })
@@ -152,6 +156,7 @@ export async function POST(request: NextRequest) {
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
         customRoleId: validatedData.customRoleId,
+        isControlRoomTrained: validatedData.isControlRoomTrained,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -164,6 +169,7 @@ export async function POST(request: NextRequest) {
         position: true,
         positionType: true,
         status: true,
+        isControlRoomTrained: true,
         customRoleId: true,
         crew: {
           select: {

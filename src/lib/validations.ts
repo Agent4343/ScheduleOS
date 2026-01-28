@@ -63,6 +63,7 @@ export const createUserSchema = z.object({
   customRoleId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
   password: z.string().min(8).optional(),
+  isControlRoomTrained: z.boolean().default(false),
 })
 
 export const updateUserSchema = createUserSchema.partial()

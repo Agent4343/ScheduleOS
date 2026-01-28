@@ -68,6 +68,7 @@ interface Worker {
   } | null
   hireDate?: string | null
   sortOrder?: number
+  isControlRoomTrained?: boolean
   crew: {
     id: string
     name: string
@@ -83,6 +84,7 @@ interface WorkerEditForm {
   role: UserRole
   customRoleId: string
   hireDate: string
+  isControlRoomTrained: boolean
 }
 
 interface RotationPattern {
@@ -177,6 +179,7 @@ function SchedulePageContent() {
     role: "WORKER" as UserRole,
     customRoleId: "",
     hireDate: "",
+    isControlRoomTrained: false,
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -402,25 +405,30 @@ function SchedulePageContent() {
     const counts: Record<string, {
       dayOps: number;
       dayOCR: number;
+      dayTrained: number; // Control room trained operators on day shift
       nightOps: number;
       nightOCR: number;
+      nightTrained: number; // Control room trained operators on night shift
       totalOnDuty: number;
     }> = {}
 
-    // Create worker position lookup
-    const workerPositions: Record<string, PositionType> = {}
+    // Create worker lookup for position and training status
+    const workerInfo: Record<string, { posType: PositionType; isTrained: boolean }> = {}
     for (const worker of workers) {
-      workerPositions[worker.id] = worker.positionType || "OTHER"
+      workerInfo[worker.id] = {
+        posType: worker.positionType || "OTHER",
+        isTrained: worker.isControlRoomTrained || false,
+      }
     }
 
     // Count schedules
     for (const schedule of schedules) {
       const dateStr = schedule.date.split("T")[0]
       if (!counts[dateStr]) {
-        counts[dateStr] = { dayOps: 0, dayOCR: 0, nightOps: 0, nightOCR: 0, totalOnDuty: 0 }
+        counts[dateStr] = { dayOps: 0, dayOCR: 0, dayTrained: 0, nightOps: 0, nightOCR: 0, nightTrained: 0, totalOnDuty: 0 }
       }
 
-      const posType = workerPositions[schedule.user.id] || "OTHER"
+      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isTrained: false }
       const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
       const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
       const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
@@ -430,11 +438,13 @@ function SchedulePageContent() {
       }
 
       if (isDay) {
-        if (posType === "OPERATOR") counts[dateStr].dayOps++
-        if (posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
+        if (info.posType === "OPERATOR") counts[dateStr].dayOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
+        if (info.isTrained) counts[dateStr].dayTrained++
       } else if (isNight) {
-        if (posType === "OPERATOR") counts[dateStr].nightOps++
-        if (posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
+        if (info.posType === "OPERATOR") counts[dateStr].nightOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
+        if (info.isTrained) counts[dateStr].nightTrained++
       }
     }
 
@@ -469,6 +479,7 @@ function SchedulePageContent() {
       role: worker.role || "WORKER",
       customRoleId: worker.customRoleId || "",
       hireDate: hireDateStr,
+      isControlRoomTrained: worker.isControlRoomTrained || false,
     })
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
@@ -503,6 +514,7 @@ function SchedulePageContent() {
           role: editForm.role,
           customRoleId: editForm.customRoleId || null,
           hireDate: editForm.hireDate || null,
+          isControlRoomTrained: editForm.isControlRoomTrained,
         }),
       })
 
@@ -526,6 +538,7 @@ function SchedulePageContent() {
                   ? customRoles.find((r) => r.id === editForm.customRoleId) || null
                   : null,
                 hireDate: editForm.hireDate || null,
+                isControlRoomTrained: editForm.isControlRoomTrained,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
                   : null,
@@ -956,6 +969,24 @@ function SchedulePageContent() {
                     )}
                   </tr>
                   <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-purple-50 dark:bg-purple-950 z-20 font-semibold text-purple-700 dark:text-purple-300 text-xs">
+                      Day - CR Trained
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "dayTrained")
+                        return (
+                          <td
+                            key={`day-trained-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-purple-50 dark:bg-purple-950 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
                     <td className="border p-2 sticky left-0 bg-green-100 dark:bg-green-900 z-20 font-semibold text-green-800 dark:text-green-200 text-xs">
                       Night - Ops
                     </td>
@@ -984,6 +1015,24 @@ function SchedulePageContent() {
                           <td
                             key={`night-ocr-${month}-${day}`}
                             className="border text-center w-8 min-w-[32px] h-6 bg-blue-100 dark:bg-blue-900 text-xs font-medium"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-purple-100 dark:bg-purple-900 z-20 font-semibold text-purple-800 dark:text-purple-200 text-xs">
+                      Night - CR Trained
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "nightTrained")
+                        return (
+                          <td
+                            key={`night-trained-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-purple-100 dark:bg-purple-900 text-xs font-medium"
                           >
                             {count > 0 ? count : ""}
                           </td>
@@ -1172,6 +1221,22 @@ function SchedulePageContent() {
               onChange={(e) => setEditForm({ ...editForm, hireDate: e.target.value })}
             />
           </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="isControlRoomTrained"
+              checked={editForm.isControlRoomTrained}
+              onChange={(e) => setEditForm({ ...editForm, isControlRoomTrained: e.target.checked })}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="isControlRoomTrained" className="text-sm font-normal">
+              Control Room Trained
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Check this if the worker is trained for control room duties
+          </p>
 
           <div className="flex justify-end gap-2 pt-4 border-b pb-4">
             <Button variant="outline" onClick={closeEditModal} disabled={saving}>

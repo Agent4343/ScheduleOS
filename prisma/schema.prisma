@@ -88,6 +88,8 @@ model User {
   phone          String?
   hireDate       DateTime?
   status         UserStatus   @default(ACTIVE)
+  sortOrder      Int?         // Custom sort order for schedule display
+  isControlRoomTrained Boolean @default(false) // Operator trained for control room duties
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

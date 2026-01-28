@@ -157,6 +157,7 @@ export async function PATCH(
           customRoleId: validatedData.customRoleId,
           hireDate: validatedData.hireDate,
           status: validatedData.status,
+          isControlRoomTrained: validatedData.isControlRoomTrained,
         },
         select: {
           id: true,
@@ -168,6 +169,7 @@ export async function PATCH(
           phone: true,
           status: true,
           hireDate: true,
+          isControlRoomTrained: true,
           customRoleId: true,
           crew: {
             select: {
@@ -199,6 +201,7 @@ export async function PATCH(
           crewId: validatedData.crewId,
           hireDate: validatedData.hireDate,
           status: validatedData.status,
+          isControlRoomTrained: validatedData.isControlRoomTrained,
         },
         select: {
           id: true,
@@ -210,6 +213,7 @@ export async function PATCH(
           phone: true,
           status: true,
           hireDate: true,
+          isControlRoomTrained: true,
           crew: {
             select: {
               id: true,
