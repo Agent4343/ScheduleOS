@@ -51,6 +51,11 @@ interface User {
     name: string
     color: string
   } | null
+  // Training certifications
+  isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
 }
 
 interface Crew {
@@ -115,6 +120,10 @@ export default function WorkersPage() {
     customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
+    isControlRoomTrained: false,
+    isOilOperatorTrained: false,
+    isUtilityOperatorTrained: false,
+    isGasOperatorTrained: false,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -178,6 +187,10 @@ export default function WorkersPage() {
       customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
+      isControlRoomTrained: user.isControlRoomTrained || false,
+      isOilOperatorTrained: user.isOilOperatorTrained || false,
+      isUtilityOperatorTrained: user.isUtilityOperatorTrained || false,
+      isGasOperatorTrained: user.isGasOperatorTrained || false,
     })
     setIsEditModalOpen(true)
     setOpenMenuId(null)
@@ -247,6 +260,10 @@ export default function WorkersPage() {
           customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
+          isControlRoomTrained: editFormData.isControlRoomTrained,
+          isOilOperatorTrained: editFormData.isOilOperatorTrained,
+          isUtilityOperatorTrained: editFormData.isUtilityOperatorTrained,
+          isGasOperatorTrained: editFormData.isGasOperatorTrained,
         }),
       })
 
@@ -702,6 +719,49 @@ export default function WorkersPage() {
                 value={editFormData.hireDate}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
+            </div>
+          </div>
+
+          {/* Training Certifications */}
+          <div className="space-y-3 pt-2">
+            <Label className="text-sm font-medium">Training Certifications</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editFormData.isControlRoomTrained}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isControlRoomTrained: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                Control Room Trained
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editFormData.isOilOperatorTrained}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isOilOperatorTrained: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                Oil Operator Trained
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editFormData.isUtilityOperatorTrained}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isUtilityOperatorTrained: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                Utility Operator Trained
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editFormData.isGasOperatorTrained}
+                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isGasOperatorTrained: e.target.checked }))}
+                  className="rounded border-gray-300"
+                />
+                Gas Operator Trained
+              </label>
             </div>
           </div>
 
