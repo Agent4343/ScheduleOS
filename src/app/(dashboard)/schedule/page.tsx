@@ -69,6 +69,9 @@ interface Worker {
   hireDate?: string | null
   sortOrder?: number
   isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
   crew: {
     id: string
     name: string
@@ -85,6 +88,9 @@ interface WorkerEditForm {
   customRoleId: string
   hireDate: string
   isControlRoomTrained: boolean
+  isOilOperatorTrained: boolean
+  isUtilityOperatorTrained: boolean
+  isGasOperatorTrained: boolean
 }
 
 interface RotationPattern {
@@ -180,6 +186,9 @@ function SchedulePageContent() {
     customRoleId: "",
     hireDate: "",
     isControlRoomTrained: false,
+    isOilOperatorTrained: false,
+    isUtilityOperatorTrained: false,
+    isGasOperatorTrained: false,
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -405,19 +414,34 @@ function SchedulePageContent() {
     const counts: Record<string, {
       dayOps: number;
       dayOCR: number;
-      dayTrained: number; // Control room trained operators on day shift
+      dayCRTrained: number; // Control room trained
+      dayOilTrained: number; // Oil operator trained
+      dayUtilityTrained: number; // Utility operator trained
+      dayGasTrained: number; // Gas operator trained
       nightOps: number;
       nightOCR: number;
-      nightTrained: number; // Control room trained operators on night shift
+      nightCRTrained: number;
+      nightOilTrained: number;
+      nightUtilityTrained: number;
+      nightGasTrained: number;
       totalOnDuty: number;
     }> = {}
 
     // Create worker lookup for position and training status
-    const workerInfo: Record<string, { posType: PositionType; isTrained: boolean }> = {}
+    const workerInfo: Record<string, {
+      posType: PositionType;
+      isCRTrained: boolean;
+      isOilTrained: boolean;
+      isUtilityTrained: boolean;
+      isGasTrained: boolean;
+    }> = {}
     for (const worker of workers) {
       workerInfo[worker.id] = {
         posType: worker.positionType || "OTHER",
-        isTrained: worker.isControlRoomTrained || false,
+        isCRTrained: worker.isControlRoomTrained || false,
+        isOilTrained: worker.isOilOperatorTrained || false,
+        isUtilityTrained: worker.isUtilityOperatorTrained || false,
+        isGasTrained: worker.isGasOperatorTrained || false,
       }
     }
 
@@ -425,10 +449,14 @@ function SchedulePageContent() {
     for (const schedule of schedules) {
       const dateStr = schedule.date.split("T")[0]
       if (!counts[dateStr]) {
-        counts[dateStr] = { dayOps: 0, dayOCR: 0, dayTrained: 0, nightOps: 0, nightOCR: 0, nightTrained: 0, totalOnDuty: 0 }
+        counts[dateStr] = {
+          dayOps: 0, dayOCR: 0, dayCRTrained: 0, dayOilTrained: 0, dayUtilityTrained: 0, dayGasTrained: 0,
+          nightOps: 0, nightOCR: 0, nightCRTrained: 0, nightOilTrained: 0, nightUtilityTrained: 0, nightGasTrained: 0,
+          totalOnDuty: 0
+        }
       }
 
-      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isTrained: false }
+      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isCRTrained: false, isOilTrained: false, isUtilityTrained: false, isGasTrained: false }
       const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
       const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
       const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
@@ -440,11 +468,17 @@ function SchedulePageContent() {
       if (isDay) {
         if (info.posType === "OPERATOR") counts[dateStr].dayOps++
         if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
-        if (info.isTrained) counts[dateStr].dayTrained++
+        if (info.isCRTrained) counts[dateStr].dayCRTrained++
+        if (info.isOilTrained) counts[dateStr].dayOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].dayUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].dayGasTrained++
       } else if (isNight) {
         if (info.posType === "OPERATOR") counts[dateStr].nightOps++
         if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
-        if (info.isTrained) counts[dateStr].nightTrained++
+        if (info.isCRTrained) counts[dateStr].nightCRTrained++
+        if (info.isOilTrained) counts[dateStr].nightOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].nightUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].nightGasTrained++
       }
     }
 
@@ -480,6 +514,9 @@ function SchedulePageContent() {
       customRoleId: worker.customRoleId || "",
       hireDate: hireDateStr,
       isControlRoomTrained: worker.isControlRoomTrained || false,
+      isOilOperatorTrained: worker.isOilOperatorTrained || false,
+      isUtilityOperatorTrained: worker.isUtilityOperatorTrained || false,
+      isGasOperatorTrained: worker.isGasOperatorTrained || false,
     })
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
@@ -515,6 +552,9 @@ function SchedulePageContent() {
           customRoleId: editForm.customRoleId || null,
           hireDate: editForm.hireDate || null,
           isControlRoomTrained: editForm.isControlRoomTrained,
+          isOilOperatorTrained: editForm.isOilOperatorTrained,
+          isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+          isGasOperatorTrained: editForm.isGasOperatorTrained,
         }),
       })
 
@@ -539,6 +579,9 @@ function SchedulePageContent() {
                   : null,
                 hireDate: editForm.hireDate || null,
                 isControlRoomTrained: editForm.isControlRoomTrained,
+                isOilOperatorTrained: editForm.isOilOperatorTrained,
+                isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+                isGasOperatorTrained: editForm.isGasOperatorTrained,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
                   : null,
@@ -968,25 +1011,81 @@ function SchedulePageContent() {
                       })
                     )}
                   </tr>
+                  {/* Day Training Requirements - with alerts */}
                   <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-purple-50 dark:bg-purple-950 z-20 font-semibold text-purple-700 dark:text-purple-300 text-xs">
-                      Day - CR Trained
+                    <td className="border p-2 sticky left-0 bg-amber-50 dark:bg-amber-950 z-20 font-semibold text-amber-700 dark:text-amber-300 text-xs">
+                      Day - Oil Op
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
-                        const count = getDailyCount(month, day, "dayTrained")
+                        const count = getDailyCount(month, day, "dayOilTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
                         return (
                           <td
-                            key={`day-trained-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-purple-50 dark:bg-purple-950 text-xs font-medium"
+                            key={`day-oil-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-amber-50 dark:bg-amber-950"
+                            )}
+                            title={isAlert ? "ALERT: No Oil Operator trained worker on day shift!" : undefined}
                           >
-                            {count > 0 ? count : ""}
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
                           </td>
                         )
                       })
                     )}
                   </tr>
                   <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-cyan-50 dark:bg-cyan-950 z-20 font-semibold text-cyan-700 dark:text-cyan-300 text-xs">
+                      Day - Utility Op
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "dayUtilityTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
+                        return (
+                          <td
+                            key={`day-utility-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-cyan-50 dark:bg-cyan-950"
+                            )}
+                            title={isAlert ? "ALERT: No Utility Operator trained worker on day shift!" : undefined}
+                          >
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-orange-50 dark:bg-orange-950 z-20 font-semibold text-orange-700 dark:text-orange-300 text-xs">
+                      Day - Gas Op
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "dayGasTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
+                        return (
+                          <td
+                            key={`day-gas-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-orange-50 dark:bg-orange-950"
+                            )}
+                            title={isAlert ? "ALERT: No Gas Operator trained worker on day shift!" : undefined}
+                          >
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  {/* Night shift counts */}
+                  <tr className="bg-muted/30 border-t">
                     <td className="border p-2 sticky left-0 bg-green-100 dark:bg-green-900 z-20 font-semibold text-green-800 dark:text-green-200 text-xs">
                       Night - Ops
                     </td>
@@ -1022,19 +1121,74 @@ function SchedulePageContent() {
                       })
                     )}
                   </tr>
+                  {/* Night Training Requirements - with alerts */}
                   <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-purple-100 dark:bg-purple-900 z-20 font-semibold text-purple-800 dark:text-purple-200 text-xs">
-                      Night - CR Trained
+                    <td className="border p-2 sticky left-0 bg-amber-100 dark:bg-amber-900 z-20 font-semibold text-amber-800 dark:text-amber-200 text-xs">
+                      Night - Oil Op
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
-                        const count = getDailyCount(month, day, "nightTrained")
+                        const count = getDailyCount(month, day, "nightOilTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
                         return (
                           <td
-                            key={`night-trained-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-purple-100 dark:bg-purple-900 text-xs font-medium"
+                            key={`night-oil-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-amber-100 dark:bg-amber-900"
+                            )}
+                            title={isAlert ? "ALERT: No Oil Operator trained worker on night shift!" : undefined}
                           >
-                            {count > 0 ? count : ""}
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-cyan-100 dark:bg-cyan-900 z-20 font-semibold text-cyan-800 dark:text-cyan-200 text-xs">
+                      Night - Utility Op
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "nightUtilityTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
+                        return (
+                          <td
+                            key={`night-utility-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-cyan-100 dark:bg-cyan-900"
+                            )}
+                            title={isAlert ? "ALERT: No Utility Operator trained worker on night shift!" : undefined}
+                          >
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-orange-100 dark:bg-orange-900 z-20 font-semibold text-orange-800 dark:text-orange-200 text-xs">
+                      Night - Gas Op
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "nightGasTrained")
+                        const hasSchedule = getDailyCount(month, day, "totalOnDuty") > 0
+                        const isAlert = hasSchedule && count === 0
+                        return (
+                          <td
+                            key={`night-gas-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
+                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" : "bg-orange-100 dark:bg-orange-900"
+                            )}
+                            title={isAlert ? "ALERT: No Gas Operator trained worker on night shift!" : undefined}
+                          >
+                            {count > 0 ? count : hasSchedule ? "!" : ""}
                           </td>
                         )
                       })
@@ -1222,21 +1376,63 @@ function SchedulePageContent() {
             />
           </div>
 
-          <div className="flex items-center gap-2 pt-2">
-            <input
-              type="checkbox"
-              id="isControlRoomTrained"
-              checked={editForm.isControlRoomTrained}
-              onChange={(e) => setEditForm({ ...editForm, isControlRoomTrained: e.target.checked })}
-              className="h-4 w-4"
-            />
-            <Label htmlFor="isControlRoomTrained" className="text-sm font-normal">
-              Control Room Trained
-            </Label>
+          {/* Training/Certification Checkboxes */}
+          <div className="pt-2 space-y-2">
+            <Label className="text-sm font-semibold">Operator Training</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isOilOperatorTrained"
+                  checked={editForm.isOilOperatorTrained}
+                  onChange={(e) => setEditForm({ ...editForm, isOilOperatorTrained: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="isOilOperatorTrained" className="text-sm font-normal">
+                  Oil Operator
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isUtilityOperatorTrained"
+                  checked={editForm.isUtilityOperatorTrained}
+                  onChange={(e) => setEditForm({ ...editForm, isUtilityOperatorTrained: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="isUtilityOperatorTrained" className="text-sm font-normal">
+                  Utility Operator
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isGasOperatorTrained"
+                  checked={editForm.isGasOperatorTrained}
+                  onChange={(e) => setEditForm({ ...editForm, isGasOperatorTrained: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="isGasOperatorTrained" className="text-sm font-normal">
+                  Gas Operator
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isControlRoomTrained"
+                  checked={editForm.isControlRoomTrained}
+                  onChange={(e) => setEditForm({ ...editForm, isControlRoomTrained: e.target.checked })}
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="isControlRoomTrained" className="text-sm font-normal">
+                  Control Room
+                </Label>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select all certifications this worker has completed
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Check this if the worker is trained for control room duties
-          </p>
 
           <div className="flex justify-end gap-2 pt-4 border-b pb-4">
             <Button variant="outline" onClick={closeEditModal} disabled={saving}>

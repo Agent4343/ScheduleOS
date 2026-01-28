@@ -89,7 +89,11 @@ model User {
   hireDate       DateTime?
   status         UserStatus   @default(ACTIVE)
   sortOrder      Int?         // Custom sort order for schedule display
-  isControlRoomTrained Boolean @default(false) // Operator trained for control room duties
+  // Operator training/certification flags
+  isControlRoomTrained Boolean @default(false) // Trained for control room duties
+  isOilOperatorTrained Boolean @default(false) // Trained as Oil Operator
+  isUtilityOperatorTrained Boolean @default(false) // Trained as Utility Operator
+  isGasOperatorTrained Boolean @default(false) // Trained as Gas Operator
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

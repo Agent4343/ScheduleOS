@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
           createdAt: true,
           sortOrder: true,
           isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
           customRoleId: true,
           crew: {
             select: {
@@ -77,6 +80,9 @@ export async function GET(request: NextRequest) {
           createdAt: true,
           sortOrder: true,
           isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
           crew: {
             select: {
               id: true,
@@ -157,6 +163,9 @@ export async function POST(request: NextRequest) {
         crewId: validatedData.crewId,
         customRoleId: validatedData.customRoleId,
         isControlRoomTrained: validatedData.isControlRoomTrained,
+        isOilOperatorTrained: validatedData.isOilOperatorTrained,
+        isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
+        isGasOperatorTrained: validatedData.isGasOperatorTrained,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -170,6 +179,9 @@ export async function POST(request: NextRequest) {
         positionType: true,
         status: true,
         isControlRoomTrained: true,
+        isOilOperatorTrained: true,
+        isUtilityOperatorTrained: true,
+        isGasOperatorTrained: true,
         customRoleId: true,
         crew: {
           select: {

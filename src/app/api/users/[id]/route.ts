@@ -158,6 +158,9 @@ export async function PATCH(
           hireDate: validatedData.hireDate,
           status: validatedData.status,
           isControlRoomTrained: validatedData.isControlRoomTrained,
+          isOilOperatorTrained: validatedData.isOilOperatorTrained,
+          isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
+          isGasOperatorTrained: validatedData.isGasOperatorTrained,
         },
         select: {
           id: true,
@@ -170,6 +173,9 @@ export async function PATCH(
           status: true,
           hireDate: true,
           isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
           customRoleId: true,
           crew: {
             select: {
@@ -202,6 +208,9 @@ export async function PATCH(
           hireDate: validatedData.hireDate,
           status: validatedData.status,
           isControlRoomTrained: validatedData.isControlRoomTrained,
+          isOilOperatorTrained: validatedData.isOilOperatorTrained,
+          isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
+          isGasOperatorTrained: validatedData.isGasOperatorTrained,
         },
         select: {
           id: true,
@@ -214,6 +223,9 @@ export async function PATCH(
           status: true,
           hireDate: true,
           isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
           crew: {
             select: {
               id: true,

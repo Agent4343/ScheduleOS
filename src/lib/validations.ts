@@ -64,6 +64,9 @@ export const createUserSchema = z.object({
   hireDate: z.coerce.date().optional(),
   password: z.string().min(8).optional(),
   isControlRoomTrained: z.boolean().default(false),
+  isOilOperatorTrained: z.boolean().default(false),
+  isUtilityOperatorTrained: z.boolean().default(false),
+  isGasOperatorTrained: z.boolean().default(false),
 })
 
 export const updateUserSchema = createUserSchema.partial()
