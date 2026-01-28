@@ -514,8 +514,8 @@ async function executeTool(
       }
 
       case "update_time_off_request": {
-        const updateData: { status: string; reviewNotes?: string; reviewedAt: Date } = {
-          status: input.status!,
+        const updateData: { status: RequestStatus; reviewNotes?: string; reviewedAt: Date } = {
+          status: input.status as RequestStatus,
           reviewedAt: new Date(),
         }
         if (input.reason) {
