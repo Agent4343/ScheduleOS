@@ -25,9 +25,19 @@ interface DashboardStats {
   staffingGaps: number
 }
 
+// Labels for training types
+const TRAINING_TYPE_LABELS: Record<string, string> = {
+  OIL_OPERATOR: "Oil Op",
+  UTILITY_OPERATOR: "Utility Op",
+  GAS_OPERATOR: "Gas Op",
+  CONTROL_ROOM: "CR Trained",
+  OPERATOR: "Operator",
+  ONSHORE_CONTROL_ROOM: "OCR",
+}
+
 interface DashboardData {
   stats: DashboardStats
-  staffingGapDetails: Array<{ date: Date; shiftType: string; shortage: number }>
+  staffingGapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string }>
   upcomingTimeOff: Array<{
     id: string
     startDate: string
@@ -226,20 +236,24 @@ export default function DashboardPage() {
           <CardContent>
             {data?.staffingGapDetails && data.staffingGapDetails.length > 0 ? (
               <div className="space-y-3">
-                {data.staffingGapDetails.map((gap, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                      <span>{new Date(gap.date).toLocaleDateString()}</span>
+                {data.staffingGapDetails.map((gap, i) => {
+                  const trainingLabel = gap.positionType ? TRAINING_TYPE_LABELS[gap.positionType] || gap.positionType : ""
+                  const shiftLabel = gap.shiftType === "DAY" ? "D" : gap.shiftType === "NIGHT" ? "N" : gap.shiftType
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between py-2 border-b last:border-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                        <span>{new Date(gap.date).toLocaleDateString()}</span>
+                      </div>
+                      <Badge variant="destructive">
+                        {shiftLabel}{trainingLabel ? ` - ${trainingLabel}` : ""}: -{gap.shortage}
+                      </Badge>
                     </div>
-                    <Badge variant="destructive">
-                      {gap.shiftType}: -{gap.shortage}
-                    </Badge>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div className="flex items-center gap-2 text-green-600">
