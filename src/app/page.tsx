@@ -645,15 +645,15 @@ export default async function HomePage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <span>Multiple locations</span>
+                      <span className="font-medium">Multiple departments</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <span>Separate calendars per team</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
                       <span>API access</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <span>Custom integrations</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
