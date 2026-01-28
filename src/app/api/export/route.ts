@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
+import ExcelJS from "exceljs"
 
 // Sanitize CSV values to prevent injection attacks
 function sanitizeCSVValue(value: string | null | undefined): string {
@@ -34,6 +35,29 @@ function getYearDays(year: number): { month: number; day: number; dateStr: strin
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
+// Shift colors matching the schedule page
+const SHIFT_COLORS: Record<string, { bg: string; text: string }> = {
+  D: { bg: "22c55e", text: "ffffff" },      // Day - green
+  DAY: { bg: "22c55e", text: "ffffff" },
+  N: { bg: "2563eb", text: "ffffff" },      // Night - blue
+  NIGHT: { bg: "2563eb", text: "ffffff" },
+  O: { bg: "e5e7eb", text: "6b7280" },      // Off - gray
+  OFF: { bg: "e5e7eb", text: "6b7280" },
+  L: { bg: "f97316", text: "ffffff" },      // Leave - orange
+  LEAVE: { bg: "f97316", text: "ffffff" },
+  P: { bg: "14b8a6", text: "ffffff" },      // PL Day - teal
+  PL_DAY: { bg: "14b8a6", text: "ffffff" },
+  PL_NIGHT: { bg: "6366f1", text: "ffffff" }, // PL Night - indigo
+  V: { bg: "10b981", text: "ffffff" },      // Vacation - emerald
+  VACATION: { bg: "10b981", text: "ffffff" },
+  S: { bg: "ef4444", text: "ffffff" },      // Sick - red
+  SICK: { bg: "ef4444", text: "ffffff" },
+  T: { bg: "eab308", text: "000000" },      // Training - yellow
+  TRAINING: { bg: "eab308", text: "000000" },
+  X: { bg: "64748b", text: "ffffff" },      // Shutdown - slate
+  SHUTDOWN: { bg: "64748b", text: "ffffff" },
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -46,9 +70,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") || "all"
     const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()))
 
-    let csv = ""
-
-    // Schedule Grid Export - Excel-like format matching the schedule page
+    // Schedule Grid Export - Excel format with colors
     if (type === "schedule-grid") {
       const startDate = getYearStartUTC(year)
       const endDate = getYearEndUTC(year)
@@ -77,102 +99,209 @@ export async function GET(request: NextRequest) {
         },
       })
 
-      // Build schedule lookup map
-      const scheduleMap = new Map<string, string>()
+      // Build schedule lookup map with full shift type for coloring
+      const scheduleMap = new Map<string, { label: string; shiftType: string }>()
       for (const schedule of schedules) {
         const dateStr = schedule.date.toISOString().split("T")[0]
         const key = `${schedule.userId}-${dateStr}`
-        const shiftLabel = schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+        const label = schedule.shiftType === "CUSTOM" && schedule.customShiftCode
           ? schedule.customShiftCode
-          : schedule.shiftType.charAt(0) // D, N, O, L, V, S, T, X
-        scheduleMap.set(key, shiftLabel)
+          : schedule.shiftType.charAt(0)
+        scheduleMap.set(key, { label, shiftType: schedule.shiftType })
       }
 
       // Get all days in the year
       const yearDays = getYearDays(year)
 
-      // Build header row with month groupings
-      let headerRow1 = "Worker,Crew"
-      let headerRow2 = ","
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = "ScheduleOS"
+      workbook.created = new Date()
+
+      const worksheet = workbook.addWorksheet(`Schedule ${year}`, {
+        views: [{ state: "frozen", xSplit: 2, ySplit: 2 }],
+      })
+
+      // Build month header row
+      const monthRow: string[] = ["Worker", "Crew"]
       let currentMonth = -1
-      for (const { month, day } of yearDays) {
+      for (const { month } of yearDays) {
         if (month !== currentMonth) {
-          headerRow1 += `,${MONTH_NAMES[month]}`
+          monthRow.push(MONTH_NAMES[month])
           currentMonth = month
         } else {
-          headerRow1 += ","
+          monthRow.push("")
         }
-        headerRow2 += `,${day}`
       }
-      csv += headerRow1 + "\n"
-      csv += headerRow2 + "\n"
+      worksheet.addRow(monthRow)
 
-      // Add worker rows
+      // Build day header row
+      const dayRow: (string | number)[] = ["", ""]
+      for (const { day } of yearDays) {
+        dayRow.push(day)
+      }
+      worksheet.addRow(dayRow)
+
+      // Style header rows
+      const headerRow1 = worksheet.getRow(1)
+      const headerRow2 = worksheet.getRow(2)
+      headerRow1.font = { bold: true }
+      headerRow2.font = { bold: true }
+      headerRow1.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "f3f4f6" } }
+      headerRow2.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "e5e7eb" } }
+
+      // Add worker rows with colored cells
       for (const user of users) {
-        let row = `"${sanitizeCSVValue(user.name)}","${sanitizeCSVValue(user.crew?.name)}"`
+        const row: (string | number)[] = [user.name || "", user.crew?.name || ""]
+
         for (const { dateStr } of yearDays) {
           const key = `${user.id}-${dateStr}`
-          const shift = scheduleMap.get(key) || ""
-          row += `,${shift}`
+          const schedule = scheduleMap.get(key)
+          row.push(schedule?.label || "")
         }
-        csv += row + "\n"
-      }
 
-      // Add training summary rows
-      const trainingLabels = [
-        { label: "Day - Oil Op Trained", field: "isOilOperatorTrained", shift: "DAY" },
-        { label: "Day - Utility Op Trained", field: "isUtilityOperatorTrained", shift: "DAY" },
-        { label: "Day - Gas Op Trained", field: "isGasOperatorTrained", shift: "DAY" },
-        { label: "Day - CR Trained", field: "isControlRoomTrained", shift: "DAY" },
-        { label: "Night - Oil Op Trained", field: "isOilOperatorTrained", shift: "NIGHT" },
-        { label: "Night - Utility Op Trained", field: "isUtilityOperatorTrained", shift: "NIGHT" },
-        { label: "Night - Gas Op Trained", field: "isGasOperatorTrained", shift: "NIGHT" },
-        { label: "Night - CR Trained", field: "isControlRoomTrained", shift: "NIGHT" },
-      ]
+        const excelRow = worksheet.addRow(row)
 
-      csv += "\n"
-      for (const { label, field, shift } of trainingLabels) {
-        let row = `"${label}",`
+        // Apply colors to shift cells
+        let colIndex = 3 // Start after Worker and Crew columns
         for (const { dateStr } of yearDays) {
-          // Count workers with this training on this shift
-          let count = 0
-          for (const user of users) {
-            const key = `${user.id}-${dateStr}`
-            const workerShift = scheduleMap.get(key)
-            const isOnShift = shift === "DAY"
-              ? (workerShift === "D" || workerShift === "DAY" || workerShift === "PL_DAY")
-              : (workerShift === "N" || workerShift === "NIGHT" || workerShift === "PL_NIGHT")
-            if (isOnShift && (user as Record<string, unknown>)[field]) {
-              count++
+          const key = `${user.id}-${dateStr}`
+          const schedule = scheduleMap.get(key)
+
+          if (schedule) {
+            const colors = SHIFT_COLORS[schedule.shiftType] || SHIFT_COLORS[schedule.label]
+            if (colors) {
+              const cell = excelRow.getCell(colIndex)
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: colors.bg },
+              }
+              cell.font = { color: { argb: colors.text }, bold: true }
+              cell.alignment = { horizontal: "center" }
             }
           }
-          row += `,${count > 0 ? count : ""}`
+          colIndex++
         }
-        csv += row + "\n"
+      }
+
+      // Add empty row before summary
+      worksheet.addRow([])
+
+      // Add training summary rows
+      const trainingConfigs = [
+        { label: "Day - Oil Op", field: "isOilOperatorTrained", shift: "DAY", bgColor: "fef3c7" },
+        { label: "Day - Utility Op", field: "isUtilityOperatorTrained", shift: "DAY", bgColor: "cffafe" },
+        { label: "Day - Gas Op", field: "isGasOperatorTrained", shift: "DAY", bgColor: "fed7aa" },
+        { label: "Day - CR Trained", field: "isControlRoomTrained", shift: "DAY", bgColor: "e9d5ff" },
+        { label: "Night - Oil Op", field: "isOilOperatorTrained", shift: "NIGHT", bgColor: "fde68a" },
+        { label: "Night - Utility Op", field: "isUtilityOperatorTrained", shift: "NIGHT", bgColor: "a5f3fc" },
+        { label: "Night - Gas Op", field: "isGasOperatorTrained", shift: "NIGHT", bgColor: "fdba74" },
+        { label: "Night - CR Trained", field: "isControlRoomTrained", shift: "NIGHT", bgColor: "d8b4fe" },
+      ]
+
+      for (const { label, field, shift, bgColor } of trainingConfigs) {
+        const row: (string | number)[] = [label, ""]
+
+        for (const { dateStr } of yearDays) {
+          let count = 0
+          let hasWorkers = false
+
+          for (const user of users) {
+            const key = `${user.id}-${dateStr}`
+            const schedule = scheduleMap.get(key)
+            const isOnShift = shift === "DAY"
+              ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
+              : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
+
+            if (isOnShift) {
+              hasWorkers = true
+              if ((user as Record<string, unknown>)[field]) {
+                count++
+              }
+            }
+          }
+
+          row.push(count > 0 ? count : (hasWorkers ? "!" : ""))
+        }
+
+        const excelRow = worksheet.addRow(row)
+        excelRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } }
+        excelRow.getCell(1).font = { bold: true, size: 10 }
+
+        // Color cells based on requirement status
+        let colIndex = 3
+        for (const { dateStr } of yearDays) {
+          let count = 0
+          let hasWorkers = false
+
+          for (const user of users) {
+            const key = `${user.id}-${dateStr}`
+            const schedule = scheduleMap.get(key)
+            const isOnShift = shift === "DAY"
+              ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
+              : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
+
+            if (isOnShift) {
+              hasWorkers = true
+              if ((user as Record<string, unknown>)[field]) {
+                count++
+              }
+            }
+          }
+
+          const cell = excelRow.getCell(colIndex)
+          if (hasWorkers && count === 0) {
+            // Alert - red background
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "fecaca" } }
+            cell.font = { color: { argb: "dc2626" }, bold: true }
+          } else if (count >= 1) {
+            // Met - green background
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "bbf7d0" } }
+            cell.font = { color: { argb: "166534" } }
+          }
+          cell.alignment = { horizontal: "center" }
+          colIndex++
+        }
       }
 
       // Add total on duty row
-      let totalRow = `"Total On Duty",`
+      const totalRow: (string | number)[] = ["Total On Duty", ""]
       for (const { dateStr } of yearDays) {
         let count = 0
         for (const user of users) {
           const key = `${user.id}-${dateStr}`
-          const shift = scheduleMap.get(key)
-          if (shift && !["O", "OFF"].includes(shift)) {
+          const schedule = scheduleMap.get(key)
+          if (schedule && !["OFF", "O"].includes(schedule.shiftType)) {
             count++
           }
         }
-        totalRow += `,${count > 0 ? count : ""}`
+        totalRow.push(count > 0 ? count : "")
       }
-      csv += totalRow + "\n"
+      const totalExcelRow = worksheet.addRow(totalRow)
+      totalExcelRow.font = { bold: true }
+      totalExcelRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "d1d5db" } }
 
-      return new NextResponse(csv, {
+      // Set column widths
+      worksheet.getColumn(1).width = 20
+      worksheet.getColumn(2).width = 15
+      for (let i = 3; i <= yearDays.length + 2; i++) {
+        worksheet.getColumn(i).width = 4
+      }
+
+      // Generate buffer
+      const buffer = await workbook.xlsx.writeBuffer()
+
+      return new NextResponse(buffer, {
         headers: {
-          "Content-Type": "text/csv",
-          "Content-Disposition": `attachment; filename="schedule-${year}.csv"`,
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="schedule-${year}.xlsx"`,
         },
       })
     }
+
+    // CSV exports for other types
+    let csv = ""
 
     if (type === "workers" || type === "all") {
       const users = await prisma.user.findMany({
@@ -190,7 +319,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "schedules" || type === "all") {
-      // Get schedules for the current year using UTC dates
       const currentYear = new Date().getFullYear()
       const startDate = getYearStartUTC(currentYear)
       const endDate = getYearEndUTC(currentYear)
@@ -217,7 +345,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === "all") {
-      // Add crews
       const crews = await prisma.crew.findMany({
         where: { organizationId: session.user.organizationId },
         include: { rotationPattern: true, _count: { select: { workers: true } } },
@@ -230,7 +357,6 @@ export async function GET(request: NextRequest) {
       }
       csv += "\n"
 
-      // Add patterns
       const patterns = await prisma.rotationPattern.findMany({
         where: { organizationId: session.user.organizationId },
       })
@@ -242,7 +368,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Return CSV file
     return new NextResponse(csv, {
       headers: {
         "Content-Type": "text/csv",
