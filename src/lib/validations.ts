@@ -46,22 +46,23 @@ export const updateOrganizationSchema = createOrganizationSchema.partial()
 
 // User validations
 export const createUserSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  email: z.string().email("Invalid email address").optional(),
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters")
+    .optional(),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string()
     .max(100, "Position must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
-    .optional(),
+    .nullish(),
   positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
-  phone: z.string().optional(),
-  crewId: z.string().optional(),
-  customRoleId: z.string().optional(),
-  hireDate: z.coerce.date().optional(),
+  phone: z.string().nullish(),
+  crewId: z.string().nullish(),
+  customRoleId: z.string().nullish(),
+  hireDate: z.coerce.date().nullish(),
   password: z.string().min(8).optional(),
   isControlRoomTrained: z.boolean().default(false),
   isOilOperatorTrained: z.boolean().default(false),
