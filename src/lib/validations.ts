@@ -60,6 +60,7 @@ export const createUserSchema = z.object({
   positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   phone: z.string().nullish(),
   crewId: z.string().nullish(),
+  departmentId: z.string().nullish(),
   customRoleId: z.string().nullish(),
   hireDate: z.coerce.date().nullish(),
   password: z.string().min(8).optional(),
@@ -86,6 +87,7 @@ export const updateUserSchema = z.object({
   positionType: z.nativeEnum(PositionType).optional(),
   phone: z.string().nullish(),
   crewId: z.string().nullish(),
+  departmentId: z.string().nullish(),
   customRoleId: z.string().nullish(),
   hireDate: z.coerce.date().nullish(),
   isControlRoomTrained: z.boolean().optional(),
@@ -105,6 +107,7 @@ export const createCrewSchema = z.object({
     .optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format"),
   rotationPatternId: z.string().optional(),
+  departmentId: z.string().nullish(),
 })
 
 export const updateCrewSchema = createCrewSchema.partial()

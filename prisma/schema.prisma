@@ -65,6 +65,7 @@ model Organization {
   // Relations
   users            User[]
   crews            Crew[]
+  departments      Department[]
   rotationPatterns RotationPattern[]
   staffingRules    StaffingRule[]
   shutdowns        Shutdown[]
@@ -73,6 +74,28 @@ model Organization {
   customShiftTypes CustomShiftType[]
   customRoles      CustomRole[]
   aiChatSessions   AIChatSession[]
+}
+
+// Department - allows Enterprise orgs to have separate calendars/teams
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#3B82F6")
+  isDefault   Boolean  @default(false) // First department created is default
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Relations
+  users User[]
+  crews Crew[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model User {
@@ -101,6 +124,10 @@ model User {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
+  // Department (for Enterprise multi-department support)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Crew assignment
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
@@ -121,6 +148,7 @@ model User {
   aiChatSessions  AIChatSession[]
 
   @@index([organizationId])
+  @@index([departmentId])
   @@index([crewId])
 }
 
@@ -157,6 +185,10 @@ model Crew {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  // Department (for Enterprise multi-department support)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Rotation Pattern
   rotationPatternId String?
   rotationPattern   RotationPattern? @relation(fields: [rotationPatternId], references: [id])
@@ -168,6 +200,7 @@ model Crew {
 
   @@unique([organizationId, name])
   @@index([organizationId])
+  @@index([departmentId])
 }
 
 model RotationPattern {

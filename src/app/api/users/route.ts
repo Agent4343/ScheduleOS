@@ -14,12 +14,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const crewId = searchParams.get("crewId")
+    const departmentId = searchParams.get("departmentId")
     const status = searchParams.get("status")
     const role = searchParams.get("role")
 
     const whereClause = {
       organizationId: session.user.organizationId,
       ...(crewId && { crewId }),
+      ...(departmentId && { departmentId }),
       ...(status && { status: status as "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "TERMINATED" }),
       ...(role && { role: role as "ADMIN" | "SUPERVISOR" | "WORKER" }),
     }
@@ -61,6 +63,13 @@ export async function GET(request: NextRequest) {
               color: true,
             },
           },
+          department: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
         },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       })
@@ -94,8 +103,8 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       })
-      // Add null customRole to each user for consistent response shape
-      users = users.map((u: typeof users[number]) => ({ ...u, customRoleId: null, customRole: null }))
+      // Add null customRole and department to each user for consistent response shape
+      users = users.map((u: typeof users[number]) => ({ ...u, customRoleId: null, customRole: null, department: null }))
     }
 
     return NextResponse.json({ success: true, data: users })
@@ -147,6 +156,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Verify department belongs to organization
+    if (validatedData.departmentId) {
+      const department = await prisma.department.findFirst({
+        where: {
+          id: validatedData.departmentId,
+          organizationId: session.user.organizationId,
+        },
+      })
+
+      if (!department) {
+        return NextResponse.json({ error: "Invalid department" }, { status: 400 })
+      }
+    }
+
     // Hash password if provided
     const passwordHash = validatedData.password
       ? await hashPassword(validatedData.password)
@@ -162,6 +185,7 @@ export async function POST(request: NextRequest) {
         phone: validatedData.phone,
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
+        departmentId: validatedData.departmentId,
         customRoleId: validatedData.customRoleId,
         isControlRoomTrained: validatedData.isControlRoomTrained,
         isOilOperatorTrained: validatedData.isOilOperatorTrained,
