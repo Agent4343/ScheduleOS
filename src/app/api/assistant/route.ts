@@ -766,6 +766,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Messages array is required" }, { status: 400 })
     }
 
+    // Limit messages to prevent token overflow (keep last 10 messages)
+    const limitedMessages = messages.slice(-10).map((m: { role: string; content: string }) => ({
+      ...m,
+      // Truncate very long messages to prevent token overflow
+      content: m.content.length > 4000 ? m.content.slice(0, 4000) + "..." : m.content,
+    }))
+
     const client = new Anthropic({ apiKey })
 
     // Get organization context
@@ -798,7 +805,7 @@ Important: When the user asks to change a schedule, you must:
 2. Then use update_schedule or bulk_update_schedules to make the change`
 
     // Build messages for Claude
-    const claudeMessages: Anthropic.MessageParam[] = messages.map(
+    const claudeMessages: Anthropic.MessageParam[] = limitedMessages.map(
       (m: { role: string; content: string }) => ({
         role: m.role as "user" | "assistant",
         content: m.content,

@@ -15,6 +15,7 @@ import {
   AlertCircle,
   CheckCircle,
   Sparkles,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -71,11 +72,14 @@ export default function AssistantPage() {
     setError(null)
 
     try {
+      // Limit to last 10 messages to avoid token limits
+      const recentMessages = [...messages, userMessage].slice(-10)
+
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
+          messages: recentMessages.map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -114,6 +118,11 @@ export default function AssistantPage() {
     sendMessage(prompt)
   }
 
+  const clearChat = () => {
+    setMessages([])
+    setError(null)
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
@@ -128,10 +137,18 @@ export default function AssistantPage() {
               Ask me anything about schedules, workers, time off, and more
             </p>
           </div>
-          <Badge variant="secondary" className="ml-auto">
-            <Sparkles className="h-3 w-3 mr-1" />
-            Beta
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            {messages.length > 0 && (
+              <Button variant="outline" size="sm" onClick={clearChat}>
+                <Trash2 className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            )}
+            <Badge variant="secondary">
+              <Sparkles className="h-3 w-3 mr-1" />
+              Beta
+            </Badge>
+          </div>
         </div>
       </div>
 
