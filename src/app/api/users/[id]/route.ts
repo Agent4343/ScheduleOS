@@ -143,25 +143,29 @@ export async function PATCH(
 
     // Try with customRoleId first, fall back without it if database hasn't been migrated
     let user
+
+    // Build update data, only including defined fields (convert null to undefined for Prisma)
+    const updateData: Record<string, unknown> = {}
+    if (validatedData.name !== undefined && validatedData.name !== null) updateData.name = validatedData.name
+    if (validatedData.email !== undefined && validatedData.email !== null) updateData.email = validatedData.email
+    if (validatedData.role !== undefined) updateData.role = validatedData.role
+    if (validatedData.status !== undefined) updateData.status = validatedData.status
+    if (validatedData.positionType !== undefined) updateData.positionType = validatedData.positionType
+    // These fields can be set to null to clear them
+    if (validatedData.position !== undefined) updateData.position = validatedData.position
+    if (validatedData.phone !== undefined) updateData.phone = validatedData.phone
+    if (validatedData.crewId !== undefined) updateData.crewId = validatedData.crewId
+    if (validatedData.customRoleId !== undefined) updateData.customRoleId = validatedData.customRoleId
+    if (validatedData.hireDate !== undefined) updateData.hireDate = validatedData.hireDate
+    if (validatedData.isControlRoomTrained !== undefined) updateData.isControlRoomTrained = validatedData.isControlRoomTrained
+    if (validatedData.isOilOperatorTrained !== undefined) updateData.isOilOperatorTrained = validatedData.isOilOperatorTrained
+    if (validatedData.isUtilityOperatorTrained !== undefined) updateData.isUtilityOperatorTrained = validatedData.isUtilityOperatorTrained
+    if (validatedData.isGasOperatorTrained !== undefined) updateData.isGasOperatorTrained = validatedData.isGasOperatorTrained
+
     try {
       user = await prisma.user.update({
         where: { id: params.id },
-        data: {
-          name: validatedData.name,
-          email: validatedData.email,
-          role: validatedData.role,
-          position: validatedData.position,
-          positionType: validatedData.positionType,
-          phone: validatedData.phone,
-          crewId: validatedData.crewId,
-          customRoleId: validatedData.customRoleId,
-          hireDate: validatedData.hireDate,
-          status: validatedData.status,
-          isControlRoomTrained: validatedData.isControlRoomTrained,
-          isOilOperatorTrained: validatedData.isOilOperatorTrained,
-          isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
-          isGasOperatorTrained: validatedData.isGasOperatorTrained,
-        },
+        data: updateData,
         select: {
           id: true,
           email: true,
@@ -195,23 +199,13 @@ export async function PATCH(
       })
     } catch {
       // Fallback without customRoleId if database hasn't been migrated
+      // Remove customRoleId from update data for fallback
+      const fallbackData = { ...updateData }
+      delete fallbackData.customRoleId
+
       user = await prisma.user.update({
         where: { id: params.id },
-        data: {
-          name: validatedData.name,
-          email: validatedData.email,
-          role: validatedData.role,
-          position: validatedData.position,
-          positionType: validatedData.positionType,
-          phone: validatedData.phone,
-          crewId: validatedData.crewId,
-          hireDate: validatedData.hireDate,
-          status: validatedData.status,
-          isControlRoomTrained: validatedData.isControlRoomTrained,
-          isOilOperatorTrained: validatedData.isOilOperatorTrained,
-          isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
-          isGasOperatorTrained: validatedData.isGasOperatorTrained,
-        },
+        data: fallbackData,
         select: {
           id: true,
           email: true,
