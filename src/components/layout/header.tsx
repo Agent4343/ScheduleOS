@@ -1,7 +1,7 @@
 "use client"
 
 import { useSession, signOut } from "next-auth/react"
-import { Bell, LogOut, Menu, User, Settings, CheckCheck } from "lucide-react"
+import { Bell, LogOut, Menu, Settings, CheckCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
 import { useState, useEffect, useRef } from "react"
@@ -252,14 +252,6 @@ export function Header({ onMenuClick }: HeaderProps) {
                     <p className="font-medium">{session?.user?.name}</p>
                     <p className="text-sm text-muted-foreground">{session?.user?.email}</p>
                   </div>
-                  <a
-                    href="/settings"
-                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
-                    onClick={() => setShowUserMenu(false)}
-                  >
-                    <User className="h-4 w-4" />
-                    Profile
-                  </a>
                   <a
                     href="/settings"
                     className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent"
