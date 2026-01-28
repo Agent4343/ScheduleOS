@@ -25,6 +25,9 @@ import {
   ShieldCheck,
   Utensils,
   Truck,
+  Bot,
+  MessageSquare,
+  Sparkles,
 } from "lucide-react"
 
 export default async function HomePage() {
@@ -43,7 +46,7 @@ export default async function HomePage() {
             <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
               <Calendar className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold">ScheduleOS</span>
+            <span className="text-xl font-bold">ShiftSync</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
             <Link href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -150,7 +153,7 @@ export default async function HomePage() {
                   <div className="flex-1 text-center">
                     <div className="inline-flex items-center gap-2 bg-background rounded-lg px-4 py-1.5 text-xs text-muted-foreground border">
                       <Globe className="h-3 w-3" />
-                      app.scheduleos.com/schedule
+                      app.shiftsync.com/schedule
                     </div>
                   </div>
                 </div>
@@ -328,7 +331,7 @@ export default async function HomePage() {
                   Never Miss Coverage on Day or Night Shifts
                 </h2>
                 <p className="text-muted-foreground mb-6">
-                  ScheduleOS automatically tracks how many trained workers you have on each shift.
+                  ShiftSync automatically tracks how many trained workers you have on each shift.
                   Red alerts show you immediately when you&apos;re short-staffed.
                 </p>
                 <ul className="space-y-4">
@@ -387,13 +390,122 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* AI Assistant Section */}
+        <section className="py-20 bg-gradient-to-b from-primary/5 to-background">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-6">
+                <Sparkles className="h-4 w-4" />
+                Powered by AI
+              </div>
+              <h2 className="text-3xl font-bold mb-4">Meet Your AI Scheduling Assistant</h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Manage your entire schedule using natural language. Just ask, and your AI assistant handles the rest.
+              </p>
+            </div>
+            <div className="grid lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
+              <div className="bg-background rounded-2xl border shadow-xl overflow-hidden">
+                <div className="bg-muted/50 px-4 py-3 border-b flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-primary" />
+                  <span className="font-medium">AI Assistant</span>
+                </div>
+                <div className="p-6 space-y-4">
+                  {/* Example conversations */}
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium">You</span>
+                    </div>
+                    <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-2 text-sm">
+                      Who&apos;s working day shift tomorrow?
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="bg-primary/10 rounded-2xl rounded-tl-sm px-4 py-2 text-sm">
+                      Tomorrow&apos;s day shift has 6 workers: John Smith, Sarah Johnson, Mike Williams, Emily Davis, Chris Brown, and Lisa Anderson. All certification requirements are met.
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-medium">You</span>
+                    </div>
+                    <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-2 text-sm">
+                      Swap John and Mike&apos;s shifts on Friday
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Bot className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="bg-primary/10 rounded-2xl rounded-tl-sm px-4 py-2 text-sm">
+                      Done! I&apos;ve swapped their shifts. John is now on night shift and Mike is on day shift for Friday, January 31st.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold mb-6">Everything You Can Do With AI</h3>
+                <ul className="space-y-4">
+                  <li className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-medium">View Schedules Instantly</div>
+                      <div className="text-sm text-muted-foreground">&quot;Who&apos;s working this week?&quot; or &quot;Show me the night shift for January&quot;</div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Swap & Update Shifts</div>
+                      <div className="text-sm text-muted-foreground">&quot;Move Sarah to night shift on Tuesday&quot; or &quot;Swap John and Mike&apos;s shifts&quot;</div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Handle Time-Off Requests</div>
+                      <div className="text-sm text-muted-foreground">&quot;Approve Sarah&apos;s vacation request&quot; or &quot;Show pending time-off requests&quot;</div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <BarChart3 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Get Daily & Weekly Summaries</div>
+                      <div className="text-sm text-muted-foreground">&quot;Give me today&apos;s summary&quot; or &quot;What does next week look like?&quot;</div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <div className="h-6 w-6 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Natural Language Control</div>
+                      <div className="text-sm text-muted-foreground">No menus or buttons to learn. Just type what you need in plain English.</div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Industries Section */}
         <section id="industries" className="py-20 bg-muted/50">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4">Built for Every Shift-Based Industry</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Whether you&apos;re managing an oil rig, hospital, factory, or security team — ScheduleOS adapts to your needs.
+                Whether you&apos;re managing an oil rig, hospital, factory, or security team — ShiftSync adapts to your needs.
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-4xl mx-auto">
@@ -486,6 +598,10 @@ export default async function HomePage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <span className="font-medium">AI Assistant</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
                       <span>Training tracking</span>
                     </li>
                     <li className="flex items-center gap-2">
@@ -525,6 +641,10 @@ export default async function HomePage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <span className="font-medium">AI Assistant</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
                       <span>Multiple locations</span>
                     </li>
                     <li className="flex items-center gap-2">
@@ -558,7 +678,7 @@ export default async function HomePage() {
             <div className="max-w-3xl mx-auto">
               <div className="text-6xl mb-6">&ldquo;</div>
               <p className="text-xl md:text-2xl mb-6 italic">
-                ScheduleOS cut our scheduling time from 4 hours to 15 minutes.
+                ShiftSync cut our scheduling time from 4 hours to 15 minutes.
                 The training coverage tracking alone has prevented countless staffing emergencies.
               </p>
               <div className="flex items-center justify-center gap-4">
