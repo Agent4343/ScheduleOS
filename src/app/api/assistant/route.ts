@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
-import { ShiftType, UserStatus } from "@/types"
+import { ShiftType, UserStatus, RequestStatus } from "@/types"
 
 // Tool definitions for the AI assistant
 const tools: Anthropic.Tool[] = [
@@ -476,12 +476,12 @@ async function executeTool(
       case "get_time_off_requests": {
         const whereClause: {
           user: { organizationId: string }
-          status?: string
+          status?: RequestStatus
           userId?: string
         } = { user: { organizationId } }
 
         if (input.status) {
-          whereClause.status = input.status
+          whereClause.status = input.status as RequestStatus
         }
         if (input.workerId) {
           whereClause.userId = input.workerId
