@@ -437,7 +437,7 @@ function SchedulePageContent() {
     }> = {}
     for (const worker of workers) {
       workerInfo[worker.id] = {
-        posType: worker.positionType || "OTHER",
+        posType: worker.positionType || PositionType.OTHER,
         isCRTrained: worker.isControlRoomTrained || false,
         isOilTrained: worker.isOilOperatorTrained || false,
         isUtilityTrained: worker.isUtilityOperatorTrained || false,
