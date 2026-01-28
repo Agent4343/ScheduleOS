@@ -46,12 +46,11 @@ export const updateOrganizationSchema = createOrganizationSchema.partial()
 
 // User validations
 export const createUserSchema = z.object({
-  email: z.string().email("Invalid email address").optional(),
+  email: z.string().email("Invalid email address"),
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters")
-    .optional(),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string()
@@ -70,7 +69,30 @@ export const createUserSchema = z.object({
   isGasOperatorTrained: z.boolean().default(false),
 })
 
-export const updateUserSchema = createUserSchema.partial()
+// For updates, all fields are optional including email and name
+export const updateUserSchema = z.object({
+  email: z.string().email("Invalid email address").nullish(),
+  name: z.string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters")
+    .nullish(),
+  role: z.nativeEnum(UserRole).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
+  position: z.string()
+    .max(100, "Position must be at most 100 characters")
+    .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
+    .nullish(),
+  positionType: z.nativeEnum(PositionType).optional(),
+  phone: z.string().nullish(),
+  crewId: z.string().nullish(),
+  customRoleId: z.string().nullish(),
+  hireDate: z.coerce.date().nullish(),
+  isControlRoomTrained: z.boolean().optional(),
+  isOilOperatorTrained: z.boolean().optional(),
+  isUtilityOperatorTrained: z.boolean().optional(),
+  isGasOperatorTrained: z.boolean().optional(),
+})
 
 // Crew validations
 export const createCrewSchema = z.object({
