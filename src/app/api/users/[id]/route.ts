@@ -287,9 +287,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only admins can delete users
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 })
+    // Only admins and supervisors can delete users
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     // Prevent self-deletion

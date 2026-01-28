@@ -19,6 +19,7 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  Download,
 } from "lucide-react"
 import { ShiftType, UserRole, PositionType } from "@/types"
 
@@ -804,6 +805,16 @@ function SchedulePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.location.href = `/api/export?type=schedule-grid&year=${currentYear}`
+            }}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export to Excel
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
             This Year
           </Button>

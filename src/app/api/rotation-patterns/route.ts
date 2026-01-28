@@ -187,8 +187,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can delete patterns" }, { status: 403 })
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)

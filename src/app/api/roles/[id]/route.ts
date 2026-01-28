@@ -63,9 +63,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only admins can update roles
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can update roles" }, { status: 403 })
+    // Only admins and supervisors can update roles
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     const body = await request.json()
@@ -142,9 +142,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only admins can delete roles
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can delete roles" }, { status: 403 })
+    // Only admins and supervisors can delete roles
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     // Check if role exists and belongs to this organization
