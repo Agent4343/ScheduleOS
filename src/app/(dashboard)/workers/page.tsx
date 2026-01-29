@@ -59,6 +59,8 @@ interface User {
   isOilOperatorTrained?: boolean
   isUtilityOperatorTrained?: boolean
   isGasOperatorTrained?: boolean
+  // Staffing settings
+  includeInStaffingCount?: boolean
 }
 
 interface Crew {
@@ -145,6 +147,7 @@ export default function WorkersPage() {
     customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
+    includeInStaffingCount: true,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -214,6 +217,7 @@ export default function WorkersPage() {
       customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
+      includeInStaffingCount: user.includeInStaffingCount !== false,
     })
     // Fetch user's certifications with expiry dates
     try {
@@ -325,6 +329,7 @@ export default function WorkersPage() {
           customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
+          includeInStaffingCount: editFormData.includeInStaffingCount,
         }),
       })
 
@@ -847,6 +852,25 @@ export default function WorkersPage() {
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
             </div>
+          </div>
+
+          {/* Staffing Count Settings */}
+          <div className="p-3 border rounded-lg space-y-2 bg-muted/30">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.includeInStaffingCount}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, includeInStaffingCount: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <div>
+                <span className="font-medium text-sm">Include in staffing counts</span>
+                <p className="text-xs text-muted-foreground">
+                  When disabled, this worker won&apos;t be counted in shift totals, staffing alerts, or coverage calculations.
+                  Useful for supervisors, leads, or administrative staff.
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Training Certifications */}

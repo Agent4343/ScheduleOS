@@ -106,6 +106,7 @@ export async function GET() {
               id: true,
               name: true,
               positionType: true,
+              includeInStaffingCount: true,
               certifications: {
                 select: { certificationTypeId: true },
               },
@@ -163,8 +164,10 @@ export async function GET() {
 
       // Check staffing rules
       for (const rule of staffingRules) {
-        // Filter by shift type
-        let filteredSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === rule.shiftType)
+        // Filter by shift type and only include workers who should be counted
+        let filteredSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === rule.shiftType && s.user.includeInStaffingCount !== false
+        )
 
         // Filter by position type if the rule specifies one
         if (rule.positionType) {
@@ -185,10 +188,12 @@ export async function GET() {
         }
       }
 
-      // Check certification-based staffing requirements
+      // Check certification-based staffing requirements (only count workers with includeInStaffingCount)
       for (const cert of requiredCertifications) {
-        // Check day shift
-        const dayShiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.DAY)
+        // Check day shift - filter to only include workers who should be counted
+        const dayShiftSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === ShiftType.DAY && s.user.includeInStaffingCount !== false
+        )
         const dayShiftWithCert = dayShiftSchedules.filter(
           (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
             s.user.certifications.some(c => c.certificationTypeId === cert.id)
@@ -203,8 +208,10 @@ export async function GET() {
           })
         }
 
-        // Check night shift
-        const nightShiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.NIGHT)
+        // Check night shift - filter to only include workers who should be counted
+        const nightShiftSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === ShiftType.NIGHT && s.user.includeInStaffingCount !== false
+        )
         const nightShiftWithCert = nightShiftSchedules.filter(
           (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
             s.user.certifications.some(c => c.certificationTypeId === cert.id)

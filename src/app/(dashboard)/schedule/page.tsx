@@ -70,6 +70,7 @@ interface Worker {
   isOilOperatorTrained?: boolean
   isUtilityOperatorTrained?: boolean
   isGasOperatorTrained?: boolean
+  includeInStaffingCount?: boolean
   crew: {
     id: string
     name: string
@@ -458,6 +459,7 @@ function SchedulePageContent() {
       isOilTrained: boolean;
       isUtilityTrained: boolean;
       isGasTrained: boolean;
+      includeInCount: boolean;
     }> = {}
     for (const worker of workers) {
       workerInfo[worker.id] = {
@@ -466,6 +468,7 @@ function SchedulePageContent() {
         isOilTrained: worker.isOilOperatorTrained || false,
         isUtilityTrained: worker.isUtilityOperatorTrained || false,
         isGasTrained: worker.isGasOperatorTrained || false,
+        includeInCount: worker.includeInStaffingCount !== false,
       }
     }
 
@@ -480,10 +483,19 @@ function SchedulePageContent() {
         }
       }
 
-      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isCRTrained: false, isOilTrained: false, isUtilityTrained: false, isGasTrained: false }
+      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isCRTrained: false, isOilTrained: false, isUtilityTrained: false, isGasTrained: false, includeInCount: true }
       const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
       const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
       const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
+
+      // Only count workers who have includeInStaffingCount enabled
+      if (!info.includeInCount) {
+        // Still count for total on duty display (they're working, just not in staffing minimums)
+        if (isOnDuty) {
+          counts[dateStr].totalOnDuty++
+        }
+        continue
+      }
 
       if (isOnDuty) {
         counts[dateStr].totalOnDuty++
@@ -566,8 +578,9 @@ function SchedulePageContent() {
       for (const rule of staffingRules) {
         if (!rule.isActive) continue
 
-        // Get workers on this shift
+        // Get workers on this shift and filter to only those who should be counted
         const shiftWorkers = getWorkersOnShift(dateStr, rule.shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
 
         // Filter by position type if specified
         let relevantWorkers = shiftWorkers

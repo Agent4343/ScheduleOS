@@ -144,6 +144,7 @@ model User {
   isOilOperatorTrained Boolean @default(false) // Trained as Oil Operator
   isUtilityOperatorTrained Boolean @default(false) // Trained as Utility Operator
   isGasOperatorTrained Boolean @default(false) // Trained as Gas Operator
+  includeInStaffingCount Boolean @default(true) // Include this worker in staffing counts/calculations
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

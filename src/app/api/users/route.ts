@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
           isOilOperatorTrained: true,
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
+          includeInStaffingCount: true,
           customRoleId: true,
           crew: {
             select: {
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
           isOilOperatorTrained: true,
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
+          includeInStaffingCount: true,
           crew: {
             select: {
               id: true,
@@ -257,6 +259,7 @@ export async function POST(request: NextRequest) {
         isOilOperatorTrained: validatedData.isOilOperatorTrained,
         isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
         isGasOperatorTrained: validatedData.isGasOperatorTrained,
+        includeInStaffingCount: validatedData.includeInStaffingCount,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -273,6 +276,7 @@ export async function POST(request: NextRequest) {
         isOilOperatorTrained: true,
         isUtilityOperatorTrained: true,
         isGasOperatorTrained: true,
+        includeInStaffingCount: true,
         customRoleId: true,
         crew: {
           select: {
