@@ -22,7 +22,9 @@ import {
   Download,
   Maximize2,
   Minimize2,
+  AlertTriangle,
 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ShiftType, UserRole, PositionType } from "@/types"
 
 interface Schedule {
@@ -115,6 +117,31 @@ interface CustomRole {
   description: string | null
   color: string
   baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+}
+
+interface StaffingRule {
+  id: string
+  name: string
+  description: string | null
+  shiftType: "DAY" | "NIGHT"
+  minWorkers: number
+  maxVacation: number | null
+  role: string | null
+  positionType: string | null
+  crewId: string | null
+  priority: number
+  isActive: boolean
+  crew: { id: string; name: string; color: string } | null
+}
+
+interface StaffingAlert {
+  date: string
+  shiftType: "DAY" | "NIGHT"
+  ruleName: string
+  required: number
+  actual: number
+  shortage: number
+  positionType?: string
 }
 
 // Built-in shift colors for the Excel-like cells
@@ -211,6 +238,14 @@ function SchedulePageContent() {
   // Focus mode - hides legend and summary for bigger schedule view
   const [focusMode, setFocusMode] = useState(false)
 
+  // Staffing rules for alerts
+  const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
+
+  // Worker breakdown modal state
+  const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
+  const [breakdownDate, setBreakdownDate] = useState<string>("")
+  const [breakdownShift, setBreakdownShift] = useState<"DAY" | "NIGHT">("DAY")
+
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
 
@@ -291,6 +326,22 @@ function SchedulePageContent() {
       }
     }
     fetchCustomRoles()
+  }, [])
+
+  // Fetch staffing rules
+  useEffect(() => {
+    async function fetchStaffingRules() {
+      try {
+        const response = await fetch("/api/staffing-rules?isActive=true")
+        const result = await response.json()
+        if (result.success) {
+          setStaffingRules(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch staffing rules:", error)
+      }
+    }
+    fetchStaffingRules()
   }, [])
 
   // Fetch workers
@@ -465,6 +516,132 @@ function SchedulePageContent() {
     const dateStr = formatDate(currentYear, month, day)
     return dailyStaffingCounts[dateStr]?.[field] || 0
   }
+
+  // Get workers on a specific day and shift
+  const getWorkersOnShift = useMemo(() => {
+    // Build a map of date -> shift -> workers
+    const shiftWorkers: Record<string, { DAY: Worker[]; NIGHT: Worker[] }> = {}
+
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!shiftWorkers[dateStr]) {
+        shiftWorkers[dateStr] = { DAY: [], NIGHT: [] }
+      }
+
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+
+      const worker = workers.find(w => w.id === schedule.user.id)
+      if (worker) {
+        if (isDay) shiftWorkers[dateStr].DAY.push(worker)
+        if (isNight) shiftWorkers[dateStr].NIGHT.push(worker)
+      }
+    }
+
+    return (dateStr: string, shift: "DAY" | "NIGHT"): Worker[] => {
+      return shiftWorkers[dateStr]?.[shift] || []
+    }
+  }, [schedules, workers])
+
+  // Calculate staffing alerts based on rules
+  const staffingAlerts = useMemo(() => {
+    const alerts: StaffingAlert[] = []
+
+    // Only process rules if we have any
+    if (staffingRules.length === 0) return alerts
+
+    // Check each day in the year that has schedules
+    const datesWithSchedules = Array.from(new Set(schedules.map(s => s.date.split("T")[0])))
+
+    for (const dateStr of datesWithSchedules) {
+      for (const rule of staffingRules) {
+        if (!rule.isActive) continue
+
+        // Get workers on this shift
+        const shiftWorkers = getWorkersOnShift(dateStr, rule.shiftType)
+
+        // Filter by position type if specified
+        let relevantWorkers = shiftWorkers
+        if (rule.positionType) {
+          relevantWorkers = shiftWorkers.filter(w => w.positionType === rule.positionType)
+        }
+
+        // Check if we meet the minimum
+        if (relevantWorkers.length < rule.minWorkers) {
+          alerts.push({
+            date: dateStr,
+            shiftType: rule.shiftType,
+            ruleName: rule.name,
+            required: rule.minWorkers,
+            actual: relevantWorkers.length,
+            shortage: rule.minWorkers - relevantWorkers.length,
+            positionType: rule.positionType || undefined,
+          })
+        }
+      }
+    }
+
+    // Sort by date
+    alerts.sort((a, b) => a.date.localeCompare(b.date))
+
+    return alerts
+  }, [schedules, staffingRules, getWorkersOnShift])
+
+  // Group alerts by date for display
+  const alertsByDate = useMemo(() => {
+    const grouped: Record<string, StaffingAlert[]> = {}
+    for (const alert of staffingAlerts) {
+      if (!grouped[alert.date]) {
+        grouped[alert.date] = []
+      }
+      grouped[alert.date].push(alert)
+    }
+    return grouped
+  }, [staffingAlerts])
+
+  // Get alerts for visible month (for the current view)
+  const visibleAlerts = useMemo(() => {
+    // Get current date info
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentDay = now.getDate()
+
+    // Filter to show alerts from today forward, limit to next 30 days
+    const todayStr = formatDate(currentYear, currentMonth, currentDay)
+    const futureDate = new Date(now)
+    futureDate.setDate(futureDate.getDate() + 30)
+    const futureDateStr = formatDate(futureDate.getFullYear(), futureDate.getMonth(), futureDate.getDate())
+
+    return staffingAlerts.filter(alert => {
+      // Only show alerts for current year
+      if (!alert.date.startsWith(String(currentYear))) {
+        // But if viewing past/future year, show that year's alerts
+        if (currentYear !== now.getFullYear()) {
+          return alert.date.startsWith(String(currentYear))
+        }
+        return false
+      }
+      // Show upcoming alerts (from today for next 30 days)
+      return alert.date >= todayStr && alert.date <= futureDateStr
+    })
+  }, [staffingAlerts, currentYear])
+
+  // Open breakdown modal
+  function openBreakdownModal(dateStr: string, shift: "DAY" | "NIGHT") {
+    setBreakdownDate(dateStr)
+    setBreakdownShift(shift)
+    setBreakdownModalOpen(true)
+  }
+
+  function closeBreakdownModal() {
+    setBreakdownModalOpen(false)
+  }
+
+  // Get breakdown workers for the modal
+  const breakdownWorkers = useMemo(() => {
+    if (!breakdownDate) return []
+    return getWorkersOnShift(breakdownDate, breakdownShift)
+  }, [breakdownDate, breakdownShift, getWorkersOnShift])
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -983,13 +1160,21 @@ function SchedulePageContent() {
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
                         const count = getDailyCount(month, day, "dayTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "DAY")
                         return (
                           <td
                             key={`day-total-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-green-50 dark:bg-green-950 text-xs font-medium"
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-green-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-green-50 dark:bg-green-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on day shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "DAY")}
                           >
                             {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
                           </td>
                         )
                       })
@@ -1001,13 +1186,21 @@ function SchedulePageContent() {
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
                         const count = getDailyCount(month, day, "nightTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "NIGHT")
                         return (
                           <td
                             key={`night-total-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-blue-50 dark:bg-blue-950 text-xs font-medium"
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-blue-50 dark:bg-blue-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on night shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "NIGHT")}
                           >
                             {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
                           </td>
                         )
                       })
@@ -1385,6 +1578,157 @@ function SchedulePageContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Worker Breakdown Modal */}
+      <Modal
+        isOpen={breakdownModalOpen}
+        onClose={closeBreakdownModal}
+        title={`${breakdownShift === "DAY" ? "Day" : "Night"} Shift Workers`}
+        description={breakdownDate ? new Date(breakdownDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+      >
+        <div className="space-y-4">
+          {/* Show any alerts for this date/shift */}
+          {alertsByDate[breakdownDate]?.filter(a => a.shiftType === breakdownShift).map((alert, idx) => (
+            <div key={idx} className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="font-medium">Staffing Alert: {alert.ruleName}</span>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                Need {alert.required} workers{alert.positionType ? ` (${alert.positionType})` : ""}, have {alert.actual} — short by {alert.shortage}
+              </p>
+            </div>
+          ))}
+
+          {/* Worker list */}
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm text-muted-foreground">
+              {breakdownWorkers.length} worker{breakdownWorkers.length !== 1 ? "s" : ""} on {breakdownShift.toLowerCase()} shift:
+            </h4>
+            {breakdownWorkers.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No workers scheduled</p>
+            ) : (
+              <div className="grid gap-2">
+                {breakdownWorkers.map((worker) => (
+                  <div
+                    key={worker.id}
+                    className="flex items-center gap-3 p-2 bg-muted/50 rounded-md"
+                  >
+                    <div
+                      className="w-3 h-8 rounded"
+                      style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{worker.name || "Unnamed"}</div>
+                      <div className="text-xs text-muted-foreground flex gap-2">
+                        <span>{worker.crew?.name || "No crew"}</span>
+                        {worker.positionType && (
+                          <>
+                            <span>•</span>
+                            <span>{worker.positionType.replace("_", " ")}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {/* Training badges */}
+                    <div className="flex gap-1 flex-shrink-0">
+                      {worker.isControlRoomTrained && (
+                        <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded" title="Control Room Trained">CR</span>
+                      )}
+                      {worker.isOilOperatorTrained && (
+                        <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded" title="Oil Operator Trained">Oil</span>
+                      )}
+                      {worker.isGasOperatorTrained && (
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded" title="Gas Operator Trained">Gas</span>
+                      )}
+                      {worker.isUtilityOperatorTrained && (
+                        <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded" title="Utility Operator Trained">Util</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={closeBreakdownModal}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Staffing Alerts Section - shown below the schedule */}
+      {!focusMode && visibleAlerts.length > 0 && (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300">
+              <AlertTriangle className="h-5 w-5" />
+              Staffing Alerts ({visibleAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {visibleAlerts.slice(0, 20).map((alert, idx) => {
+                const alertDate = new Date(alert.date + "T12:00:00")
+                const isToday = alert.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                const isTomorrow = (() => {
+                  const tomorrow = new Date(today)
+                  tomorrow.setDate(tomorrow.getDate() + 1)
+                  return alert.date === formatDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+                })()
+
+                return (
+                  <Alert
+                    key={`${alert.date}-${alert.shiftType}-${alert.ruleName}-${idx}`}
+                    variant="destructive"
+                    className="py-2"
+                    showIcon={false}
+                  >
+                    <AlertTriangle className="h-4 w-4 absolute left-4 top-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">
+                          {isToday ? "Today" : isTomorrow ? "Tomorrow" : alertDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span className={cn(
+                          "font-medium",
+                          alert.shiftType === "DAY" ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                        )}>
+                          {alert.shiftType}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span>{alert.ruleName}</span>
+                        {alert.positionType && (
+                          <span className="text-muted-foreground ml-1">({alert.positionType})</span>
+                        )}
+                        <span className="ml-2 text-sm">
+                          — Need {alert.required}, have {alert.actual} (short {alert.shortage})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 ml-2"
+                        onClick={() => openBreakdownModal(alert.date, alert.shiftType)}
+                      >
+                        View
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )
+              })}
+              {visibleAlerts.length > 20 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  And {visibleAlerts.length - 20} more alerts...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
