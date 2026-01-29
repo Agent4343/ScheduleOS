@@ -255,6 +255,33 @@ const tools: Anthropic.Tool[] = [
       required: ["workerId", "startDate", "endDate", "shiftType"],
     },
   },
+  {
+    name: "get_staffing_rules",
+    description: "Get the organization's staffing rules including minimum workers required per shift type, position requirements, and certification requirements.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "check_staffing_gaps",
+    description: "Check staffing gaps for a date range. This compares the actual scheduled workers against the minimum staffing rules to identify where more workers are needed. Use this instead of manually looking at who is off.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        startDate: {
+          type: "string",
+          description: "Start date in YYYY-MM-DD format",
+        },
+        endDate: {
+          type: "string",
+          description: "End date in YYYY-MM-DD format",
+        },
+      },
+      required: ["startDate", "endDate"],
+    },
+  },
 ]
 
 interface ToolInput {
@@ -766,6 +793,194 @@ async function executeTool(
         return `Updated ${count} days of schedules for ${worker.name} to ${input.shiftType} (${input.startDate} to ${input.endDate}).`
       }
 
+      case "get_staffing_rules": {
+        // Get staffing rules
+        const staffingRules = await prisma.staffingRule.findMany({
+          where: { organizationId, isActive: true },
+          orderBy: { shiftType: "asc" },
+        })
+
+        // Get certification requirements
+        const certRequirements = await prisma.certificationType.findMany({
+          where: { organizationId, isActive: true, requireOnSchedule: true },
+          select: {
+            id: true,
+            name: true,
+            minPerDayShift: true,
+            minPerNightShift: true,
+          },
+        })
+
+        let result = "## Staffing Rules\n\n"
+
+        if (staffingRules.length === 0 && certRequirements.length === 0) {
+          return "No staffing rules configured. Go to Settings to set up minimum staffing requirements."
+        }
+
+        if (staffingRules.length > 0) {
+          result += "### Minimum Workers Per Shift:\n"
+          for (const rule of staffingRules) {
+            const positionLabel = rule.positionType ? ` (${rule.positionType})` : ""
+            result += `- ${rule.shiftType} shift${positionLabel}: minimum ${rule.minWorkers} workers\n`
+          }
+        }
+
+        if (certRequirements.length > 0) {
+          result += "\n### Certification Requirements:\n"
+          for (const cert of certRequirements) {
+            result += `- ${cert.name}:\n`
+            result += `  - Day shift: minimum ${cert.minPerDayShift} worker(s)\n`
+            result += `  - Night shift: minimum ${cert.minPerNightShift} worker(s)\n`
+          }
+        }
+
+        return result
+      }
+
+      case "check_staffing_gaps": {
+        const checkStartDate = new Date(input.startDate!)
+        const checkEndDate = new Date(input.endDate!)
+
+        // Get staffing rules
+        const staffingRules = await prisma.staffingRule.findMany({
+          where: { organizationId, isActive: true },
+        })
+
+        // Get certification requirements
+        const certRequirements = await prisma.certificationType.findMany({
+          where: { organizationId, isActive: true, requireOnSchedule: true },
+          select: {
+            id: true,
+            name: true,
+            minPerDayShift: true,
+            minPerNightShift: true,
+          },
+        })
+
+        if (staffingRules.length === 0 && certRequirements.length === 0) {
+          return "No staffing rules configured. Cannot check for gaps without minimum staffing requirements. Go to Settings to configure staffing rules."
+        }
+
+        // Get schedules for the date range
+        const schedules = await prisma.schedule.findMany({
+          where: {
+            user: { organizationId },
+            date: { gte: checkStartDate, lte: checkEndDate },
+            shiftType: { in: [ShiftType.DAY, ShiftType.NIGHT] },
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                positionType: true,
+                certifications: {
+                  select: { certificationTypeId: true },
+                },
+              },
+            },
+          },
+        })
+
+        // Group schedules by date
+        const schedulesByDate = new Map<string, typeof schedules>()
+        for (const schedule of schedules) {
+          const dateKey = schedule.date.toISOString().split("T")[0]
+          if (!schedulesByDate.has(dateKey)) {
+            schedulesByDate.set(dateKey, [])
+          }
+          schedulesByDate.get(dateKey)!.push(schedule)
+        }
+
+        const gaps: Array<{
+          date: string
+          shiftType: string
+          issue: string
+          have: number
+          need: number
+        }> = []
+
+        // Check each day
+        const currentDate = new Date(checkStartDate)
+        while (currentDate <= checkEndDate) {
+          const dateKey = currentDate.toISOString().split("T")[0]
+          const daySchedules = schedulesByDate.get(dateKey) || []
+
+          // Check staffing rules
+          for (const rule of staffingRules) {
+            let filteredSchedules = daySchedules.filter(s => s.shiftType === rule.shiftType)
+            if (rule.positionType) {
+              filteredSchedules = filteredSchedules.filter(s => s.user.positionType === rule.positionType)
+            }
+
+            const count = filteredSchedules.length
+            if (count < rule.minWorkers) {
+              const positionLabel = rule.positionType ? ` (${rule.positionType})` : ""
+              gaps.push({
+                date: dateKey,
+                shiftType: rule.shiftType,
+                issue: `Minimum workers${positionLabel}`,
+                have: count,
+                need: rule.minWorkers,
+              })
+            }
+          }
+
+          // Check certification requirements
+          for (const cert of certRequirements) {
+            // Day shift
+            const dayShiftSchedules = daySchedules.filter(s => s.shiftType === ShiftType.DAY)
+            const dayWithCert = dayShiftSchedules.filter(s =>
+              s.user.certifications.some(c => c.certificationTypeId === cert.id)
+            )
+            if (dayWithCert.length < cert.minPerDayShift) {
+              gaps.push({
+                date: dateKey,
+                shiftType: "DAY",
+                issue: `Workers with ${cert.name}`,
+                have: dayWithCert.length,
+                need: cert.minPerDayShift,
+              })
+            }
+
+            // Night shift
+            const nightShiftSchedules = daySchedules.filter(s => s.shiftType === ShiftType.NIGHT)
+            const nightWithCert = nightShiftSchedules.filter(s =>
+              s.user.certifications.some(c => c.certificationTypeId === cert.id)
+            )
+            if (nightWithCert.length < cert.minPerNightShift) {
+              gaps.push({
+                date: dateKey,
+                shiftType: "NIGHT",
+                issue: `Workers with ${cert.name}`,
+                have: nightWithCert.length,
+                need: cert.minPerNightShift,
+              })
+            }
+          }
+
+          currentDate.setDate(currentDate.getDate() + 1)
+        }
+
+        if (gaps.length === 0) {
+          return `✅ No staffing gaps found for ${input.startDate} to ${input.endDate}. All shifts meet minimum requirements.`
+        }
+
+        let result = `## Staffing Gaps (${input.startDate} to ${input.endDate})\n\n`
+        result += `Found **${gaps.length} staffing gaps** that need attention:\n\n`
+        result += "| Date | Shift | Issue | Have | Need | Shortage |\n"
+        result += "|------|-------|-------|------|------|----------|\n"
+
+        for (const gap of gaps) {
+          const shortage = gap.need - gap.have
+          result += `| ${gap.date} | ${gap.shiftType} | ${gap.issue} | ${gap.have} | ${gap.need} | -${shortage} |\n`
+        }
+
+        result += "\n**Note:** These gaps are based on your configured staffing rules in Settings."
+
+        return result
+      }
+
       default:
         return `Unknown tool: ${name}`
     }
@@ -878,6 +1093,7 @@ You have access to tools to:
 - Look up worker information
 - Manage time off requests
 - Get summaries of schedules
+- Check staffing rules and identify staffing gaps
 
 Guidelines:
 1. Always confirm before making changes that affect multiple people or dates
@@ -886,6 +1102,15 @@ Guidelines:
 4. Be concise but helpful
 5. If you're unsure about a request, ask for clarification
 6. For date ranges, always use YYYY-MM-DD format internally
+
+IMPORTANT - Staffing Gap Analysis:
+When the user asks about staffing gaps, understaffing, or coverage issues:
+1. Use check_staffing_gaps to compare actual schedules against minimum staffing requirements
+2. Do NOT manually list who is off - that's not how staffing gaps are calculated
+3. A staffing gap means: the number of workers scheduled for a shift is BELOW the minimum required
+4. Use get_staffing_rules to show the configured minimums if the user wants to see the rules
+
+Example: If the rule says "Day shift needs minimum 5 workers" and only 3 are scheduled, that's a gap of 2 - regardless of who specifically is off.
 
 Important: When the user asks to change a schedule, you must:
 1. First find the worker using get_worker_by_name if only a name is provided
