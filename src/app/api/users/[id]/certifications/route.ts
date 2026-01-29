@@ -111,7 +111,7 @@ export async function POST(
 
       // Determine what to add and remove
       const toAdd = requestedCertIds.filter(certId => !currentCertIds.has(certId))
-      const toRemove = [...currentCertIds].filter(certId => !requestedCertIds.includes(certId))
+      const toRemove = Array.from(currentCertIds).filter(certId => !requestedCertIds.includes(certId))
 
       // Perform updates in a transaction
       await prisma.$transaction([
