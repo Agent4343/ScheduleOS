@@ -25,14 +25,10 @@ interface DashboardStats {
   staffingGaps: number
 }
 
-// Labels for training types
-const TRAINING_TYPE_LABELS: Record<string, string> = {
-  OIL_OPERATOR: "Oil Op",
-  UTILITY_OPERATOR: "Utility Op",
-  GAS_OPERATOR: "Gas Op",
-  CONTROL_ROOM: "CR Trained",
+// Labels for position types
+const POSITION_TYPE_LABELS: Record<string, string> = {
   OPERATOR: "Operator",
-  ONSHORE_CONTROL_ROOM: "OCR",
+  OTHER: "Staff",
 }
 
 interface DashboardData {
@@ -237,7 +233,7 @@ export default function DashboardPage() {
             {data?.staffingGapDetails && data.staffingGapDetails.length > 0 ? (
               <div className="space-y-3">
                 {data.staffingGapDetails.map((gap, i) => {
-                  const trainingLabel = gap.positionType ? TRAINING_TYPE_LABELS[gap.positionType] || gap.positionType : ""
+                  const positionLabel = gap.positionType ? POSITION_TYPE_LABELS[gap.positionType] || "" : ""
                   const shiftLabel = gap.shiftType === "DAY" ? "D" : gap.shiftType === "NIGHT" ? "N" : gap.shiftType
                   return (
                     <div
@@ -249,7 +245,7 @@ export default function DashboardPage() {
                         <span>{new Date(gap.date).toLocaleDateString()}</span>
                       </div>
                       <Badge variant="destructive">
-                        {shiftLabel}{trainingLabel ? ` - ${trainingLabel}` : ""}: -{gap.shortage}
+                        {shiftLabel}{positionLabel ? ` - ${positionLabel}` : ""}: -{gap.shortage}
                       </Badge>
                     </div>
                   )

@@ -75,14 +75,28 @@ export async function GET(request: NextRequest) {
       const startDate = getYearStartUTC(year)
       const endDate = getYearEndUTC(year)
 
-      // Fetch all workers with training certifications
+      // Fetch all workers with their certifications
       const users = await prisma.user.findMany({
         where: {
           organizationId: session.user.organizationId,
           status: "ACTIVE",
         },
-        include: { crew: true },
+        include: {
+          crew: true,
+          certifications: {
+            include: { certificationType: true }
+          }
+        },
         orderBy: [{ sortOrder: "asc" }, { crew: { name: "asc" } }, { name: "asc" }],
+      })
+
+      // Fetch organization's certification types
+      const certificationTypes = await prisma.certificationType.findMany({
+        where: {
+          organizationId: session.user.organizationId,
+          isActive: true,
+        },
+        orderBy: { name: "asc" },
       })
 
       // Fetch all schedules for the year
@@ -188,80 +202,89 @@ export async function GET(request: NextRequest) {
       // Add empty row before summary
       worksheet.addRow([])
 
-      // Add training summary rows
-      const trainingConfigs = [
-        { label: "Day - Oil Op", field: "isOilOperatorTrained", shift: "DAY", bgColor: "fef3c7" },
-        { label: "Day - Utility Op", field: "isUtilityOperatorTrained", shift: "DAY", bgColor: "cffafe" },
-        { label: "Day - Gas Op", field: "isGasOperatorTrained", shift: "DAY", bgColor: "fed7aa" },
-        { label: "Day - CR Trained", field: "isControlRoomTrained", shift: "DAY", bgColor: "e9d5ff" },
-        { label: "Night - Oil Op", field: "isOilOperatorTrained", shift: "NIGHT", bgColor: "fde68a" },
-        { label: "Night - Utility Op", field: "isUtilityOperatorTrained", shift: "NIGHT", bgColor: "a5f3fc" },
-        { label: "Night - Gas Op", field: "isGasOperatorTrained", shift: "NIGHT", bgColor: "fdba74" },
-        { label: "Night - CR Trained", field: "isControlRoomTrained", shift: "NIGHT", bgColor: "d8b4fe" },
-      ]
+      // Build user certification lookup
+      const userCertMap = new Map<string, Set<string>>()
+      for (const user of users) {
+        const certIds = new Set(user.certifications.map(c => c.certificationTypeId))
+        userCertMap.set(user.id, certIds)
+      }
 
-      for (const { label, field, shift, bgColor } of trainingConfigs) {
-        const row: (string | number)[] = [label, ""]
+      // Add certification summary rows (only if organization has certifications configured)
+      if (certificationTypes.length > 0) {
+        // Generate colors for certifications
+        const certColors = ["fef3c7", "cffafe", "fed7aa", "e9d5ff", "fde68a", "a5f3fc", "fdba74", "d8b4fe"]
 
-        for (const { dateStr } of yearDays) {
-          let count = 0
-          let hasWorkers = false
+        for (const shift of ["DAY", "NIGHT"]) {
+          for (let i = 0; i < certificationTypes.length; i++) {
+            const cert = certificationTypes[i]
+            const label = `${shift === "DAY" ? "Day" : "Night"} - ${cert.name}`
+            const bgColor = certColors[i % certColors.length]
 
-          for (const user of users) {
-            const key = `${user.id}-${dateStr}`
-            const schedule = scheduleMap.get(key)
-            const isOnShift = shift === "DAY"
-              ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
-              : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
+            const row: (string | number)[] = [label, ""]
 
-            if (isOnShift) {
-              hasWorkers = true
-              if ((user as Record<string, unknown>)[field]) {
-                count++
+            for (const { dateStr } of yearDays) {
+              let count = 0
+              let hasWorkers = false
+
+              for (const user of users) {
+                const key = `${user.id}-${dateStr}`
+                const schedule = scheduleMap.get(key)
+                const isOnShift = shift === "DAY"
+                  ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
+                  : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
+
+                if (isOnShift) {
+                  hasWorkers = true
+                  const userCerts = userCertMap.get(user.id)
+                  if (userCerts?.has(cert.id)) {
+                    count++
+                  }
+                }
               }
+
+              row.push(count > 0 ? count : (hasWorkers ? "!" : ""))
+            }
+
+            const excelRow = worksheet.addRow(row)
+            excelRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } }
+            excelRow.getCell(1).font = { bold: true, size: 10 }
+
+            // Color cells based on requirement status
+            let colIndex = 3
+            for (const { dateStr } of yearDays) {
+              let count = 0
+              let hasWorkers = false
+
+              for (const user of users) {
+                const key = `${user.id}-${dateStr}`
+                const schedule = scheduleMap.get(key)
+                const isOnShift = shift === "DAY"
+                  ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
+                  : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
+
+                if (isOnShift) {
+                  hasWorkers = true
+                  const userCerts = userCertMap.get(user.id)
+                  if (userCerts?.has(cert.id)) {
+                    count++
+                  }
+                }
+              }
+
+              const cell = excelRow.getCell(colIndex)
+              if (hasWorkers && count === 0 && cert.isRequired) {
+                // Alert - red background (only for required certifications)
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "fecaca" } }
+                cell.font = { color: { argb: "dc2626" }, bold: true }
+              } else if (count >= 1) {
+                // Met - green background
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "bbf7d0" } }
+                cell.font = { color: { argb: "166534" } }
+              }
+              cell.alignment = { horizontal: "center" }
+              colIndex++
             }
           }
-
-          row.push(count > 0 ? count : (hasWorkers ? "!" : ""))
-        }
-
-        const excelRow = worksheet.addRow(row)
-        excelRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: bgColor } }
-        excelRow.getCell(1).font = { bold: true, size: 10 }
-
-        // Color cells based on requirement status
-        let colIndex = 3
-        for (const { dateStr } of yearDays) {
-          let count = 0
-          let hasWorkers = false
-
-          for (const user of users) {
-            const key = `${user.id}-${dateStr}`
-            const schedule = scheduleMap.get(key)
-            const isOnShift = shift === "DAY"
-              ? (schedule?.shiftType === "DAY" || schedule?.shiftType === "PL_DAY")
-              : (schedule?.shiftType === "NIGHT" || schedule?.shiftType === "PL_NIGHT")
-
-            if (isOnShift) {
-              hasWorkers = true
-              if ((user as Record<string, unknown>)[field]) {
-                count++
-              }
-            }
-          }
-
-          const cell = excelRow.getCell(colIndex)
-          if (hasWorkers && count === 0) {
-            // Alert - red background
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "fecaca" } }
-            cell.font = { color: { argb: "dc2626" }, bold: true }
-          } else if (count >= 1) {
-            // Met - green background
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "bbf7d0" } }
-            cell.font = { color: { argb: "166534" } }
-          }
-          cell.alignment = { horizontal: "center" }
-          colIndex++
         }
       }
 

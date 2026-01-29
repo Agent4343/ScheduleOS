@@ -1014,14 +1014,14 @@ function SchedulePageContent() {
                   {/* Daily Staffing Summary Rows */}
                   <tr className="bg-muted/30 border-t-2 border-primary/20">
                     <td className="border p-2 sticky left-0 bg-green-50 dark:bg-green-950 z-20 font-semibold text-green-700 dark:text-green-300 text-xs">
-                      Day - Ops
+                      Day Shift
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
-                        const count = getDailyCount(month, day, "dayOps")
+                        const count = getDailyCount(month, day, "dayTotal")
                         return (
                           <td
-                            key={`day-ops-${month}-${day}`}
+                            key={`day-total-${month}-${day}`}
                             className="border text-center w-8 min-w-[32px] h-6 bg-green-50 dark:bg-green-950 text-xs font-medium"
                           >
                             {count > 0 ? count : ""}
@@ -1032,272 +1032,17 @@ function SchedulePageContent() {
                   </tr>
                   <tr className="bg-muted/30">
                     <td className="border p-2 sticky left-0 bg-blue-50 dark:bg-blue-950 z-20 font-semibold text-blue-700 dark:text-blue-300 text-xs">
-                      Day - OCR
+                      Night Shift
                     </td>
                     {yearMonths.map(({ month, days }) =>
                       days.map((day) => {
-                        const count = getDailyCount(month, day, "dayOCR")
+                        const count = getDailyCount(month, day, "nightTotal")
                         return (
                           <td
-                            key={`day-ocr-${month}-${day}`}
+                            key={`night-total-${month}-${day}`}
                             className="border text-center w-8 min-w-[32px] h-6 bg-blue-50 dark:bg-blue-950 text-xs font-medium"
                           >
                             {count > 0 ? count : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  {/* Day Training Requirements - with alerts */}
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-purple-50 dark:bg-purple-950 z-20 font-semibold text-purple-700 dark:text-purple-300 text-xs">
-                      Day - CR Trained
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "dayCRTrained")
-                        const hasDayWorkers = getDailyCount(month, day, "dayTotal") > 0
-                        const isAlert = hasDayWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`day-cr-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-purple-50 dark:bg-purple-950"
-                            )}
-                            title={isAlert ? "ALERT: No Control Room trained worker on day shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasDayWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-amber-50 dark:bg-amber-950 z-20 font-semibold text-amber-700 dark:text-amber-300 text-xs">
-                      Day - Oil Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "dayOilTrained")
-                        const hasDayWorkers = getDailyCount(month, day, "dayTotal") > 0
-                        const isAlert = hasDayWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`day-oil-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-amber-50 dark:bg-amber-950"
-                            )}
-                            title={isAlert ? "ALERT: No Oil Operator trained worker on day shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasDayWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-cyan-50 dark:bg-cyan-950 z-20 font-semibold text-cyan-700 dark:text-cyan-300 text-xs">
-                      Day - Utility Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "dayUtilityTrained")
-                        const hasDayWorkers = getDailyCount(month, day, "dayTotal") > 0
-                        const isAlert = hasDayWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`day-utility-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-cyan-50 dark:bg-cyan-950"
-                            )}
-                            title={isAlert ? "ALERT: No Utility Operator trained worker on day shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasDayWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-orange-50 dark:bg-orange-950 z-20 font-semibold text-orange-700 dark:text-orange-300 text-xs">
-                      Day - Gas Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "dayGasTrained")
-                        const hasDayWorkers = getDailyCount(month, day, "dayTotal") > 0
-                        const isAlert = hasDayWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`day-gas-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-orange-50 dark:bg-orange-950"
-                            )}
-                            title={isAlert ? "ALERT: No Gas Operator trained worker on day shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasDayWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  {/* Night shift counts */}
-                  <tr className="bg-muted/30 border-t">
-                    <td className="border p-2 sticky left-0 bg-green-100 dark:bg-green-900 z-20 font-semibold text-green-800 dark:text-green-200 text-xs">
-                      Night - Ops
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightOps")
-                        return (
-                          <td
-                            key={`night-ops-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-green-100 dark:bg-green-900 text-xs font-medium"
-                          >
-                            {count > 0 ? count : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-blue-100 dark:bg-blue-900 z-20 font-semibold text-blue-800 dark:text-blue-200 text-xs">
-                      Night - OCR
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightOCR")
-                        return (
-                          <td
-                            key={`night-ocr-${month}-${day}`}
-                            className="border text-center w-8 min-w-[32px] h-6 bg-blue-100 dark:bg-blue-900 text-xs font-medium"
-                          >
-                            {count > 0 ? count : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  {/* Night Training Requirements - with alerts */}
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-purple-100 dark:bg-purple-900 z-20 font-semibold text-purple-800 dark:text-purple-200 text-xs">
-                      Night - CR Trained
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightCRTrained")
-                        const hasNightWorkers = getDailyCount(month, day, "nightTotal") > 0
-                        const isAlert = hasNightWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`night-cr-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-purple-100 dark:bg-purple-900"
-                            )}
-                            title={isAlert ? "ALERT: No Control Room trained worker on night shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasNightWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-amber-100 dark:bg-amber-900 z-20 font-semibold text-amber-800 dark:text-amber-200 text-xs">
-                      Night - Oil Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightOilTrained")
-                        const hasNightWorkers = getDailyCount(month, day, "nightTotal") > 0
-                        const isAlert = hasNightWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`night-oil-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-amber-100 dark:bg-amber-900"
-                            )}
-                            title={isAlert ? "ALERT: No Oil Operator trained worker on night shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasNightWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-cyan-100 dark:bg-cyan-900 z-20 font-semibold text-cyan-800 dark:text-cyan-200 text-xs">
-                      Night - Utility Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightUtilityTrained")
-                        const hasNightWorkers = getDailyCount(month, day, "nightTotal") > 0
-                        const isAlert = hasNightWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`night-utility-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-cyan-100 dark:bg-cyan-900"
-                            )}
-                            title={isAlert ? "ALERT: No Utility Operator trained worker on night shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasNightWorkers ? "!" : ""}
-                          </td>
-                        )
-                      })
-                    )}
-                  </tr>
-                  <tr className="bg-muted/30">
-                    <td className="border p-2 sticky left-0 bg-orange-100 dark:bg-orange-900 z-20 font-semibold text-orange-800 dark:text-orange-200 text-xs">
-                      Night - Gas Op
-                    </td>
-                    {yearMonths.map(({ month, days }) =>
-                      days.map((day) => {
-                        const count = getDailyCount(month, day, "nightGasTrained")
-                        const hasNightWorkers = getDailyCount(month, day, "nightTotal") > 0
-                        const isAlert = hasNightWorkers && count === 0
-                        const isMet = count >= 1
-                        return (
-                          <td
-                            key={`night-gas-${month}-${day}`}
-                            className={cn(
-                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium",
-                              isAlert ? "bg-red-200 dark:bg-red-900 text-red-800 dark:text-red-200" :
-                              isMet ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200" :
-                              "bg-orange-100 dark:bg-orange-900"
-                            )}
-                            title={isAlert ? "ALERT: No Gas Operator trained worker on night shift!" : isMet ? "Requirement met" : undefined}
-                          >
-                            {count > 0 ? count : hasNightWorkers ? "!" : ""}
                           </td>
                         )
                       })
@@ -1483,64 +1228,6 @@ function SchedulePageContent() {
               value={editForm.hireDate}
               onChange={(e) => setEditForm({ ...editForm, hireDate: e.target.value })}
             />
-          </div>
-
-          {/* Training/Certification Checkboxes */}
-          <div className="pt-2 space-y-2">
-            <Label className="text-sm font-semibold">Operator Training</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isOilOperatorTrained"
-                  checked={editForm.isOilOperatorTrained}
-                  onChange={(e) => setEditForm({ ...editForm, isOilOperatorTrained: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="isOilOperatorTrained" className="text-sm font-normal">
-                  Oil Operator
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isUtilityOperatorTrained"
-                  checked={editForm.isUtilityOperatorTrained}
-                  onChange={(e) => setEditForm({ ...editForm, isUtilityOperatorTrained: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="isUtilityOperatorTrained" className="text-sm font-normal">
-                  Utility Operator
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isGasOperatorTrained"
-                  checked={editForm.isGasOperatorTrained}
-                  onChange={(e) => setEditForm({ ...editForm, isGasOperatorTrained: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="isGasOperatorTrained" className="text-sm font-normal">
-                  Gas Operator
-                </Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isControlRoomTrained"
-                  checked={editForm.isControlRoomTrained}
-                  onChange={(e) => setEditForm({ ...editForm, isControlRoomTrained: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="isControlRoomTrained" className="text-sm font-normal">
-                  Control Room
-                </Label>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Select all certifications this worker has completed
-            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-b pb-4">
