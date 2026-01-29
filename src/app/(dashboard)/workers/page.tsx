@@ -497,7 +497,7 @@ export default function WorkersPage() {
         title="Add Worker"
         description="Add a new worker to your organization"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -506,6 +506,7 @@ export default function WorkersPage() {
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -516,6 +517,7 @@ export default function WorkersPage() {
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
           </div>
@@ -565,6 +567,7 @@ export default function WorkersPage() {
                 value={formData.position}
                 onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., Operator, Supervisor"
+                autoComplete="off"
               />
             </div>
           </div>
@@ -577,6 +580,7 @@ export default function WorkersPage() {
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -622,7 +626,7 @@ export default function WorkersPage() {
         title="Edit Worker"
         description="Update worker information"
       >
-        <form onSubmit={handleUpdate} className="space-y-4">
+        <form onSubmit={handleUpdate} className="space-y-4" autoComplete="off">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
@@ -631,6 +635,7 @@ export default function WorkersPage() {
                 value={editFormData.name}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -641,6 +646,7 @@ export default function WorkersPage() {
                 value={editFormData.email}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
           </div>
@@ -703,6 +709,7 @@ export default function WorkersPage() {
                 value={editFormData.position}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., Operator, Supervisor"
+                autoComplete="off"
               />
             </div>
           </div>
@@ -715,6 +722,7 @@ export default function WorkersPage() {
                 type="tel"
                 value={editFormData.phone}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
