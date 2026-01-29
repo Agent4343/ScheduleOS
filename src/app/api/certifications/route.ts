@@ -9,6 +9,10 @@ const createCertificationSchema = z.object({
   description: z.string().max(500).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   isRequired: z.boolean().optional(),
+  requireOnSchedule: z.boolean().optional(),
+  minPerDayShift: z.number().int().min(1).optional(),
+  minPerNightShift: z.number().int().min(1).optional(),
+  expiryWarningDays: z.number().int().min(7).optional(),
 })
 
 export async function GET(_request: NextRequest) {
@@ -76,6 +80,10 @@ export async function POST(request: NextRequest) {
         description: validatedData.description,
         color: validatedData.color || "#3B82F6",
         isRequired: validatedData.isRequired || false,
+        requireOnSchedule: validatedData.requireOnSchedule || false,
+        minPerDayShift: validatedData.minPerDayShift || 1,
+        minPerNightShift: validatedData.minPerNightShift || 1,
+        expiryWarningDays: validatedData.expiryWarningDays || 180,
         organizationId: session.user.organizationId,
       },
       include: {

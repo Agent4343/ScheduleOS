@@ -205,7 +205,7 @@ export async function GET(request: NextRequest) {
       // Build user certification lookup
       const userCertMap = new Map<string, Set<string>>()
       for (const user of users) {
-        const certIds = new Set(user.certifications.map(c => c.certificationTypeId))
+        const certIds = new Set<string>(user.certifications.map((c: { certificationTypeId: string }) => c.certificationTypeId))
         userCertMap.set(user.id, certIds)
       }
 

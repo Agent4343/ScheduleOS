@@ -11,8 +11,14 @@ const assignCertificationSchema = z.object({
   notes: z.string().max(500).optional(),
 })
 
+// Supports both simple array of IDs and detailed objects with expiry dates
 const bulkUpdateSchema = z.object({
-  certificationIds: z.array(z.string()),
+  certificationIds: z.array(z.string()).optional(),
+  certifications: z.array(z.object({
+    certificationId: z.string(),
+    expiresAt: z.string().optional().nullable(),
+    earnedAt: z.string().optional(),
+  })).optional(),
 })
 
 export async function GET(
@@ -86,8 +92,8 @@ export async function POST(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Check if this is a bulk update (array of certification IDs)
-    if (body.certificationIds !== undefined) {
+    // Check if this is a bulk update (array of certification IDs or objects)
+    if (body.certificationIds !== undefined || body.certifications !== undefined) {
       const validatedData = bulkUpdateSchema.parse(body)
 
       // Get all certification types for this organization
@@ -99,18 +105,33 @@ export async function POST(
         select: { id: true },
       })
 
-      const validCertIds = new Set(orgCertifications.map(c => c.id))
-      const requestedCertIds = validatedData.certificationIds.filter(id => validCertIds.has(id))
+      const validCertIds = new Set(orgCertifications.map((c: { id: string }) => c.id))
+
+      // Handle both old format (certificationIds array) and new format (certifications array with expiry)
+      let requestedCerts: Array<{ certificationId: string; expiresAt?: string | null; earnedAt?: string }> = []
+
+      if (validatedData.certifications && validatedData.certifications.length > 0) {
+        // New format with expiry dates
+        requestedCerts = validatedData.certifications.filter(c => validCertIds.has(c.certificationId))
+      } else if (validatedData.certificationIds) {
+        // Old format - just IDs
+        requestedCerts = validatedData.certificationIds
+          .filter(certId => validCertIds.has(certId))
+          .map(certId => ({ certificationId: certId }))
+      }
+
+      const requestedCertIds = requestedCerts.map(c => c.certificationId)
 
       // Get current certifications
       const currentCerts = await prisma.userCertification.findMany({
         where: { userId: id },
-        select: { certificationTypeId: true },
+        select: { certificationTypeId: true, expiresAt: true },
       })
-      const currentCertIds = new Set(currentCerts.map(c => c.certificationTypeId))
+      const currentCertIds = new Set<string>(currentCerts.map((c: { certificationTypeId: string }) => c.certificationTypeId))
 
-      // Determine what to add and remove
-      const toAdd = requestedCertIds.filter(certId => !currentCertIds.has(certId))
+      // Determine what to add, update, and remove
+      const toAdd = requestedCerts.filter(c => !currentCertIds.has(c.certificationId))
+      const toUpdate = requestedCerts.filter(c => currentCertIds.has(c.certificationId))
       const toRemove = Array.from(currentCertIds).filter(certId => !requestedCertIds.includes(certId))
 
       // Perform updates in a transaction
@@ -122,12 +143,29 @@ export async function POST(
             certificationTypeId: { in: toRemove },
           },
         }),
-        // Add certifications
-        ...toAdd.map(certificationTypeId =>
+        // Add new certifications
+        ...toAdd.map(cert =>
           prisma.userCertification.create({
             data: {
               userId: id,
-              certificationTypeId,
+              certificationTypeId: cert.certificationId,
+              earnedAt: cert.earnedAt ? new Date(cert.earnedAt) : new Date(),
+              expiresAt: cert.expiresAt ? new Date(cert.expiresAt) : null,
+            },
+          })
+        ),
+        // Update existing certifications (expiry dates)
+        ...toUpdate.map(cert =>
+          prisma.userCertification.update({
+            where: {
+              userId_certificationTypeId: {
+                userId: id,
+                certificationTypeId: cert.certificationId,
+              },
+            },
+            data: {
+              expiresAt: cert.expiresAt ? new Date(cert.expiresAt) : null,
+              earnedAt: cert.earnedAt ? new Date(cert.earnedAt) : undefined,
             },
           })
         ),

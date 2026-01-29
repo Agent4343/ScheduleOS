@@ -131,6 +131,10 @@ interface CertificationType {
   color: string
   isRequired: boolean
   isActive: boolean
+  requireOnSchedule: boolean
+  minPerDayShift: number
+  minPerNightShift: number
+  expiryWarningDays: number
   _count: { userCertifications: number }
 }
 
@@ -247,7 +251,25 @@ export default function SettingsPage() {
   const [showCertForm, setShowCertForm] = useState(false)
   const [editingCert, setEditingCert] = useState<CertificationType | null>(null)
   const [savingCert, setSavingCert] = useState(false)
-  const [newCert, setNewCert] = useState<{ name: string; description: string; color: string; isRequired: boolean }>({ name: "", description: "", color: "#3B82F6", isRequired: false })
+  const [newCert, setNewCert] = useState<{
+    name: string
+    description: string
+    color: string
+    isRequired: boolean
+    requireOnSchedule: boolean
+    minPerDayShift: number
+    minPerNightShift: number
+    expiryWarningDays: number
+  }>({
+    name: "",
+    description: "",
+    color: "#3B82F6",
+    isRequired: false,
+    requireOnSchedule: false,
+    minPerDayShift: 1,
+    minPerNightShift: 1,
+    expiryWarningDays: 180,
+  })
 
   // Subscription state
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
@@ -588,7 +610,16 @@ export default function SettingsPage() {
 
   // Certification handlers
   const resetCertForm = () => {
-    setNewCert({ name: "", description: "", color: "#3B82F6", isRequired: false })
+    setNewCert({
+      name: "",
+      description: "",
+      color: "#3B82F6",
+      isRequired: false,
+      requireOnSchedule: false,
+      minPerDayShift: 1,
+      minPerNightShift: 1,
+      expiryWarningDays: 180,
+    })
     setEditingCert(null)
     setShowCertForm(false)
   }
@@ -600,6 +631,10 @@ export default function SettingsPage() {
       description: cert.description || "",
       color: cert.color,
       isRequired: cert.isRequired,
+      requireOnSchedule: cert.requireOnSchedule || false,
+      minPerDayShift: cert.minPerDayShift || 1,
+      minPerNightShift: cert.minPerNightShift || 1,
+      expiryWarningDays: cert.expiryWarningDays || 180,
     })
     setShowCertForm(true)
   }
@@ -1999,6 +2034,68 @@ export default function SettingsPage() {
                       Required for all workers
                     </label>
                   </div>
+
+                  {/* Schedule Staffing Requirements */}
+                  <div className="md:col-span-2 pt-3 border-t">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newCert.requireOnSchedule}
+                        onChange={(e) => setNewCert({ ...newCert, requireOnSchedule: e.target.checked })}
+                        className="h-4 w-4 rounded"
+                      />
+                      <span className="font-medium">Require on schedule</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1 ml-6">
+                      Alert if no worker with this certification is scheduled
+                    </p>
+                  </div>
+
+                  {newCert.requireOnSchedule && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="min-day">Min. per Day Shift</Label>
+                        <Input
+                          id="min-day"
+                          type="number"
+                          min={1}
+                          value={newCert.minPerDayShift}
+                          onChange={(e) => setNewCert({ ...newCert, minPerDayShift: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="min-night">Min. per Night Shift</Label>
+                        <Input
+                          id="min-night"
+                          type="number"
+                          min={1}
+                          value={newCert.minPerNightShift}
+                          onChange={(e) => setNewCert({ ...newCert, minPerNightShift: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Expiry Warning */}
+                  <div className="md:col-span-2 pt-3 border-t space-y-2">
+                    <Label htmlFor="expiry-warning">Expiry Warning (days before)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="expiry-warning"
+                        type="number"
+                        min={7}
+                        className="w-24"
+                        value={newCert.expiryWarningDays}
+                        onChange={(e) => setNewCert({ ...newCert, expiryWarningDays: parseInt(e.target.value) || 180 })}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        ({Math.round(newCert.expiryWarningDays / 30)} months)
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Send reminder when certification is about to expire
+                    </p>
+                  </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" onClick={resetCertForm}>Cancel</Button>
@@ -2022,7 +2119,8 @@ export default function SettingsPage() {
                       <p className="font-medium">{cert.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {cert._count.userCertifications} worker{cert._count.userCertifications !== 1 ? "s" : ""}
-                        {cert.isRequired && " • Required"}
+                        {cert.isRequired && " • Required for all"}
+                        {cert.requireOnSchedule && ` • Min ${cert.minPerDayShift}D/${cert.minPerNightShift}N per shift`}
                       </p>
                     </div>
                   </div>

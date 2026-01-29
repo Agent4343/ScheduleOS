@@ -5,10 +5,6 @@ import { authOptions } from "@/lib/auth"
 import { ShiftType } from "@/types"
 import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
 
-interface OrgSettings {
-  minStaffOperators?: number
-  minStaffingAlertEnabled?: boolean
-}
 
 export async function GET() {
   try {
@@ -59,7 +55,8 @@ export async function GET() {
       upcomingShutdowns,
       weekSchedules,
       staffingRules,
-      organization,
+      _organization,
+      requiredCertifications,
     ] = await Promise.all([
       // Total active workers
       prisma.user.count({
@@ -109,6 +106,9 @@ export async function GET() {
               id: true,
               name: true,
               positionType: true,
+              certifications: {
+                select: { certificationTypeId: true },
+              },
             },
           },
         },
@@ -124,11 +124,26 @@ export async function GET() {
         where: { id: organizationId },
         select: { settings: true },
       }),
+
+      // Certification types with schedule requirements
+      prisma.certificationType.findMany({
+        where: {
+          organizationId,
+          isActive: true,
+          requireOnSchedule: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          minPerDayShift: true,
+          minPerNightShift: true,
+        },
+      }),
     ])
 
     // Calculate staffing gaps for the week based on staffing rules
     let staffingGaps = 0
-    const gapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string }> = []
+    const gapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string; certificationName?: string }> = []
 
     // Group schedules by date
     const schedulesByDate = new Map<string, typeof weekSchedules>()
@@ -166,6 +181,41 @@ export async function GET() {
             shiftType: rule.shiftType,
             shortage: rule.minWorkers - count,
             positionType: rule.positionType || undefined,
+          })
+        }
+      }
+
+      // Check certification-based staffing requirements
+      for (const cert of requiredCertifications) {
+        // Check day shift
+        const dayShiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.DAY)
+        const dayShiftWithCert = dayShiftSchedules.filter(
+          (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
+            s.user.certifications.some(c => c.certificationTypeId === cert.id)
+        )
+        if (dayShiftWithCert.length < cert.minPerDayShift) {
+          staffingGaps++
+          gapDetails.push({
+            date: checkDate,
+            shiftType: ShiftType.DAY,
+            shortage: cert.minPerDayShift - dayShiftWithCert.length,
+            certificationName: cert.name,
+          })
+        }
+
+        // Check night shift
+        const nightShiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === ShiftType.NIGHT)
+        const nightShiftWithCert = nightShiftSchedules.filter(
+          (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
+            s.user.certifications.some(c => c.certificationTypeId === cert.id)
+        )
+        if (nightShiftWithCert.length < cert.minPerNightShift) {
+          staffingGaps++
+          gapDetails.push({
+            date: checkDate,
+            shiftType: ShiftType.NIGHT,
+            shortage: cert.minPerNightShift - nightShiftWithCert.length,
+            certificationName: cert.name,
           })
         }
       }

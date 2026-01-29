@@ -113,7 +113,7 @@ export default function WorkersPage() {
   const [crews, setCrews] = useState<Crew[]>([])
   const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
   const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
-  const [selectedCertifications, setSelectedCertifications] = useState<string[]>([])
+  const [selectedCertifications, setSelectedCertifications] = useState<Map<string, { expiresAt: string | null; earnedAt: string }>>(new Map())
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -215,17 +215,24 @@ export default function WorkersPage() {
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
     })
-    // Fetch user's certifications
+    // Fetch user's certifications with expiry dates
     try {
       const res = await fetch(`/api/users/${user.id}/certifications`)
       const data = await res.json()
       if (data.success) {
-        setSelectedCertifications(data.data.map((c: { certificationTypeId: string }) => c.certificationTypeId))
+        const certMap = new Map<string, { expiresAt: string | null; earnedAt: string }>()
+        for (const cert of data.data) {
+          certMap.set(cert.certificationTypeId, {
+            expiresAt: cert.expiresAt ? cert.expiresAt.split("T")[0] : null,
+            earnedAt: cert.earnedAt ? cert.earnedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+          })
+        }
+        setSelectedCertifications(certMap)
       } else {
-        setSelectedCertifications([])
+        setSelectedCertifications(new Map())
       }
     } catch {
-      setSelectedCertifications([])
+      setSelectedCertifications(new Map())
     }
     setIsEditModalOpen(true)
     setOpenMenuId(null)
@@ -326,10 +333,15 @@ export default function WorkersPage() {
       if (data.success) {
         // Update certifications if any certification types exist
         if (certificationTypes.length > 0) {
+          const certifications = Array.from(selectedCertifications.entries()).map(([certId, certData]) => ({
+            certificationId: certId,
+            expiresAt: certData.expiresAt,
+            earnedAt: certData.earnedAt,
+          }))
           await fetch(`/api/users/${editingUser.id}/certifications`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ certificationIds: selectedCertifications }),
+            body: JSON.stringify({ certifications }),
           })
         }
 
@@ -338,7 +350,7 @@ export default function WorkersPage() {
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
-        setSelectedCertifications([])
+        setSelectedCertifications(new Map())
         addToast({ type: "success", message: "Worker updated successfully" })
       } else {
         // Show detailed validation errors if available
@@ -722,7 +734,7 @@ export default function WorkersPage() {
         onClose={() => {
           setIsEditModalOpen(false)
           setEditingUser(null)
-          setSelectedCertifications([])
+          setSelectedCertifications(new Map())
         }}
         title="Edit Worker"
         description="Update worker information"
@@ -841,30 +853,77 @@ export default function WorkersPage() {
           {certificationTypes.length > 0 && (
             <div className="space-y-3 pt-2">
               <Label className="text-sm font-medium">Training & Certifications</Label>
-              <p className="text-xs text-muted-foreground">Select all certifications this worker has completed</p>
-              <div className="grid grid-cols-2 gap-3">
-                {certificationTypes.map((cert) => (
-                  <label key={cert.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCertifications.includes(cert.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCertifications((prev) => [...prev, cert.id])
-                        } else {
-                          setSelectedCertifications((prev) => prev.filter((id) => id !== cert.id))
-                        }
-                      }}
-                      className="rounded border-gray-300"
-                    />
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: cert.color }}
-                    />
-                    {cert.name}
-                    {cert.isRequired && <span className="text-xs text-muted-foreground">(Required)</span>}
-                  </label>
-                ))}
+              <p className="text-xs text-muted-foreground">Select certifications and set expiry dates (optional)</p>
+              <div className="space-y-3">
+                {certificationTypes.map((cert) => {
+                  const isSelected = selectedCertifications.has(cert.id)
+                  const certData = selectedCertifications.get(cert.id)
+                  return (
+                    <div key={cert.id} className="p-3 border rounded-lg space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newMap = new Map(selectedCertifications)
+                            if (e.target.checked) {
+                              newMap.set(cert.id, {
+                                expiresAt: null,
+                                earnedAt: new Date().toISOString().split("T")[0],
+                              })
+                            } else {
+                              newMap.delete(cert.id)
+                            }
+                            setSelectedCertifications(newMap)
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: cert.color }}
+                        />
+                        <span className="font-medium">{cert.name}</span>
+                        {cert.isRequired && <span className="text-xs text-muted-foreground">(Required)</span>}
+                      </label>
+                      {isSelected && (
+                        <div className="ml-6 flex gap-4 text-xs">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Earned</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.earnedAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  earnedAt: e.target.value,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Expires</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.expiresAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  expiresAt: e.target.value || null,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -873,7 +932,7 @@ export default function WorkersPage() {
             <Button type="button" variant="outline" onClick={() => {
               setIsEditModalOpen(false)
               setEditingUser(null)
-              setSelectedCertifications([])
+              setSelectedCertifications(new Map())
             }}>
               Cancel
             </Button>

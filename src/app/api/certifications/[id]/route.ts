@@ -10,6 +10,10 @@ const updateCertificationSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
   isRequired: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  requireOnSchedule: z.boolean().optional(),
+  minPerDayShift: z.number().int().min(1).optional(),
+  minPerNightShift: z.number().int().min(1).optional(),
+  expiryWarningDays: z.number().int().min(7).optional(),
 })
 
 export async function GET(

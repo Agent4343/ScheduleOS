@@ -351,6 +351,15 @@ model CertificationType {
   color       String   @default("#3B82F6") // Hex color for display
   isRequired  Boolean  @default(false)     // Required for all workers?
   isActive    Boolean  @default(true)
+
+  // Schedule staffing requirements
+  requireOnSchedule Boolean @default(false)  // Must have worker with this cert on shift?
+  minPerDayShift    Int     @default(1)      // Minimum workers on day shift
+  minPerNightShift  Int     @default(1)      // Minimum workers on night shift
+
+  // Expiry reminders (days before expiry)
+  expiryWarningDays Int     @default(180)    // Default 6 months warning
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
