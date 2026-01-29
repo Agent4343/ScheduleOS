@@ -1609,6 +1609,27 @@ function SchedulePageContent() {
             </div>
           ))}
 
+          {/* Training coverage summary */}
+          {breakdownWorkers.length > 0 && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
+              <div className="flex flex-wrap gap-2">
+                <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">
+                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length}
+                </span>
+                <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-2 py-1 rounded">
+                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length}
+                </span>
+                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length}
+                </span>
+                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">
+                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Worker list */}
           <div className="space-y-2">
             <h4 className="font-medium text-sm text-muted-foreground">
