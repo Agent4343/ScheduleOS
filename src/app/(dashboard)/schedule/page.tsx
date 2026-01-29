@@ -1613,20 +1613,26 @@ function SchedulePageContent() {
           {breakdownWorkers.length > 0 && (
             <div className="p-3 bg-muted/50 rounded-md">
               <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Note: Each worker can only cover ONE role at a time
+              </p>
               <div className="flex flex-wrap gap-2">
                 <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">
-                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length}
+                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length} available
                 </span>
                 <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-2 py-1 rounded">
-                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length}
+                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length} available
                 </span>
                 <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length}
+                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length} available
                 </span>
                 <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">
-                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length}
+                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length} available
                 </span>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Total workers: {breakdownWorkers.length} — Can fill up to {breakdownWorkers.length} role{breakdownWorkers.length !== 1 ? 's' : ''} total
+              </p>
             </div>
           )}
 
