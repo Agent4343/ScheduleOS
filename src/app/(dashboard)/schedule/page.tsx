@@ -519,12 +519,14 @@ function SchedulePageContent() {
 
   // Get workers on a specific day and shift
   const getWorkersOnShift = useMemo(() => {
-    // Build a map of date -> shift -> workers
+    // Build a map of date -> shift -> workers (using Set to deduplicate)
+    const shiftWorkerIds: Record<string, { DAY: Set<string>; NIGHT: Set<string> }> = {}
     const shiftWorkers: Record<string, { DAY: Worker[]; NIGHT: Worker[] }> = {}
 
     for (const schedule of schedules) {
       const dateStr = schedule.date.split("T")[0]
-      if (!shiftWorkers[dateStr]) {
+      if (!shiftWorkerIds[dateStr]) {
+        shiftWorkerIds[dateStr] = { DAY: new Set(), NIGHT: new Set() }
         shiftWorkers[dateStr] = { DAY: [], NIGHT: [] }
       }
 
@@ -533,8 +535,15 @@ function SchedulePageContent() {
 
       const worker = workers.find(w => w.id === schedule.user.id)
       if (worker) {
-        if (isDay) shiftWorkers[dateStr].DAY.push(worker)
-        if (isNight) shiftWorkers[dateStr].NIGHT.push(worker)
+        // Only add if not already in the set (ensures one person per role)
+        if (isDay && !shiftWorkerIds[dateStr].DAY.has(worker.id)) {
+          shiftWorkerIds[dateStr].DAY.add(worker.id)
+          shiftWorkers[dateStr].DAY.push(worker)
+        }
+        if (isNight && !shiftWorkerIds[dateStr].NIGHT.has(worker.id)) {
+          shiftWorkerIds[dateStr].NIGHT.add(worker.id)
+          shiftWorkers[dateStr].NIGHT.push(worker)
+        }
       }
     }
 
