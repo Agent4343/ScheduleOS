@@ -71,6 +71,14 @@ interface CustomRole {
   baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
 }
 
+interface CertificationType {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  isRequired: boolean
+}
+
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
   ACTIVE: { variant: "default", label: "Active" },
   INACTIVE: { variant: "secondary", label: "Inactive" },
@@ -90,6 +98,8 @@ export default function WorkersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
+  const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
+  const [selectedCertifications, setSelectedCertifications] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -120,29 +130,28 @@ export default function WorkersPage() {
     customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
-    isControlRoomTrained: false,
-    isOilOperatorTrained: false,
-    isUtilityOperatorTrained: false,
-    isGasOperatorTrained: false,
   })
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes, rolesRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
           fetch("/api/roles"),
+          fetch("/api/certifications"),
         ])
 
         const usersData = await usersRes.json()
         const crewsData = await crewsRes.json()
         const rolesData = await rolesRes.json()
+        const certsData = await certsRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
         if (rolesData.success) setCustomRoles(rolesData.data)
+        if (certsData.success) setCertificationTypes(certsData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -175,7 +184,7 @@ export default function WorkersPage() {
     return matchesSearch && matchesStatus && matchesCrew
   })
 
-  function openEditModal(user: User) {
+  async function openEditModal(user: User) {
     setEditingUser(user)
     setEditFormData({
       name: user.name || "",
@@ -187,11 +196,19 @@ export default function WorkersPage() {
       customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
-      isControlRoomTrained: user.isControlRoomTrained || false,
-      isOilOperatorTrained: user.isOilOperatorTrained || false,
-      isUtilityOperatorTrained: user.isUtilityOperatorTrained || false,
-      isGasOperatorTrained: user.isGasOperatorTrained || false,
     })
+    // Fetch user's certifications
+    try {
+      const res = await fetch(`/api/users/${user.id}/certifications`)
+      const data = await res.json()
+      if (data.success) {
+        setSelectedCertifications(data.data.map((c: { certificationTypeId: string }) => c.certificationTypeId))
+      } else {
+        setSelectedCertifications([])
+      }
+    } catch {
+      setSelectedCertifications([])
+    }
     setIsEditModalOpen(true)
     setOpenMenuId(null)
   }
@@ -247,6 +264,7 @@ export default function WorkersPage() {
     setSubmitting(true)
 
     try {
+      // Update user info
       const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -260,21 +278,27 @@ export default function WorkersPage() {
           customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
-          isControlRoomTrained: editFormData.isControlRoomTrained,
-          isOilOperatorTrained: editFormData.isOilOperatorTrained,
-          isUtilityOperatorTrained: editFormData.isUtilityOperatorTrained,
-          isGasOperatorTrained: editFormData.isGasOperatorTrained,
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
+        // Update certifications if any certification types exist
+        if (certificationTypes.length > 0) {
+          await fetch(`/api/users/${editingUser.id}/certifications`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ certificationIds: selectedCertifications }),
+          })
+        }
+
         setUsers((prev) =>
           prev.map((u) => (u.id === editingUser.id ? data.data : u))
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        setSelectedCertifications([])
         addToast({ type: "success", message: "Worker updated successfully" })
       } else {
         // Show detailed validation errors if available
@@ -622,6 +646,7 @@ export default function WorkersPage() {
         onClose={() => {
           setIsEditModalOpen(false)
           setEditingUser(null)
+          setSelectedCertifications([])
         }}
         title="Edit Worker"
         description="Update worker information"
@@ -737,52 +762,42 @@ export default function WorkersPage() {
           </div>
 
           {/* Training Certifications */}
-          <div className="space-y-3 pt-2">
-            <Label className="text-sm font-medium">Training Certifications</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editFormData.isControlRoomTrained}
-                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isControlRoomTrained: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                Control Room Trained
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editFormData.isOilOperatorTrained}
-                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isOilOperatorTrained: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                Oil Operator Trained
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editFormData.isUtilityOperatorTrained}
-                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isUtilityOperatorTrained: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                Utility Operator Trained
-              </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editFormData.isGasOperatorTrained}
-                  onChange={(e) => setEditFormData((prev) => ({ ...prev, isGasOperatorTrained: e.target.checked }))}
-                  className="rounded border-gray-300"
-                />
-                Gas Operator Trained
-              </label>
+          {certificationTypes.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <Label className="text-sm font-medium">Training & Certifications</Label>
+              <p className="text-xs text-muted-foreground">Select all certifications this worker has completed</p>
+              <div className="grid grid-cols-2 gap-3">
+                {certificationTypes.map((cert) => (
+                  <label key={cert.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCertifications.includes(cert.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedCertifications((prev) => [...prev, cert.id])
+                        } else {
+                          setSelectedCertifications((prev) => prev.filter((id) => id !== cert.id))
+                        }
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: cert.color }}
+                    />
+                    {cert.name}
+                    {cert.isRequired && <span className="text-xs text-muted-foreground">(Required)</span>}
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => {
               setIsEditModalOpen(false)
               setEditingUser(null)
+              setSelectedCertifications([])
             }}>
               Cancel
             </Button>

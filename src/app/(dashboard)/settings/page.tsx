@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   FileText,
   Loader2,
+  Award,
 } from "lucide-react"
 
 interface Organization {
@@ -118,6 +119,16 @@ interface CustomRole {
   baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
   isActive: boolean
   _count: { users: number }
+}
+
+interface CertificationType {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  isRequired: boolean
+  isActive: boolean
+  _count: { userCertifications: number }
 }
 
 const DEFAULT_SHIFT_COLORS = {
@@ -211,6 +222,13 @@ export default function SettingsPage() {
   const [savingRole, setSavingRole] = useState(false)
   const [newRole, setNewRole] = useState<{ name: string; description: string; color: string; baseRole: "ADMIN" | "SUPERVISOR" | "WORKER" }>({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" })
 
+  // Certifications state
+  const [certifications, setCertifications] = useState<CertificationType[]>([])
+  const [showCertForm, setShowCertForm] = useState(false)
+  const [editingCert, setEditingCert] = useState<CertificationType | null>(null)
+  const [savingCert, setSavingCert] = useState(false)
+  const [newCert, setNewCert] = useState<{ name: string; description: string; color: string; isRequired: boolean }>({ name: "", description: "", color: "#3B82F6", isRequired: false })
+
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
@@ -228,12 +246,13 @@ export default function SettingsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes] = await Promise.all([
+      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes, certsRes] = await Promise.all([
         fetch("/api/organization"),
         fetch("/api/rotation-patterns"),
         fetch("/api/custom-shift-types"),
         fetch("/api/holidays"),
         fetch("/api/roles"),
+        fetch("/api/certifications"),
       ])
 
       const orgData = await orgRes.json()
@@ -241,6 +260,7 @@ export default function SettingsPage() {
       const shiftTypesData = await shiftTypesRes.json()
       const holidaysData = await holidaysRes.json()
       const rolesData = await rolesRes.json()
+      const certsData = await certsRes.json()
 
       if (orgData.success) {
         setOrganization(orgData.data)
@@ -252,6 +272,7 @@ export default function SettingsPage() {
       if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
       if (holidaysData.success) setHolidays(holidaysData.data)
       if (rolesData.success) setCustomRoles(rolesData.data)
+      if (certsData.success) setCertifications(certsData.data)
     } catch (error) {
       console.error("Failed to fetch data:", error)
     } finally {
@@ -531,6 +552,80 @@ export default function SettingsPage() {
       if (data.success) {
         setCustomRoles(customRoles.filter(r => r.id !== roleId))
         showMessage("Role deleted")
+      } else {
+        showMessage(data.error || "Failed to delete")
+      }
+    } catch {
+      showMessage("Failed to delete")
+    }
+  }
+
+  // Certification handlers
+  const resetCertForm = () => {
+    setNewCert({ name: "", description: "", color: "#3B82F6", isRequired: false })
+    setEditingCert(null)
+    setShowCertForm(false)
+  }
+
+  const startEditCert = (cert: CertificationType) => {
+    setEditingCert(cert)
+    setNewCert({
+      name: cert.name,
+      description: cert.description || "",
+      color: cert.color,
+      isRequired: cert.isRequired,
+    })
+    setShowCertForm(true)
+  }
+
+  const handleSaveCert = async () => {
+    if (!newCert.name.trim()) {
+      showMessage("Certification name is required")
+      return
+    }
+
+    setSavingCert(true)
+
+    try {
+      const url = editingCert
+        ? `/api/certifications/${editingCert.id}`
+        : "/api/certifications"
+
+      const response = await fetch(url, {
+        method: editingCert ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCert),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        const certsRes = await fetch("/api/certifications")
+        const certsData = await certsRes.json()
+        if (certsData.success) setCertifications(certsData.data)
+
+        showMessage(editingCert ? "Certification updated" : "Certification created")
+        resetCertForm()
+      } else {
+        showMessage(data.error || "Failed to save certification")
+      }
+    } catch {
+      showMessage("Failed to save certification")
+    } finally {
+      setSavingCert(false)
+    }
+  }
+
+  const handleDeleteCert = async (certId: string) => {
+    if (!confirm("Delete this certification? Workers with this certification will have it removed.")) return
+
+    try {
+      const response = await fetch(`/api/certifications/${certId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setCertifications(certifications.filter(c => c.id !== certId))
+        showMessage("Certification deleted")
       } else {
         showMessage(data.error || "Failed to delete")
       }
@@ -1708,6 +1803,139 @@ export default function SettingsPage() {
               ))}
               {customRoles.length === 0 && (
                 <p className="text-center text-muted-foreground py-4">No custom roles</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Training Certifications */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  Training & Certifications
+                </CardTitle>
+                <CardDescription>Define training certifications for your organization</CardDescription>
+              </div>
+              {isAdmin && !showCertForm && (
+                <Button size="sm" onClick={() => setShowCertForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Certification
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                Create certifications specific to your business (e.g., Forklift Operator, Food Safety, First Aid).
+                Workers can be assigned certifications in their profile.
+              </p>
+            </div>
+
+            {showCertForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">{editingCert ? "Edit" : "New"} Certification</h4>
+                  <Button variant="ghost" size="sm" onClick={resetCertForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="cert-name">Name</Label>
+                    <Input
+                      id="cert-name"
+                      placeholder="e.g., Forklift Operator"
+                      value={newCert.name}
+                      onChange={(e) => setNewCert({ ...newCert, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cert-color">Color</Label>
+                    <div className="flex gap-2">
+                      <input
+                        id="cert-color"
+                        type="color"
+                        value={newCert.color}
+                        onChange={(e) => setNewCert({ ...newCert, color: e.target.value })}
+                        className="w-10 h-10 rounded cursor-pointer"
+                      />
+                      <Input
+                        value={newCert.color}
+                        onChange={(e) => setNewCert({ ...newCert, color: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="cert-description">Description</Label>
+                    <Input
+                      id="cert-description"
+                      placeholder="Optional description"
+                      value={newCert.description}
+                      onChange={(e) => setNewCert({ ...newCert, description: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newCert.isRequired}
+                        onChange={(e) => setNewCert({ ...newCert, isRequired: e.target.checked })}
+                        className="h-4 w-4 rounded"
+                      />
+                      Required for all workers
+                    </label>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetCertForm}>Cancel</Button>
+                  <Button onClick={handleSaveCert} disabled={savingCert}>
+                    {savingCert ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {editingCert ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {certifications.map((cert) => (
+                <div key={cert.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: cert.color }}
+                    />
+                    <div>
+                      <p className="font-medium">{cert.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {cert._count.userCertifications} worker{cert._count.userCertifications !== 1 ? "s" : ""}
+                        {cert.isRequired && " • Required"}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditCert(cert)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteCert(cert.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {certifications.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No certifications defined yet. Add certifications specific to your industry.
+                </p>
               )}
             </div>
           </CardContent>

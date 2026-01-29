@@ -74,6 +74,7 @@ model Organization {
   customShiftTypes CustomShiftType[]
   customRoles      CustomRole[]
   aiChatSessions   AIChatSession[]
+  certificationTypes CertificationType[]
 }
 
 // Department - allows Enterprise orgs to have separate calendars/teams
@@ -146,6 +147,7 @@ model User {
   notifications   Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
   aiChatSessions  AIChatSession[]
+  certifications  UserCertification[]
 
   @@index([organizationId])
   @@index([departmentId])
@@ -313,6 +315,50 @@ model CustomShiftType {
 
   @@unique([organizationId, code])
   @@index([organizationId])
+}
+
+// Certification types that organizations can define
+model CertificationType {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Forklift Operator", "Food Safety", "First Aid"
+  description String?
+  color       String   @default("#3B82F6") // Hex color for display
+  isRequired  Boolean  @default(false)     // Required for all workers?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Users with this certification
+  userCertifications UserCertification[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// Junction table for user certifications
+model UserCertification {
+  id        String    @id @default(cuid())
+  earnedAt  DateTime  @default(now())  // When certification was earned
+  expiresAt DateTime?                   // Optional expiration date
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // User
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Certification type
+  certificationTypeId String
+  certificationType   CertificationType @relation(fields: [certificationTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, certificationTypeId])
+  @@index([userId])
+  @@index([certificationTypeId])
 }
 
 model TimeOffRequest {
