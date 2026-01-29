@@ -34,6 +34,9 @@ import {
   FileText,
   Loader2,
   Award,
+  CreditCard,
+  Zap,
+  CheckCircle2,
 } from "lucide-react"
 
 interface Organization {
@@ -129,6 +132,23 @@ interface CertificationType {
   isRequired: boolean
   isActive: boolean
   _count: { userCertifications: number }
+}
+
+interface SubscriptionData {
+  tier: string
+  status: string
+  tierName: string
+  price: number
+  workerLimit: number
+  workerCount: number
+  workersRemaining: number
+  trialEndsAt: string | null
+  trialDaysRemaining: number | null
+  subscriptionEndsAt: string | null
+  features: string[]
+  canAddWorkers: boolean
+  isAtLimit: boolean
+  isTrialExpired: boolean
 }
 
 const DEFAULT_SHIFT_COLORS = {
@@ -229,6 +249,9 @@ export default function SettingsPage() {
   const [savingCert, setSavingCert] = useState(false)
   const [newCert, setNewCert] = useState<{ name: string; description: string; color: string; isRequired: boolean }>({ name: "", description: "", color: "#3B82F6", isRequired: false })
 
+  // Subscription state
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
+
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
@@ -246,13 +269,14 @@ export default function SettingsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes, certsRes] = await Promise.all([
+      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes, certsRes, subRes] = await Promise.all([
         fetch("/api/organization"),
         fetch("/api/rotation-patterns"),
         fetch("/api/custom-shift-types"),
         fetch("/api/holidays"),
         fetch("/api/roles"),
         fetch("/api/certifications"),
+        fetch("/api/subscription"),
       ])
 
       const orgData = await orgRes.json()
@@ -261,6 +285,7 @@ export default function SettingsPage() {
       const holidaysData = await holidaysRes.json()
       const rolesData = await rolesRes.json()
       const certsData = await certsRes.json()
+      const subData = await subRes.json()
 
       if (orgData.success) {
         setOrganization(orgData.data)
@@ -273,6 +298,7 @@ export default function SettingsPage() {
       if (holidaysData.success) setHolidays(holidaysData.data)
       if (rolesData.success) setCustomRoles(rolesData.data)
       if (certsData.success) setCertifications(certsData.data)
+      if (subData.success) setSubscription(subData.data)
     } catch (error) {
       console.error("Failed to fetch data:", error)
     } finally {
@@ -945,6 +971,90 @@ export default function SettingsPage() {
                 <UserPlus className="h-4 w-4 mr-2" />
                 Invite User
               </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Subscription & Billing */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Subscription
+            </CardTitle>
+            <CardDescription>Manage your plan and billing</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {subscription && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{subscription.tierName} Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      {subscription.price > 0 ? `$${subscription.price}/month` : "Free Trial"}
+                    </p>
+                  </div>
+                  <Badge variant={
+                    subscription.status === "ACTIVE" ? "default" :
+                    subscription.status === "TRIALING" ? "secondary" :
+                    subscription.isTrialExpired ? "destructive" : "outline"
+                  }>
+                    {subscription.isTrialExpired ? "Expired" : subscription.status}
+                  </Badge>
+                </div>
+
+                {subscription.tier === "TRIAL" && subscription.trialDaysRemaining !== null && (
+                  <Alert variant={subscription.trialDaysRemaining <= 3 ? "destructive" : "default"}>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      {subscription.isTrialExpired
+                        ? "Your trial has expired. Upgrade to continue using ShiftSync."
+                        : `${subscription.trialDaysRemaining} days left in your trial`}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="pt-3 border-t">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>Workers</span>
+                    <span className={subscription.isAtLimit ? "text-destructive font-medium" : ""}>
+                      {subscription.workerCount} / {subscription.workerLimit === 999999 ? "Unlimited" : subscription.workerLimit}
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        subscription.isAtLimit ? "bg-destructive" :
+                        subscription.workerCount / subscription.workerLimit > 0.8 ? "bg-yellow-500" :
+                        "bg-primary"
+                      }`}
+                      style={{ width: `${Math.min(100, (subscription.workerCount / subscription.workerLimit) * 100)}%` }}
+                    />
+                  </div>
+                  {subscription.workersRemaining > 0 && subscription.workerLimit !== 999999 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {subscription.workersRemaining} slot{subscription.workersRemaining !== 1 ? "s" : ""} remaining
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2 pt-3 border-t">
+                  <p className="text-sm font-medium">Plan features:</p>
+                  {subscription.features.slice(0, 4).map((feature, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                      {feature}
+                    </div>
+                  ))}
+                </div>
+
+                {isAdmin && subscription.tier !== "BUSINESS" && (
+                  <Button className="w-full" onClick={() => window.open("/pricing", "_blank")}>
+                    <Zap className="h-4 w-4 mr-2" />
+                    {subscription.tier === "TRIAL" ? "Choose a Plan" : "Upgrade Plan"}
+                  </Button>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

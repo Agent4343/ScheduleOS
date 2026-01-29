@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions, hashPassword } from "@/lib/auth"
 import { createUserSchema } from "@/lib/validations"
+import { SUBSCRIPTION_TIERS, isTrialExpired } from "@/lib/subscription"
 
 export async function GET(request: NextRequest) {
   try {
@@ -125,6 +126,71 @@ export async function POST(request: NextRequest) {
     // Only admins and supervisors can create users
     if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
+    }
+
+    // Check subscription limits
+    const organization = await prisma.organization.findUnique({
+      where: { id: session.user.organizationId },
+      select: {
+        subscriptionTier: true,
+        subscriptionStatus: true,
+        workerLimit: true,
+        trialEndsAt: true,
+        _count: {
+          select: {
+            users: {
+              where: {
+                status: { in: ["ACTIVE", "INACTIVE", "ON_LEAVE"] },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!organization) {
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 })
+    }
+
+    // Check if trial has expired
+    const tier = organization.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS
+    if (tier === "TRIAL" && isTrialExpired(organization.trialEndsAt)) {
+      return NextResponse.json(
+        {
+          error: "Trial expired",
+          code: "TRIAL_EXPIRED",
+          message: "Your free trial has expired. Please upgrade to continue adding workers."
+        },
+        { status: 402 }
+      )
+    }
+
+    // Check worker limit
+    const currentWorkerCount = organization._count.users
+    if (currentWorkerCount >= organization.workerLimit) {
+      const tierInfo = SUBSCRIPTION_TIERS[tier]
+      const nextTiers = Object.entries(SUBSCRIPTION_TIERS)
+        .filter(([, info]) => info.workerLimit > organization.workerLimit)
+        .slice(0, 1)
+
+      const upgradeInfo = nextTiers.length > 0 ? {
+        nextTier: nextTiers[0][0],
+        nextTierName: nextTiers[0][1].name,
+        nextTierPrice: nextTiers[0][1].price,
+        nextTierLimit: nextTiers[0][1].workerLimit,
+      } : null
+
+      return NextResponse.json(
+        {
+          error: "Worker limit reached",
+          code: "WORKER_LIMIT_REACHED",
+          message: `You've reached your ${tierInfo.name} plan limit of ${organization.workerLimit} workers. Upgrade to add more.`,
+          currentLimit: organization.workerLimit,
+          currentCount: currentWorkerCount,
+          upgrade: upgradeInfo,
+        },
+        { status: 402 }
+      )
     }
 
     const body = await request.json()

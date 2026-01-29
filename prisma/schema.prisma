@@ -62,6 +62,15 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Subscription
+  subscriptionTier   SubscriptionTier @default(TRIAL)
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+  workerLimit        Int              @default(5)      // Max workers allowed
+  trialEndsAt        DateTime?                         // When trial expires
+  subscriptionEndsAt DateTime?                         // Current billing period end
+  stripeCustomerId   String?          @unique          // For Stripe integration
+  stripeSubscriptionId String?        @unique
+
   // Relations
   users            User[]
   crews            Crew[]
@@ -75,6 +84,23 @@ model Organization {
   customRoles      CustomRole[]
   aiChatSessions   AIChatSession[]
   certificationTypes CertificationType[]
+}
+
+// Subscription tiers with worker limits
+enum SubscriptionTier {
+  TRIAL      // 5 workers, 14 days
+  STARTER    // 15 workers, $39/mo
+  GROWTH     // 40 workers, $79/mo
+  PRO        // 100 workers, $149/mo
+  BUSINESS   // Unlimited, $299/mo
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
 }
 
 // Department - allows Enterprise orgs to have separate calendars/teams

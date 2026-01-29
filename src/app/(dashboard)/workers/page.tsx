@@ -28,7 +28,10 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  AlertTriangle,
+  Zap,
 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserRole, UserStatus } from "@/types"
 
 interface User {
@@ -79,6 +82,17 @@ interface CertificationType {
   isRequired: boolean
 }
 
+interface SubscriptionInfo {
+  tier: string
+  tierName: string
+  workerLimit: number
+  workerCount: number
+  workersRemaining: number
+  canAddWorkers: boolean
+  isAtLimit: boolean
+  isTrialExpired: boolean
+}
+
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
   ACTIVE: { variant: "default", label: "Active" },
   INACTIVE: { variant: "secondary", label: "Inactive" },
@@ -100,6 +114,7 @@ export default function WorkersPage() {
   const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
   const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
   const [selectedCertifications, setSelectedCertifications] = useState<string[]>([])
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -136,22 +151,25 @@ export default function WorkersPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes, rolesRes, certsRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes, subRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
           fetch("/api/roles"),
           fetch("/api/certifications"),
+          fetch("/api/subscription"),
         ])
 
         const usersData = await usersRes.json()
         const crewsData = await crewsRes.json()
         const rolesData = await rolesRes.json()
         const certsData = await certsRes.json()
+        const subData = await subRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
         if (rolesData.success) setCustomRoles(rolesData.data)
         if (certsData.success) setCertificationTypes(certsData.data)
+        if (subData.success) setSubscription(subData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -234,6 +252,16 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => [...prev, data.data])
+        // Update subscription count
+        if (subscription) {
+          setSubscription({
+            ...subscription,
+            workerCount: subscription.workerCount + 1,
+            workersRemaining: subscription.workersRemaining - 1,
+            canAddWorkers: subscription.workersRemaining - 1 > 0,
+            isAtLimit: subscription.workersRemaining - 1 <= 0,
+          })
+        }
         setIsModalOpen(false)
         setFormData({
           name: "",
@@ -247,6 +275,18 @@ export default function WorkersPage() {
           password: "",
         })
         addToast({ type: "success", message: "Worker added successfully" })
+      } else if (data.code === "WORKER_LIMIT_REACHED") {
+        setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: data.message || "Worker limit reached. Please upgrade your plan.",
+        })
+      } else if (data.code === "TRIAL_EXPIRED") {
+        setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: "Your trial has expired. Please upgrade to continue.",
+        })
       } else {
         addToast({ type: "error", message: data.error || "Failed to create worker" })
       }
@@ -348,15 +388,51 @@ export default function WorkersPage() {
 
   return (
     <div className="space-y-6">
+      {/* Subscription Warning Banner */}
+      {subscription && (subscription.isAtLimit || subscription.isTrialExpired) && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              {subscription.isTrialExpired
+                ? "Your free trial has expired. Upgrade to continue adding workers."
+                : `You've reached your ${subscription.tierName} plan limit of ${subscription.workerLimit} workers.`}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => window.open("/pricing", "_blank")}>
+              <Zap className="h-4 w-4 mr-1" />
+              Upgrade Now
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Approaching Limit Warning */}
+      {subscription && !subscription.isAtLimit && subscription.workersRemaining <= 3 && subscription.workersRemaining > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            You have {subscription.workersRemaining} worker slot{subscription.workersRemaining !== 1 ? "s" : ""} remaining on your {subscription.tierName} plan.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Workers</h1>
           <p className="text-muted-foreground">
             Manage your workforce ({users.length} total)
+            {subscription && subscription.workerLimit !== 999999 && (
+              <span className="ml-1">
+                · {subscription.workersRemaining} slot{subscription.workersRemaining !== 1 ? "s" : ""} available
+              </span>
+            )}
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
+        <Button
+          onClick={() => setIsModalOpen(true)}
+          disabled={subscription?.isAtLimit || subscription?.isTrialExpired}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Worker
         </Button>
