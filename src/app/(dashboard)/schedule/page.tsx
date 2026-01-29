@@ -25,13 +25,6 @@ import {
 } from "lucide-react"
 import { ShiftType, UserRole, PositionType } from "@/types"
 
-// Position type display labels - can be customized per organization
-const POSITION_TYPE_LABELS: Record<PositionType, { short: string; full: string; color: string }> = {
-  OPERATOR: { short: "Ops", full: "Operators", color: "#22c55e" },
-  ONSHORE_CONTROL_ROOM: { short: "OCR", full: "Onshore Control Room", color: "#3b82f6" },
-  OTHER: { short: "Other", full: "Other", color: "#6b7280" },
-}
-
 interface Schedule {
   id: string
   date: string
@@ -384,34 +377,6 @@ function SchedulePageContent() {
       // Finally by worker name
       return (a.name || "").localeCompare(b.name || "")
     })
-  }, [workers])
-
-  // Calculate worker counts by position type
-  const workerCountsByPosition = useMemo(() => {
-    const counts: Record<PositionType, number> = {
-      OPERATOR: 0,
-      ONSHORE_CONTROL_ROOM: 0,
-      OTHER: 0,
-    }
-    for (const worker of workers) {
-      const posType = worker.positionType || "OTHER"
-      counts[posType]++
-    }
-    return counts
-  }, [workers])
-
-  // Calculate worker counts by crew
-  const workerCountsByCrew = useMemo(() => {
-    const counts: Record<string, { name: string; color: string; count: number }> = {}
-    for (const worker of workers) {
-      if (worker.crew) {
-        if (!counts[worker.crew.id]) {
-          counts[worker.crew.id] = { name: worker.crew.name, color: worker.crew.color, count: 0 }
-        }
-        counts[worker.crew.id].count++
-      }
-    }
-    return Object.values(counts).sort((a, b) => a.name.localeCompare(b.name))
   }, [workers])
 
   // Calculate daily staffing counts by position type and shift
@@ -1072,67 +1037,6 @@ function SchedulePageContent() {
           )}
         </CardContent>
       </Card>
-
-      {/* Worker Count Summary - hidden in focus mode */}
-      {!loading && sortedWorkers.length > 0 && !focusMode && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5" />
-              Staff Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {/* Total workers */}
-              <div className="p-4 rounded-lg bg-muted/50 text-center">
-                <div className="text-3xl font-bold">{sortedWorkers.length}</div>
-                <div className="text-sm text-muted-foreground">Total Staff</div>
-              </div>
-
-              {/* Position type counts */}
-              {(Object.entries(POSITION_TYPE_LABELS) as [PositionType, { short: string; full: string; color: string }][]).map(
-                ([posType, label]) => {
-                  const count = workerCountsByPosition[posType]
-                  if (count === 0) return null
-                  return (
-                    <div
-                      key={posType}
-                      className="p-4 rounded-lg text-center"
-                      style={{ backgroundColor: `${label.color}15` }}
-                    >
-                      <div className="text-3xl font-bold" style={{ color: label.color }}>
-                        {count}
-                      </div>
-                      <div className="text-sm font-medium" style={{ color: label.color }}>
-                        {label.short}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{label.full}</div>
-                    </div>
-                  )
-                }
-              )}
-
-              {/* Crew counts */}
-              {workerCountsByCrew.map((crew) => (
-                <div
-                  key={crew.name}
-                  className="p-4 rounded-lg text-center"
-                  style={{ backgroundColor: `${crew.color}15` }}
-                >
-                  <div className="text-3xl font-bold" style={{ color: crew.color }}>
-                    {crew.count}
-                  </div>
-                  <div className="text-sm font-medium truncate" style={{ color: crew.color }}>
-                    {crew.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground">Crew</div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Edit Worker Modal */}
       <Modal
