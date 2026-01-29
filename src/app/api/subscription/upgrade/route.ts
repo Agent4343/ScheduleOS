@@ -60,13 +60,14 @@ export async function POST(request: NextRequest) {
 
     if (stripeSecretKey && priceId) {
       // Stripe is configured - create checkout session
-      const stripe = require("stripe")(stripeSecretKey)
+      const Stripe = (await import("stripe")).default
+      const stripe = new Stripe(stripeSecretKey)
 
       // Create or get customer
       let customerId = organization.stripeCustomerId
       if (!customerId) {
         const customer = await stripe.customers.create({
-          email: session.user.email,
+          email: session.user.email || undefined,
           metadata: {
             organizationId: organization.id,
           },
