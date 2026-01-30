@@ -606,10 +606,10 @@ function SchedulePageContent() {
       // Check training coverage for each shift type
       // Requirement: At least ONE person on each shift must have each training type
       const trainingTypes = [
-        { key: "controlRoom" as const, field: "isControlRoomTrained", label: "Control Room Coverage" },
-        { key: "oil" as const, field: "isOilOperatorTrained", label: "Oil Operator Coverage" },
-        { key: "gas" as const, field: "isGasOperatorTrained", label: "Gas Operator Coverage" },
-        { key: "utility" as const, field: "isUtilityOperatorTrained", label: "Utility Operator Coverage" },
+        { key: "controlRoom" as const, field: "isControlRoomTrained" as const, label: "Control Room Coverage" },
+        { key: "oil" as const, field: "isOilOperatorTrained" as const, label: "Oil Operator Coverage" },
+        { key: "gas" as const, field: "isGasOperatorTrained" as const, label: "Gas Operator Coverage" },
+        { key: "utility" as const, field: "isUtilityOperatorTrained" as const, label: "Utility Operator Coverage" },
       ]
 
       for (const shiftType of ["DAY", "NIGHT"] as const) {
