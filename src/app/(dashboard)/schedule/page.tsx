@@ -1175,8 +1175,45 @@ function SchedulePageContent() {
                     </tr>
                   ))}
 
-                  {/* Daily Staffing Summary Rows */}
+                  {/* Compliance Issues Row */}
                   <tr className="bg-muted/30 border-t-2 border-primary/20">
+                    <td className="border p-2 sticky left-0 bg-red-50 dark:bg-red-950 z-20 font-semibold text-red-700 dark:text-red-300 text-xs">
+                      Compliance
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayAlerts = alertsByDate[dateStr] || []
+                        const hasIssues = dayAlerts.length > 0
+                        const issueCount = dayAlerts.length
+                        const dayIssues = dayAlerts.filter(a => a.shiftType === "DAY").length
+                        const nightIssues = dayAlerts.filter(a => a.shiftType === "NIGHT").length
+
+                        return (
+                          <td
+                            key={`compliance-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium transition-all",
+                              hasIssues
+                                ? "bg-red-100 dark:bg-red-900 cursor-pointer hover:ring-2 hover:ring-red-400 hover:ring-inset"
+                                : "bg-red-50/50 dark:bg-red-950/30"
+                            )}
+                            title={hasIssues ? `${issueCount} compliance issue${issueCount !== 1 ? 's' : ''} - Day: ${dayIssues}, Night: ${nightIssues}` : "No compliance issues"}
+                            onClick={() => hasIssues && openBreakdownModal(dateStr, dayIssues > 0 ? "DAY" : "NIGHT")}
+                          >
+                            {hasIssues && (
+                              <span className="text-red-600 dark:text-red-400 font-bold">
+                                {issueCount > 1 ? issueCount : "!"}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  {/* Daily Staffing Summary Rows */}
+                  <tr className="bg-muted/30">
                     <td className="border p-2 sticky left-0 bg-green-50 dark:bg-green-950 z-20 font-semibold text-green-700 dark:text-green-300 text-xs">
                       Day Shift
                     </td>
