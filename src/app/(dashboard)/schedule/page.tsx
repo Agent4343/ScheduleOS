@@ -1732,6 +1732,51 @@ function SchedulePageContent() {
               <p className="text-xs text-muted-foreground mt-2">
                 Control Room: backup for onshore operations if needed
               </p>
+              {/* Single point of failure warning */}
+              {(() => {
+                // Find training types with exactly 1 person covering them
+                const trainingTypes = [
+                  { key: 'oil', label: 'Oil', field: 'isOilOperatorTrained' as const },
+                  { key: 'gas', label: 'Gas', field: 'isGasOperatorTrained' as const },
+                  { key: 'utility', label: 'Utility', field: 'isUtilityOperatorTrained' as const },
+                ];
+
+                // For each training type with exactly 1 person, track who that person is
+                const singleCoverageMap: Record<string, { types: string[], worker: typeof breakdownWorkers[0] }> = {};
+
+                for (const training of trainingTypes) {
+                  const trainedWorkers = breakdownWorkers.filter(w => w[training.field]);
+                  if (trainedWorkers.length === 1) {
+                    const worker = trainedWorkers[0];
+                    if (!singleCoverageMap[worker.id]) {
+                      singleCoverageMap[worker.id] = { types: [], worker };
+                    }
+                    singleCoverageMap[worker.id].types.push(training.label);
+                  }
+                }
+
+                // Find workers who are single points of failure for multiple training types
+                const singlePointsOfFailure = Object.values(singleCoverageMap).filter(
+                  entry => entry.types.length > 1
+                );
+
+                if (singlePointsOfFailure.length === 0) return null;
+
+                return (
+                  <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Single Point of Failure Warning
+                    </p>
+                    {singlePointsOfFailure.map(entry => (
+                      <p key={entry.worker.id} className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {entry.worker.name} is the only person covering {entry.types.join(', ')} training.
+                        If unavailable, {entry.types.length} coverage requirements would fail.
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
