@@ -11,133 +11,175 @@ import {
   Calendar,
   Clock,
   TrendingUp,
+  TrendingDown,
   Download,
   Loader2,
   Sun,
   Moon,
   CalendarOff,
+  AlertTriangle,
+  UserCheck,
+  Briefcase,
+  Heart,
+  Award,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
 } from "lucide-react"
 
-interface ScheduleStats {
-  totalSchedules: number
-  dayShifts: number
-  nightShifts: number
-  offDays: number
-  vacationDays: number
-  sickDays: number
-}
-
-interface WorkerStats {
-  totalWorkers: number
-  activeWorkers: number
-  onLeave: number
-  byPosition: Record<string, number>
-}
-
-interface CrewStats {
-  totalCrews: number
-  crews: Array<{
+interface ReportData {
+  period: { start: string; end: string }
+  scheduleStats: {
+    totalSchedules: number
+    dayShifts: number
+    nightShifts: number
+    offDays: number
+    vacationDays: number
+    sickDays: number
+    trainingDays: number
+    leaveDays: number
+    plDays: number
+  }
+  trends: {
+    workDaysChange: number
+    totalSchedulesChange: number
+  }
+  workerStats: {
+    total: number
+    active: number
+    onLeave: number
+    byPosition: Record<string, { count: number; dayShifts: number; nightShifts: number }>
+  }
+  topWorkers: Array<{
+    id: string
+    name: string
+    position: string | null
+    crew: { id: string; name: string; color: string } | null
+    totalShifts: number
+    dayShifts: number
+    nightShifts: number
+  }>
+  highSickDays: Array<{
+    id: string
+    name: string
+    sickDays: number
+  }>
+  highVacation: Array<{
+    id: string
+    name: string
+    vacationDays: number
+  }>
+  nightShiftLeaders: Array<{
+    id: string
+    name: string
+    nightRatio: number
+    nightShifts: number
+    totalShifts: number
+  }>
+  crewAnalytics: Array<{
     id: string
     name: string
     color: string
     workerCount: number
-    scheduledDays: number
+    totalShifts: number
+    dayShifts: number
+    nightShifts: number
+    avgShiftsPerWorker: number
   }>
+  timeOffStats: {
+    total: number
+    pending: number
+    approved: number
+    denied: number
+    byType: {
+      vacation: number
+      sick: number
+      personal: number
+      bereavement: number
+      juryDuty: number
+      other: number
+    }
+  }
+  holidayFairness: Array<{
+    id: string
+    name: string
+    holidaysWorked: number
+    totalTracked: number
+  }>
+}
+
+function TrendBadge({ value, suffix = "%" }: { value: number; suffix?: string }) {
+  if (value === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+        <Minus className="h-3 w-3" />
+        No change
+      </span>
+    )
+  }
+  if (value > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm text-green-600">
+        <ArrowUpRight className="h-3 w-3" />
+        +{value}{suffix} vs prev period
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-sm text-red-600">
+      <ArrowDownRight className="h-3 w-3" />
+      {value}{suffix} vs prev period
+    </span>
+  )
+}
+
+function ProgressBar({
+  value,
+  max,
+  color = "bg-primary",
+  showPercent = true
+}: {
+  value: number
+  max: number
+  color?: string
+  showPercent?: boolean
+}) {
+  const percent = max > 0 ? Math.round((value / max) * 100) : 0
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      {showPercent && <span className="text-sm text-muted-foreground w-12 text-right">{percent}%</span>}
+    </div>
+  )
 }
 
 export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true)
+  const [reportData, setReportData] = useState<ReportData | null>(null)
   const [startDate, setStartDate] = useState(() => {
     const date = new Date()
-    date.setDate(1) // First of current month
+    date.setDate(1)
     return date.toISOString().split("T")[0]
   })
   const [endDate, setEndDate] = useState(() => {
     const date = new Date()
     date.setMonth(date.getMonth() + 1)
-    date.setDate(0) // Last day of current month
+    date.setDate(0)
     return date.toISOString().split("T")[0]
-  })
-
-  const [scheduleStats, setScheduleStats] = useState<ScheduleStats>({
-    totalSchedules: 0,
-    dayShifts: 0,
-    nightShifts: 0,
-    offDays: 0,
-    vacationDays: 0,
-    sickDays: 0,
-  })
-
-  const [workerStats, setWorkerStats] = useState<WorkerStats>({
-    totalWorkers: 0,
-    activeWorkers: 0,
-    onLeave: 0,
-    byPosition: {},
-  })
-
-  const [crewStats, setCrewStats] = useState<CrewStats>({
-    totalCrews: 0,
-    crews: [],
   })
 
   const fetchReportData = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Fetch schedules for date range
-      const schedulesRes = await fetch(
-        `/api/schedules?startDate=${startDate}&endDate=${endDate}`
-      )
-      const schedulesData = await schedulesRes.json()
-
-      if (schedulesData.success && schedulesData.data) {
-        const schedules = schedulesData.data
-        const stats: ScheduleStats = {
-          totalSchedules: schedules.length,
-          dayShifts: schedules.filter((s: { shiftType: string }) => s.shiftType === "DAY").length,
-          nightShifts: schedules.filter((s: { shiftType: string }) => s.shiftType === "NIGHT").length,
-          offDays: schedules.filter((s: { shiftType: string }) => s.shiftType === "OFF").length,
-          vacationDays: schedules.filter((s: { shiftType: string }) => s.shiftType === "VACATION").length,
-          sickDays: schedules.filter((s: { shiftType: string }) => s.shiftType === "SICK").length,
-        }
-        setScheduleStats(stats)
-      }
-
-      // Fetch workers
-      const workersRes = await fetch("/api/users")
-      const workersData = await workersRes.json()
-
-      if (workersData.success && workersData.data) {
-        const workers = workersData.data
-        const positions: Record<string, number> = {}
-        workers.forEach((w: { position: string | null }) => {
-          const pos = w.position || "Unassigned"
-          positions[pos] = (positions[pos] || 0) + 1
-        })
-
-        setWorkerStats({
-          totalWorkers: workers.length,
-          activeWorkers: workers.filter((w: { status: string }) => w.status === "ACTIVE").length,
-          onLeave: workers.filter((w: { status: string }) => w.status === "ON_LEAVE").length,
-          byPosition: positions,
-        })
-      }
-
-      // Fetch crews
-      const crewsRes = await fetch("/api/crews")
-      const crewsData = await crewsRes.json()
-
-      if (crewsData.success && crewsData.data) {
-        const crews = crewsData.data
-        setCrewStats({
-          totalCrews: crews.length,
-          crews: crews.map((c: { id: string; name: string; color: string; _count?: { workers: number } }) => ({
-            id: c.id,
-            name: c.name,
-            color: c.color,
-            workerCount: c._count?.workers || 0,
-            scheduledDays: 0,
-          })),
-        })
+      const res = await fetch(`/api/reports?startDate=${startDate}&endDate=${endDate}`)
+      const data = await res.json()
+      if (data.success) {
+        setReportData(data.data)
       }
     } catch (error) {
       console.error("Failed to fetch report data:", error)
@@ -150,13 +192,76 @@ export default function ReportsPage() {
     fetchReportData()
   }, [fetchReportData])
 
-  const handleRefresh = () => {
-    fetchReportData()
+  const exportCSV = () => {
+    if (!reportData) return
+
+    const rows: string[][] = []
+
+    // Header
+    rows.push(["ShiftSync Report", `${startDate} to ${endDate}`])
+    rows.push([])
+
+    // Schedule Overview
+    rows.push(["SCHEDULE OVERVIEW"])
+    rows.push(["Metric", "Value"])
+    rows.push(["Total Scheduled Days", String(reportData.scheduleStats.totalSchedules)])
+    rows.push(["Day Shifts", String(reportData.scheduleStats.dayShifts)])
+    rows.push(["Night Shifts", String(reportData.scheduleStats.nightShifts)])
+    rows.push(["Off Days", String(reportData.scheduleStats.offDays)])
+    rows.push(["Vacation Days", String(reportData.scheduleStats.vacationDays)])
+    rows.push(["Sick Days", String(reportData.scheduleStats.sickDays)])
+    rows.push([])
+
+    // Top Workers
+    rows.push(["TOP WORKERS BY SHIFTS"])
+    rows.push(["Name", "Position", "Crew", "Total Shifts", "Day", "Night"])
+    reportData.topWorkers.forEach((w) => {
+      rows.push([
+        w.name,
+        w.position || "-",
+        w.crew?.name || "-",
+        String(w.totalShifts),
+        String(w.dayShifts),
+        String(w.nightShifts),
+      ])
+    })
+    rows.push([])
+
+    // Crew Analytics
+    rows.push(["CREW ANALYTICS"])
+    rows.push(["Crew", "Workers", "Total Shifts", "Day", "Night", "Avg per Worker"])
+    reportData.crewAnalytics.forEach((c) => {
+      rows.push([
+        c.name,
+        String(c.workerCount),
+        String(c.totalShifts),
+        String(c.dayShifts),
+        String(c.nightShifts),
+        String(c.avgShiftsPerWorker),
+      ])
+    })
+    rows.push([])
+
+    // Time Off
+    rows.push(["TIME OFF REQUESTS"])
+    rows.push(["Status", "Count"])
+    rows.push(["Pending", String(reportData.timeOffStats.pending)])
+    rows.push(["Approved", String(reportData.timeOffStats.approved)])
+    rows.push(["Denied", String(reportData.timeOffStats.denied)])
+
+    const csvContent = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = `shiftsync-report-${startDate}-to-${endDate}.csv`
+    link.click()
   }
 
-  const totalWorkDays = scheduleStats.dayShifts + scheduleStats.nightShifts
-  const workPercentage = scheduleStats.totalSchedules > 0
-    ? Math.round((totalWorkDays / scheduleStats.totalSchedules) * 100)
+  const totalWorkDays = reportData
+    ? reportData.scheduleStats.dayShifts + reportData.scheduleStats.nightShifts
+    : 0
+  const workPercentage = reportData && reportData.scheduleStats.totalSchedules > 0
+    ? Math.round((totalWorkDays / reportData.scheduleStats.totalSchedules) * 100)
     : 0
 
   return (
@@ -165,10 +270,10 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-bold">Reports</h1>
           <p className="text-muted-foreground mt-1">
-            View scheduling statistics and workforce metrics
+            Workforce analytics and scheduling insights
           </p>
         </div>
-        <Button variant="outline" className="gap-2" disabled>
+        <Button variant="outline" className="gap-2" onClick={exportCSV} disabled={!reportData}>
           <Download className="h-4 w-4" />
           Export CSV
         </Button>
@@ -176,9 +281,8 @@ export default function ReportsPage() {
 
       {/* Date Range Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Date Range</CardTitle>
-          <CardDescription>Select the period for schedule statistics</CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Report Period</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 items-end">
@@ -200,7 +304,7 @@ export default function ReportsPage() {
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
-            <Button onClick={handleRefresh} disabled={isLoading}>
+            <Button onClick={fetchReportData} disabled={isLoading}>
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -215,46 +319,17 @@ export default function ReportsPage() {
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : (
+      ) : reportData ? (
         <>
-          {/* Overview Stats */}
+          {/* Key Metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Total Workers</CardDescription>
-                <CardTitle className="text-3xl">{workerStats.totalWorkers}</CardTitle>
+                <CardDescription>Work Days</CardDescription>
+                <CardTitle className="text-3xl">{totalWorkDays}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  <span>{workerStats.activeWorkers} active</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total Crews</CardDescription>
-                <CardTitle className="text-3xl">{crewStats.totalCrews}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Users className="h-4 w-4" />
-                  <span>Managing workers</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Scheduled Days</CardDescription>
-                <CardTitle className="text-3xl">{scheduleStats.totalSchedules}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  <span>In selected period</span>
-                </div>
+                <TrendBadge value={reportData.trends.workDaysChange} />
               </CardContent>
             </Card>
 
@@ -266,13 +341,39 @@ export default function ReportsPage() {
               <CardContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <TrendingUp className="h-4 w-4" />
-                  <span>Days worked vs total</span>
+                  <span>Days worked vs scheduled</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Active Workers</CardDescription>
+                <CardTitle className="text-3xl">{reportData.workerStats.active}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                  <span>{reportData.workerStats.onLeave} on leave</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Pending Time Off</CardDescription>
+                <CardTitle className="text-3xl">{reportData.timeOffStats.pending}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4" />
+                  <span>{reportData.timeOffStats.total} total requests</span>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Schedule Breakdown */}
+          {/* Schedule Breakdown + Crew Performance */}
           <div className="grid lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -280,136 +381,320 @@ export default function ReportsPage() {
                   <BarChart3 className="h-5 w-5" />
                   Schedule Breakdown
                 </CardTitle>
-                <CardDescription>Distribution of shift types in selected period</CardDescription>
+                <CardDescription>Distribution of shift types</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sun className="h-4 w-4 text-amber-500" />
+                      <span>Day Shifts</span>
+                    </div>
+                    <span className="font-medium">{reportData.scheduleStats.dayShifts}</span>
+                  </div>
+                  <ProgressBar
+                    value={reportData.scheduleStats.dayShifts}
+                    max={reportData.scheduleStats.totalSchedules}
+                    color="bg-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Moon className="h-4 w-4 text-blue-500" />
+                      <span>Night Shifts</span>
+                    </div>
+                    <span className="font-medium">{reportData.scheduleStats.nightShifts}</span>
+                  </div>
+                  <ProgressBar
+                    value={reportData.scheduleStats.nightShifts}
+                    max={reportData.scheduleStats.totalSchedules}
+                    color="bg-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CalendarOff className="h-4 w-4 text-gray-400" />
+                      <span>Off Days</span>
+                    </div>
+                    <span className="font-medium">{reportData.scheduleStats.offDays}</span>
+                  </div>
+                  <ProgressBar
+                    value={reportData.scheduleStats.offDays}
+                    max={reportData.scheduleStats.totalSchedules}
+                    color="bg-gray-400"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-emerald-500" />
+                      <span>Vacation</span>
+                    </div>
+                    <span className="font-medium">{reportData.scheduleStats.vacationDays}</span>
+                  </div>
+                  <ProgressBar
+                    value={reportData.scheduleStats.vacationDays}
+                    max={reportData.scheduleStats.totalSchedules}
+                    color="bg-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-500" />
+                      <span>Sick Days</span>
+                    </div>
+                    <span className="font-medium">{reportData.scheduleStats.sickDays}</span>
+                  </div>
+                  <ProgressBar
+                    value={reportData.scheduleStats.sickDays}
+                    max={reportData.scheduleStats.totalSchedules}
+                    color="bg-red-500"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Crew Performance
+                </CardTitle>
+                <CardDescription>Shifts by crew</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sun className="h-4 w-4 text-green-500" />
-                        <span>Day Shifts</span>
+                {reportData.crewAnalytics.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">
+                    No crews configured.{" "}
+                    <a href="/crews" className="text-primary hover:underline">
+                      Create a crew
+                    </a>
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {reportData.crewAnalytics.map((crew) => (
+                      <div key={crew.id} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: crew.color }}
+                            />
+                            <span className="font-medium">{crew.name}</span>
+                            <span className="text-sm text-muted-foreground">
+                              ({crew.workerCount} workers)
+                            </span>
+                          </div>
+                          <span className="font-medium">{crew.totalShifts} shifts</span>
+                        </div>
+                        <div className="flex gap-2 text-sm">
+                          <div className="flex items-center gap-1">
+                            <Sun className="h-3 w-3 text-amber-500" />
+                            <span>{crew.dayShifts}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Moon className="h-3 w-3 text-blue-500" />
+                            <span>{crew.nightShifts}</span>
+                          </div>
+                          <span className="text-muted-foreground ml-auto">
+                            ~{crew.avgShiftsPerWorker} per worker
+                          </span>
+                        </div>
+                        <ProgressBar
+                          value={crew.totalShifts}
+                          max={Math.max(...reportData.crewAnalytics.map((c) => c.totalShifts))}
+                          color="bg-primary"
+                          showPercent={false}
+                        />
                       </div>
-                      <span className="font-medium">{scheduleStats.dayShifts}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full"
-                        style={{
-                          width: `${scheduleStats.totalSchedules > 0 ? (scheduleStats.dayShifts / scheduleStats.totalSchedules) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Moon className="h-4 w-4 text-blue-500" />
-                        <span>Night Shifts</span>
+          {/* Worker Insights */}
+          <div className="grid lg:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Award className="h-5 w-5 text-amber-500" />
+                  Top Workers by Shifts
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reportData.topWorkers.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No schedule data</p>
+                ) : (
+                  <div className="space-y-3">
+                    {reportData.topWorkers.slice(0, 5).map((worker, index) => (
+                      <div key={worker.id} className="flex items-center gap-3">
+                        <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{worker.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {worker.crew?.name || "No crew"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{worker.totalShifts}</p>
+                          <p className="text-xs text-muted-foreground">shifts</p>
+                        </div>
                       </div>
-                      <span className="font-medium">{scheduleStats.nightShifts}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 rounded-full"
-                        style={{
-                          width: `${scheduleStats.totalSchedules > 0 ? (scheduleStats.nightShifts / scheduleStats.totalSchedules) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CalendarOff className="h-4 w-4 text-gray-500" />
-                        <span>Off Days</span>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Moon className="h-5 w-5 text-blue-500" />
+                  Night Shift Distribution
+                </CardTitle>
+                <CardDescription className="text-xs">Workers with most night shifts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {reportData.nightShiftLeaders.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No night shift data</p>
+                ) : (
+                  <div className="space-y-3">
+                    {reportData.nightShiftLeaders.map((worker) => (
+                      <div key={worker.id} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium truncate">{worker.name}</span>
+                          <span className="text-sm">{worker.nightRatio}% nights</span>
+                        </div>
+                        <ProgressBar
+                          value={worker.nightShifts}
+                          max={worker.totalShifts}
+                          color="bg-blue-500"
+                          showPercent={false}
+                        />
                       </div>
-                      <span className="font-medium">{scheduleStats.offDays}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gray-400 rounded-full"
-                        style={{
-                          width: `${scheduleStats.totalSchedules > 0 ? (scheduleStats.offDays / scheduleStats.totalSchedules) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-emerald-500" />
-                        <span>Vacation</span>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Heart className="h-5 w-5 text-red-500" />
+                  Sick Day Usage
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {reportData.highSickDays.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No sick days recorded</p>
+                ) : (
+                  <div className="space-y-3">
+                    {reportData.highSickDays.map((worker) => (
+                      <div key={worker.id} className="flex items-center justify-between">
+                        <span className="text-sm font-medium truncate">{worker.name}</span>
+                        <span className="text-sm font-medium text-red-600">
+                          {worker.sickDays} day{worker.sickDays !== 1 ? "s" : ""}
+                        </span>
                       </div>
-                      <span className="font-medium">{scheduleStats.vacationDays}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{
-                          width: `${scheduleStats.totalSchedules > 0 ? (scheduleStats.vacationDays / scheduleStats.totalSchedules) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
+                    ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-red-500" />
-                        <span>Sick Days</span>
-                      </div>
-                      <span className="font-medium">{scheduleStats.sickDays}</span>
+          {/* Time Off + Holiday Fairness */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Time Off Requests
+                </CardTitle>
+                <CardDescription>Request status breakdown</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div className="text-center p-3 rounded-lg bg-amber-50 dark:bg-amber-950">
+                    <p className="text-2xl font-bold text-amber-600">{reportData.timeOffStats.pending}</p>
+                    <p className="text-xs text-muted-foreground">Pending</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-green-50 dark:bg-green-950">
+                    <p className="text-2xl font-bold text-green-600">{reportData.timeOffStats.approved}</p>
+                    <p className="text-xs text-muted-foreground">Approved</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-red-50 dark:bg-red-950">
+                    <p className="text-2xl font-bold text-red-600">{reportData.timeOffStats.denied}</p>
+                    <p className="text-xs text-muted-foreground">Denied</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">By Type</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between p-2 bg-muted/50 rounded">
+                      <span>Vacation</span>
+                      <span className="font-medium">{reportData.timeOffStats.byType.vacation}</span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-red-500 rounded-full"
-                        style={{
-                          width: `${scheduleStats.totalSchedules > 0 ? (scheduleStats.sickDays / scheduleStats.totalSchedules) * 100 : 0}%`,
-                        }}
-                      />
+                    <div className="flex justify-between p-2 bg-muted/50 rounded">
+                      <span>Sick</span>
+                      <span className="font-medium">{reportData.timeOffStats.byType.sick}</span>
+                    </div>
+                    <div className="flex justify-between p-2 bg-muted/50 rounded">
+                      <span>Personal</span>
+                      <span className="font-medium">{reportData.timeOffStats.byType.personal}</span>
+                    </div>
+                    <div className="flex justify-between p-2 bg-muted/50 rounded">
+                      <span>Bereavement</span>
+                      <span className="font-medium">{reportData.timeOffStats.byType.bereavement}</span>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Crew Summary */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Crew Summary
+                  <UserCheck className="h-5 w-5" />
+                  Holiday Fairness
                 </CardTitle>
-                <CardDescription>Workers per crew</CardDescription>
+                <CardDescription>Who worked the most holidays</CardDescription>
               </CardHeader>
               <CardContent>
-                {crewStats.crews.length === 0 ? (
+                {reportData.holidayFairness.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">
-                    No crews configured yet.{" "}
-                    <a href="/crews" className="text-primary hover:underline">
-                      Create a crew
-                    </a>
+                    No holiday tracking data yet.
                   </p>
                 ) : (
                   <div className="space-y-3">
-                    {crewStats.crews.map((crew) => (
-                      <div
-                        key={crew.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: crew.color }}
-                          />
-                          <span className="font-medium">{crew.name}</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {crew.workerCount} worker{crew.workerCount !== 1 ? "s" : ""}
+                    {reportData.holidayFairness.slice(0, 6).map((worker) => (
+                      <div key={worker.id} className="flex items-center justify-between">
+                        <span className="font-medium">{worker.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {worker.holidaysWorked} / {worker.totalTracked}
+                          </span>
+                          <div className="w-16">
+                            <ProgressBar
+                              value={worker.holidaysWorked}
+                              max={worker.totalTracked}
+                              color={worker.holidaysWorked > worker.totalTracked / 2 ? "bg-amber-500" : "bg-green-500"}
+                              showPercent={false}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -419,17 +704,17 @@ export default function ReportsPage() {
             </Card>
           </div>
 
-          {/* Workers by Position */}
+          {/* Position Breakdown */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
                 Workers by Position
               </CardTitle>
-              <CardDescription>Distribution of workers across positions</CardDescription>
+              <CardDescription>Headcount and shift distribution by role</CardDescription>
             </CardHeader>
             <CardContent>
-              {Object.keys(workerStats.byPosition).length === 0 ? (
+              {Object.keys(reportData.workerStats.byPosition).length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
                   No workers found.{" "}
                   <a href="/workers" className="text-primary hover:underline">
@@ -438,13 +723,23 @@ export default function ReportsPage() {
                 </p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {Object.entries(workerStats.byPosition).map(([position, count]) => (
+                  {Object.entries(reportData.workerStats.byPosition).map(([position, stats]) => (
                     <div
                       key={position}
-                      className="p-4 rounded-lg bg-muted/50 text-center"
+                      className="p-4 rounded-lg bg-muted/50"
                     >
-                      <p className="text-2xl font-bold">{count}</p>
-                      <p className="text-sm text-muted-foreground">{position}</p>
+                      <p className="text-2xl font-bold">{stats.count}</p>
+                      <p className="text-sm font-medium">{position}</p>
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Sun className="h-3 w-3 text-amber-500" />
+                          <span>{stats.dayShifts}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Moon className="h-3 w-3 text-blue-500" />
+                          <span>{stats.nightShifts}</span>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -452,6 +747,12 @@ export default function ReportsPage() {
             </CardContent>
           </Card>
         </>
+      ) : (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Failed to load report data. Please try again.
+          </CardContent>
+        </Card>
       )}
     </div>
   )
