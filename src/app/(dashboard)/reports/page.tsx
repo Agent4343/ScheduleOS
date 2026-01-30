@@ -69,6 +69,13 @@ interface ComplianceData {
     dayIssueCount: number
     nightIssueCount: number
   }>
+  trainingCoverageRequirements: Array<{
+    name: string
+    color: string
+    description: string
+    dayIssueCount: number
+    nightIssueCount: number
+  }>
   issues: ComplianceIssue[]
   totalIssues: number
   excludedWorkers: Array<{
@@ -583,6 +590,48 @@ export default function ReportsPage() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Training Coverage Requirements */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4" />
+                    Training Coverage Requirements
+                  </h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Each shift requires at least 1 person with each training type
+                  </p>
+                  <div className="space-y-2">
+                    {reportData.compliance.trainingCoverageRequirements?.map((training) => (
+                      <div key={training.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: training.color }}
+                            />
+                            <span className="font-medium">{training.name}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {training.description}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          {training.dayIssueCount === 0 && training.nightIssueCount === 0 ? (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <CheckCircle2 className="h-4 w-4" />
+                              OK
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-red-600">
+                              <XCircle className="h-4 w-4" />
+                              D:{training.dayIssueCount} N:{training.nightIssueCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

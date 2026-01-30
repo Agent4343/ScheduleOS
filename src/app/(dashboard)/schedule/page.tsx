@@ -143,6 +143,7 @@ interface StaffingAlert {
   actual: number
   shortage: number
   positionType?: string
+  trainingType?: "controlRoom" | "oil" | "gas" | "utility"
 }
 
 // Built-in shift colors for the Excel-like cells
@@ -599,6 +600,38 @@ function SchedulePageContent() {
             shortage: rule.minWorkers - relevantWorkers.length,
             positionType: rule.positionType || undefined,
           })
+        }
+      }
+
+      // Check training coverage for each shift type
+      // Requirement: At least ONE person on each shift must have each training type
+      const trainingTypes = [
+        { key: "controlRoom" as const, field: "isControlRoomTrained", label: "Control Room Coverage" },
+        { key: "oil" as const, field: "isOilOperatorTrained", label: "Oil Operator Coverage" },
+        { key: "gas" as const, field: "isGasOperatorTrained", label: "Gas Operator Coverage" },
+        { key: "utility" as const, field: "isUtilityOperatorTrained", label: "Utility Operator Coverage" },
+      ]
+
+      for (const shiftType of ["DAY", "NIGHT"] as const) {
+        const shiftWorkers = getWorkersOnShift(dateStr, shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
+
+        // Only check if there are workers scheduled on this shift
+        if (shiftWorkers.length > 0) {
+          for (const training of trainingTypes) {
+            const trainedCount = shiftWorkers.filter(w => w[training.field]).length
+            if (trainedCount < 1) {
+              alerts.push({
+                date: dateStr,
+                shiftType,
+                ruleName: training.label,
+                required: 1,
+                actual: 0,
+                shortage: 1,
+                trainingType: training.key,
+              })
+            }
+          }
         }
       }
     }
@@ -1664,24 +1697,40 @@ function SchedulePageContent() {
             <div className="p-3 bg-muted/50 rounded-md">
               <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
               <p className="text-xs text-muted-foreground mb-2">
-                Note: Each worker can only cover ONE role at a time
+                Requirement: At least 1 person on shift must have each training type
               </p>
               <div className="flex flex-wrap gap-2">
-                <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">
-                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length} available
+                <span className={`text-xs px-2 py-1 rounded ${
+                  breakdownWorkers.some(w => w.isControlRoomTrained)
+                    ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                }`}>
+                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isControlRoomTrained).length})
                 </span>
-                <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-2 py-1 rounded">
-                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length} available
+                <span className={`text-xs px-2 py-1 rounded ${
+                  breakdownWorkers.some(w => w.isOilOperatorTrained)
+                    ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                }`}>
+                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isOilOperatorTrained).length})
                 </span>
-                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length} available
+                <span className={`text-xs px-2 py-1 rounded ${
+                  breakdownWorkers.some(w => w.isGasOperatorTrained)
+                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                }`}>
+                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isGasOperatorTrained).length})
                 </span>
-                <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-2 py-1 rounded">
-                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length} available
+                <span className={`text-xs px-2 py-1 rounded ${
+                  breakdownWorkers.some(w => w.isUtilityOperatorTrained)
+                    ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                }`}>
+                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length})
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Total workers: {breakdownWorkers.length} — Can fill up to {breakdownWorkers.length} role{breakdownWorkers.length !== 1 ? 's' : ''} total
+                Control Room: backup for onshore operations if needed
               </p>
             </div>
           )}

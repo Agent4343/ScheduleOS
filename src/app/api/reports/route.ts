@@ -536,6 +536,44 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Check training coverage requirements
+      // Requirement: At least ONE person on each shift must have each training type
+      const trainingTypes = [
+        { field: "isControlRoomTrained" as const, label: "Control Room Coverage" },
+        { field: "isOilOperatorTrained" as const, label: "Oil Operator Coverage" },
+        { field: "isGasOperatorTrained" as const, label: "Gas Operator Coverage" },
+        { field: "isUtilityOperatorTrained" as const, label: "Utility Operator Coverage" },
+      ]
+
+      for (const shiftType of ["DAY", "NIGHT"] as const) {
+        const shiftSchedules = daySchedules.filter(
+          (s) => s.shiftType === shiftType && s.user.includeInStaffingCount !== false
+        )
+
+        // Only check if there are workers scheduled on this shift
+        if (shiftSchedules.length > 0) {
+          // Get the worker IDs on this shift
+          const shiftWorkerIds = shiftSchedules.map((s) => s.userId)
+          // Find the workers with their training info
+          const shiftWorkers = workersWithTraining.filter((w) => shiftWorkerIds.includes(w.id))
+
+          for (const training of trainingTypes) {
+            const trainedCount = shiftWorkers.filter((w) => w[training.field]).length
+            if (trainedCount < 1) {
+              dayHasIssue = true
+              complianceIssues.push({
+                date: dateKey,
+                ruleName: training.label,
+                shiftType,
+                required: 1,
+                actual: 0,
+                shortage: 1,
+              })
+            }
+          }
+        }
+      }
+
       if (!dayHasIssue) {
         daysInCompliance++
       }
@@ -615,6 +653,36 @@ export async function GET(request: NextRequest) {
           dayIssueCount: issuesByRule[`${c.name}-DAY`]?.count || 0,
           nightIssueCount: issuesByRule[`${c.name}-NIGHT`]?.count || 0,
         })),
+      trainingCoverageRequirements: [
+        {
+          name: "Control Room Coverage",
+          color: "#9333ea",
+          description: "Backup for onshore operations",
+          dayIssueCount: issuesByRule["Control Room Coverage-DAY"]?.count || 0,
+          nightIssueCount: issuesByRule["Control Room Coverage-NIGHT"]?.count || 0,
+        },
+        {
+          name: "Oil Operator Coverage",
+          color: "#f59e0b",
+          description: "At least 1 oil trained operator per shift",
+          dayIssueCount: issuesByRule["Oil Operator Coverage-DAY"]?.count || 0,
+          nightIssueCount: issuesByRule["Oil Operator Coverage-NIGHT"]?.count || 0,
+        },
+        {
+          name: "Gas Operator Coverage",
+          color: "#3b82f6",
+          description: "At least 1 gas trained operator per shift",
+          dayIssueCount: issuesByRule["Gas Operator Coverage-DAY"]?.count || 0,
+          nightIssueCount: issuesByRule["Gas Operator Coverage-NIGHT"]?.count || 0,
+        },
+        {
+          name: "Utility Operator Coverage",
+          color: "#22c55e",
+          description: "At least 1 utility trained operator per shift",
+          dayIssueCount: issuesByRule["Utility Operator Coverage-DAY"]?.count || 0,
+          nightIssueCount: issuesByRule["Utility Operator Coverage-NIGHT"]?.count || 0,
+        },
+      ],
       issues: complianceIssues.slice(0, 50), // Limit to first 50 issues
       totalIssues: complianceIssues.length,
       excludedWorkers,
