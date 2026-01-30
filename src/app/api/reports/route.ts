@@ -59,6 +59,43 @@ type HolidayRecord = {
   date: Date
 }
 
+type StaffingRuleRecord = {
+  id: string
+  name: string
+  description: string | null
+  shiftType: string
+  minWorkers: number
+  positionType: string | null
+  isActive: boolean
+  crew: { id: string; name: string; color: string } | null
+}
+
+type CertificationTypeRecord = {
+  id: string
+  name: string
+  color: string
+  requireOnSchedule: boolean
+  minPerDayShift: number
+  minPerNightShift: number
+  isActive: boolean
+}
+
+type WorkerWithTraining = {
+  id: string
+  name: string | null
+  email: string
+  position: string | null
+  positionType: string | null
+  status: string
+  includeInStaffingCount: boolean
+  isControlRoomTrained: boolean
+  isOilOperatorTrained: boolean
+  isUtilityOperatorTrained: boolean
+  isGasOperatorTrained: boolean
+  crew: { id: string; name: string; color: string } | null
+  certifications: { certificationTypeId: string; certificationType: { id: string; name: string; color: string } }[]
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -94,10 +131,13 @@ export async function GET(request: NextRequest) {
       schedules,
       prevSchedules,
       workers,
+      workersWithTraining,
       crews,
       timeOffRequests,
       holidays,
       holidayTracking,
+      staffingRules,
+      certificationTypes,
     ] = await Promise.all([
       // Current period schedules
       prisma.schedule.findMany({
@@ -112,6 +152,7 @@ export async function GET(request: NextRequest) {
               name: true,
               email: true,
               position: true,
+              positionType: true,
               crewId: true,
               includeInStaffingCount: true,
             },
@@ -126,13 +167,37 @@ export async function GET(request: NextRequest) {
           date: { gte: prevStart, lte: prevEnd },
         },
       }) as Promise<{ shiftType: string }[]>,
-      // Workers
+      // Workers (basic)
       prisma.user.findMany({
         where: { organizationId, role: "WORKER" },
         include: {
           crew: { select: { id: true, name: true, color: true } },
         },
       }) as Promise<WorkerWithCrew[]>,
+      // Workers with training and certification info
+      prisma.user.findMany({
+        where: { organizationId, role: "WORKER", status: "ACTIVE" },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          position: true,
+          positionType: true,
+          status: true,
+          includeInStaffingCount: true,
+          isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
+          crew: { select: { id: true, name: true, color: true } },
+          certifications: {
+            select: {
+              certificationTypeId: true,
+              certificationType: { select: { id: true, name: true, color: true } },
+            },
+          },
+        },
+      }) as Promise<WorkerWithTraining[]>,
       // Crews
       prisma.crew.findMany({
         where: { organizationId },
@@ -170,6 +235,26 @@ export async function GET(request: NextRequest) {
           holiday: { select: { id: true, name: true, date: true } },
         },
       }) as Promise<HolidayTrackingWithRelations[]>,
+      // Staffing rules
+      prisma.staffingRule.findMany({
+        where: { organizationId, isActive: true },
+        include: {
+          crew: { select: { id: true, name: true, color: true } },
+        },
+      }) as Promise<StaffingRuleRecord[]>,
+      // Certification types with schedule requirements
+      prisma.certificationType.findMany({
+        where: { organizationId, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          requireOnSchedule: true,
+          minPerDayShift: true,
+          minPerNightShift: true,
+          isActive: true,
+        },
+      }) as Promise<CertificationTypeRecord[]>,
     ])
 
     // ==================
@@ -335,6 +420,215 @@ export async function GET(request: NextRequest) {
       positionStats[pos].nightShifts += workerSchedules.filter((s: ScheduleWithRelations) => s.shiftType === "NIGHT").length
     })
 
+    // ==================
+    // STAFFING COMPLIANCE
+    // ==================
+
+    // Group schedules by date for compliance checking
+    const schedulesByDate = new Map<string, typeof schedules>()
+    for (const schedule of schedules) {
+      const dateKey = schedule.date.toISOString().split("T")[0]
+      if (!schedulesByDate.has(dateKey)) {
+        schedulesByDate.set(dateKey, [])
+      }
+      schedulesByDate.get(dateKey)!.push(schedule)
+    }
+
+    // Calculate compliance for each staffing rule
+    type ComplianceIssue = {
+      date: string
+      ruleName: string
+      shiftType: string
+      required: number
+      actual: number
+      shortage: number
+      positionType?: string
+      certificationName?: string
+    }
+
+    const complianceIssues: ComplianceIssue[] = []
+    let totalDaysChecked = 0
+    let daysInCompliance = 0
+
+    // Get unique dates in the period
+    const uniqueDates = Array.from(schedulesByDate.keys()).sort()
+    totalDaysChecked = uniqueDates.length
+
+    for (const dateKey of uniqueDates) {
+      const daySchedules = schedulesByDate.get(dateKey) || []
+      let dayHasIssue = false
+
+      // Check staffing rules (only count workers with includeInStaffingCount = true)
+      for (const rule of staffingRules) {
+        // Filter by shift type and only include workers who should be counted
+        let filteredSchedules = daySchedules.filter(
+          (s) => s.shiftType === rule.shiftType && s.user.includeInStaffingCount !== false
+        )
+
+        // Filter by position type if the rule specifies one
+        if (rule.positionType) {
+          filteredSchedules = filteredSchedules.filter(
+            (s) => (s.user as { positionType?: string }).positionType === rule.positionType
+          )
+        }
+
+        const count = filteredSchedules.length
+        if (count < rule.minWorkers) {
+          dayHasIssue = true
+          complianceIssues.push({
+            date: dateKey,
+            ruleName: rule.name,
+            shiftType: rule.shiftType,
+            required: rule.minWorkers,
+            actual: count,
+            shortage: rule.minWorkers - count,
+            positionType: rule.positionType || undefined,
+          })
+        }
+      }
+
+      // Check certification requirements (only count workers with includeInStaffingCount = true)
+      const requiredCerts = certificationTypes.filter((c) => c.requireOnSchedule)
+      for (const cert of requiredCerts) {
+        // Check day shift
+        const dayShiftSchedules = daySchedules.filter(
+          (s) => s.shiftType === "DAY" && s.user.includeInStaffingCount !== false
+        )
+        const workersWithCert = workersWithTraining.filter((w) =>
+          w.certifications.some((c) => c.certificationTypeId === cert.id)
+        )
+        const dayShiftWithCert = dayShiftSchedules.filter((s) =>
+          workersWithCert.some((w) => w.id === s.userId)
+        )
+
+        if (dayShiftWithCert.length < cert.minPerDayShift) {
+          dayHasIssue = true
+          complianceIssues.push({
+            date: dateKey,
+            ruleName: cert.name,
+            shiftType: "DAY",
+            required: cert.minPerDayShift,
+            actual: dayShiftWithCert.length,
+            shortage: cert.minPerDayShift - dayShiftWithCert.length,
+            certificationName: cert.name,
+          })
+        }
+
+        // Check night shift
+        const nightShiftSchedules = daySchedules.filter(
+          (s) => s.shiftType === "NIGHT" && s.user.includeInStaffingCount !== false
+        )
+        const nightShiftWithCert = nightShiftSchedules.filter((s) =>
+          workersWithCert.some((w) => w.id === s.userId)
+        )
+
+        if (nightShiftWithCert.length < cert.minPerNightShift) {
+          dayHasIssue = true
+          complianceIssues.push({
+            date: dateKey,
+            ruleName: cert.name,
+            shiftType: "NIGHT",
+            required: cert.minPerNightShift,
+            actual: nightShiftWithCert.length,
+            shortage: cert.minPerNightShift - nightShiftWithCert.length,
+            certificationName: cert.name,
+          })
+        }
+      }
+
+      if (!dayHasIssue) {
+        daysInCompliance++
+      }
+    }
+
+    // Build compliance summary
+    const complianceRate = totalDaysChecked > 0
+      ? Math.round((daysInCompliance / totalDaysChecked) * 100)
+      : 100
+
+    // Workers excluded from staffing counts
+    const excludedWorkers = workersWithTraining
+      .filter((w) => w.includeInStaffingCount === false)
+      .map((w) => ({
+        id: w.id,
+        name: w.name || w.email,
+        position: w.position,
+        crew: w.crew,
+      }))
+
+    // Workers counted in staffing
+    const countedWorkers = workersWithTraining
+      .filter((w) => w.includeInStaffingCount !== false)
+      .map((w) => ({
+        id: w.id,
+        name: w.name || w.email,
+        position: w.position,
+        positionType: w.positionType,
+        crew: w.crew,
+        isControlRoomTrained: w.isControlRoomTrained,
+        isOilOperatorTrained: w.isOilOperatorTrained,
+        isUtilityOperatorTrained: w.isUtilityOperatorTrained,
+        isGasOperatorTrained: w.isGasOperatorTrained,
+        certifications: w.certifications.map((c) => ({
+          id: c.certificationTypeId,
+          name: c.certificationType.name,
+          color: c.certificationType.color,
+        })),
+      }))
+
+    // Group compliance issues by rule for summary
+    const issuesByRule: Record<string, { count: number; shiftType: string; totalShortage: number }> = {}
+    for (const issue of complianceIssues) {
+      const key = `${issue.ruleName}-${issue.shiftType}`
+      if (!issuesByRule[key]) {
+        issuesByRule[key] = { count: 0, shiftType: issue.shiftType, totalShortage: 0 }
+      }
+      issuesByRule[key].count++
+      issuesByRule[key].totalShortage += issue.shortage
+    }
+
+    const complianceData = {
+      summary: {
+        totalDaysChecked,
+        daysInCompliance,
+        daysWithIssues: totalDaysChecked - daysInCompliance,
+        complianceRate,
+      },
+      staffingRules: staffingRules.map((r) => ({
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        shiftType: r.shiftType,
+        minWorkers: r.minWorkers,
+        positionType: r.positionType,
+        crew: r.crew,
+        issueCount: issuesByRule[`${r.name}-${r.shiftType}`]?.count || 0,
+      })),
+      certificationRequirements: certificationTypes
+        .filter((c) => c.requireOnSchedule)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color,
+          minPerDayShift: c.minPerDayShift,
+          minPerNightShift: c.minPerNightShift,
+          dayIssueCount: issuesByRule[`${c.name}-DAY`]?.count || 0,
+          nightIssueCount: issuesByRule[`${c.name}-NIGHT`]?.count || 0,
+        })),
+      issues: complianceIssues.slice(0, 50), // Limit to first 50 issues
+      totalIssues: complianceIssues.length,
+      excludedWorkers,
+      countedWorkers,
+      trainingStats: {
+        controlRoomTrained: countedWorkers.filter((w) => w.isControlRoomTrained).length,
+        oilOperatorTrained: countedWorkers.filter((w) => w.isOilOperatorTrained).length,
+        utilityOperatorTrained: countedWorkers.filter((w) => w.isUtilityOperatorTrained).length,
+        gasOperatorTrained: countedWorkers.filter((w) => w.isGasOperatorTrained).length,
+        totalCounted: countedWorkers.length,
+        totalExcluded: excludedWorkers.length,
+      },
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -362,6 +656,7 @@ export async function GET(request: NextRequest) {
         timeOffStats,
         holidayFairness,
         holidays: holidays.map((h) => ({ id: h.id, name: h.name, date: h.date })),
+        compliance: complianceData,
       },
     })
   } catch (error) {

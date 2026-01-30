@@ -24,7 +24,80 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  ShieldCheck,
+  ShieldAlert,
+  UserX,
+  GraduationCap,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react"
+
+interface ComplianceIssue {
+  date: string
+  ruleName: string
+  shiftType: string
+  required: number
+  actual: number
+  shortage: number
+  positionType?: string
+  certificationName?: string
+}
+
+interface ComplianceData {
+  summary: {
+    totalDaysChecked: number
+    daysInCompliance: number
+    daysWithIssues: number
+    complianceRate: number
+  }
+  staffingRules: Array<{
+    id: string
+    name: string
+    description: string | null
+    shiftType: string
+    minWorkers: number
+    positionType: string | null
+    crew: { id: string; name: string; color: string } | null
+    issueCount: number
+  }>
+  certificationRequirements: Array<{
+    id: string
+    name: string
+    color: string
+    minPerDayShift: number
+    minPerNightShift: number
+    dayIssueCount: number
+    nightIssueCount: number
+  }>
+  issues: ComplianceIssue[]
+  totalIssues: number
+  excludedWorkers: Array<{
+    id: string
+    name: string
+    position: string | null
+    crew: { id: string; name: string; color: string } | null
+  }>
+  countedWorkers: Array<{
+    id: string
+    name: string
+    position: string | null
+    positionType: string | null
+    crew: { id: string; name: string; color: string } | null
+    isControlRoomTrained: boolean
+    isOilOperatorTrained: boolean
+    isUtilityOperatorTrained: boolean
+    isGasOperatorTrained: boolean
+    certifications: Array<{ id: string; name: string; color: string }>
+  }>
+  trainingStats: {
+    controlRoomTrained: number
+    oilOperatorTrained: number
+    utilityOperatorTrained: number
+    gasOperatorTrained: number
+    totalCounted: number
+    totalExcluded: number
+  }
+}
 
 interface ReportData {
   period: { start: string; end: string }
@@ -105,6 +178,7 @@ interface ReportData {
     holidaysWorked: number
     totalTracked: number
   }>
+  compliance: ComplianceData
 }
 
 function TrendBadge({ value, suffix = "%" }: { value: number; suffix?: string }) {
@@ -371,6 +445,276 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Staffing Compliance Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {reportData.compliance.summary.complianceRate >= 90 ? (
+                  <ShieldCheck className="h-5 w-5 text-green-500" />
+                ) : reportData.compliance.summary.complianceRate >= 70 ? (
+                  <ShieldAlert className="h-5 w-5 text-amber-500" />
+                ) : (
+                  <ShieldAlert className="h-5 w-5 text-red-500" />
+                )}
+                Staffing Compliance
+              </CardTitle>
+              <CardDescription>
+                Minimum requirements and training compliance for the selected period
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Compliance Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className={`text-3xl font-bold ${
+                    reportData.compliance.summary.complianceRate >= 90 ? "text-green-600" :
+                    reportData.compliance.summary.complianceRate >= 70 ? "text-amber-600" : "text-red-600"
+                  }`}>
+                    {reportData.compliance.summary.complianceRate}%
+                  </p>
+                  <p className="text-sm text-muted-foreground">Compliance Rate</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950">
+                  <p className="text-3xl font-bold text-green-600">
+                    {reportData.compliance.summary.daysInCompliance}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Days Compliant</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-red-50 dark:bg-red-950">
+                  <p className="text-3xl font-bold text-red-600">
+                    {reportData.compliance.summary.daysWithIssues}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Days with Issues</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className="text-3xl font-bold">
+                    {reportData.compliance.summary.totalDaysChecked}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Days Checked</p>
+                </div>
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Staffing Rules */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Minimum Staffing Rules
+                  </h4>
+                  {reportData.compliance.staffingRules.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No staffing rules configured.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reportData.compliance.staffingRules.map((rule) => (
+                        <div key={rule.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{rule.name}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                rule.shiftType === "DAY" ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" :
+                                "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                              }`}>
+                                {rule.shiftType}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Min {rule.minWorkers} worker{rule.minWorkers !== 1 ? "s" : ""}
+                              {rule.positionType && ` (${rule.positionType})`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {rule.issueCount === 0 ? (
+                              <span className="flex items-center gap-1 text-green-600 text-sm">
+                                <CheckCircle2 className="h-4 w-4" />
+                                OK
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-red-600 text-sm">
+                                <XCircle className="h-4 w-4" />
+                                {rule.issueCount} issue{rule.issueCount !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Certification Requirements */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4" />
+                    Certification Requirements
+                  </h4>
+                  {reportData.compliance.certificationRequirements.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No certification requirements configured.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reportData.compliance.certificationRequirements.map((cert) => (
+                        <div key={cert.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: cert.color }}
+                              />
+                              <span className="font-medium">{cert.name}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Day: min {cert.minPerDayShift} | Night: min {cert.minPerNightShift}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {cert.dayIssueCount === 0 && cert.nightIssueCount === 0 ? (
+                              <span className="flex items-center gap-1 text-green-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                                OK
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-red-600">
+                                <XCircle className="h-4 w-4" />
+                                {cert.dayIssueCount + cert.nightIssueCount} issue{cert.dayIssueCount + cert.nightIssueCount !== 1 ? "s" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Training Stats and Excluded Workers */}
+              <div className="grid lg:grid-cols-2 gap-6 mt-6 pt-6 border-t">
+                {/* Training Stats */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4" />
+                    Training Qualifications (Counted Workers)
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <span className="text-sm">Control Room Trained</span>
+                      <span className="font-medium">
+                        {reportData.compliance.trainingStats.controlRoomTrained} / {reportData.compliance.trainingStats.totalCounted}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <span className="text-sm">Oil Operator Trained</span>
+                      <span className="font-medium">
+                        {reportData.compliance.trainingStats.oilOperatorTrained} / {reportData.compliance.trainingStats.totalCounted}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <span className="text-sm">Utility Operator Trained</span>
+                      <span className="font-medium">
+                        {reportData.compliance.trainingStats.utilityOperatorTrained} / {reportData.compliance.trainingStats.totalCounted}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 rounded bg-muted/30">
+                      <span className="text-sm">Gas Operator Trained</span>
+                      <span className="font-medium">
+                        {reportData.compliance.trainingStats.gasOperatorTrained} / {reportData.compliance.trainingStats.totalCounted}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Excluded Workers */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <UserX className="h-4 w-4 text-amber-500" />
+                    Workers Excluded from Staffing Counts
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({reportData.compliance.trainingStats.totalExcluded} total)
+                    </span>
+                  </h4>
+                  {reportData.compliance.excludedWorkers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+                      All active workers are counted in staffing compliance.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {reportData.compliance.excludedWorkers.map((worker) => (
+                        <div key={worker.id} className="flex items-center justify-between p-2 rounded bg-amber-50 dark:bg-amber-950">
+                          <div>
+                            <span className="font-medium">{worker.name}</span>
+                            {worker.position && (
+                              <span className="text-sm text-muted-foreground ml-2">({worker.position})</span>
+                            )}
+                          </div>
+                          {worker.crew && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded"
+                              style={{ backgroundColor: worker.crew.color + "20", color: worker.crew.color }}
+                            >
+                              {worker.crew.name}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    These workers are scheduled but NOT counted toward minimum staffing requirements.
+                  </p>
+                </div>
+              </div>
+
+              {/* Recent Compliance Issues */}
+              {reportData.compliance.totalIssues > 0 && (
+                <div className="mt-6 pt-6 border-t">
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    Recent Compliance Issues
+                    <span className="text-xs font-normal text-muted-foreground">
+                      ({reportData.compliance.totalIssues} total)
+                    </span>
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 px-2">Date</th>
+                          <th className="text-left py-2 px-2">Rule</th>
+                          <th className="text-left py-2 px-2">Shift</th>
+                          <th className="text-right py-2 px-2">Required</th>
+                          <th className="text-right py-2 px-2">Actual</th>
+                          <th className="text-right py-2 px-2">Shortage</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.compliance.issues.slice(0, 10).map((issue, idx) => (
+                          <tr key={idx} className="border-b last:border-0">
+                            <td className="py-2 px-2">{new Date(issue.date).toLocaleDateString()}</td>
+                            <td className="py-2 px-2">{issue.ruleName}</td>
+                            <td className="py-2 px-2">
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                issue.shiftType === "DAY" ? "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300" :
+                                "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                              }`}>
+                                {issue.shiftType}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-right">{issue.required}</td>
+                            <td className="py-2 px-2 text-right">{issue.actual}</td>
+                            <td className="py-2 px-2 text-right text-red-600 font-medium">-{issue.shortage}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {reportData.compliance.totalIssues > 10 && (
+                      <p className="text-xs text-muted-foreground mt-2 text-center">
+                        Showing first 10 of {reportData.compliance.totalIssues} issues
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Schedule Breakdown + Crew Performance */}
           <div className="grid lg:grid-cols-2 gap-6">
