@@ -11,7 +11,6 @@ import {
   Calendar,
   Clock,
   TrendingUp,
-  TrendingDown,
   Download,
   Loader2,
   Sun,
