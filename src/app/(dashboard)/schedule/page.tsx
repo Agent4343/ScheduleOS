@@ -1697,43 +1697,52 @@ function SchedulePageContent() {
             <div className="p-3 bg-muted/50 rounded-md">
               <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
               <p className="text-xs text-muted-foreground mb-2">
-                Requirement: At least 1 person on shift must have each training type
+                Requirement: At least 1 counted worker on shift must have each training type
               </p>
-              <div className="flex flex-wrap gap-2">
-                <span className={`text-xs px-2 py-1 rounded ${
-                  breakdownWorkers.some(w => w.isControlRoomTrained)
-                    ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
-                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                }`}>
-                  CR: {breakdownWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isControlRoomTrained).length})
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  breakdownWorkers.some(w => w.isOilOperatorTrained)
-                    ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
-                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                }`}>
-                  Oil: {breakdownWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isOilOperatorTrained).length})
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  breakdownWorkers.some(w => w.isGasOperatorTrained)
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                }`}>
-                  Gas: {breakdownWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isGasOperatorTrained).length})
-                </span>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  breakdownWorkers.some(w => w.isUtilityOperatorTrained)
-                    ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
-                    : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                }`}>
-                  Utility: {breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({breakdownWorkers.filter(w => w.isUtilityOperatorTrained).length})
-                </span>
-              </div>
+              {(() => {
+                // Only count workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isControlRoomTrained)
+                        ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      CR: {countedWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isControlRoomTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isOilOperatorTrained)
+                        ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Oil: {countedWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isOilOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isGasOperatorTrained)
+                        ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Gas: {countedWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isGasOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isUtilityOperatorTrained)
+                        ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Utility: {countedWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isUtilityOperatorTrained).length})
+                    </span>
+                  </div>
+                )
+              })()}
               <p className="text-xs text-muted-foreground mt-2">
                 Control Room: backup for onshore operations if needed
               </p>
               {/* Single point of failure warning */}
               {(() => {
+                // Only consider workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+
                 // Find training types with exactly 1 person covering them
                 const trainingTypes = [
                   { key: 'oil', label: 'Oil', field: 'isOilOperatorTrained' as const },
@@ -1742,10 +1751,10 @@ function SchedulePageContent() {
                 ];
 
                 // For each training type with exactly 1 person, track who that person is
-                const singleCoverageMap: Record<string, { types: string[], worker: typeof breakdownWorkers[0] }> = {};
+                const singleCoverageMap: Record<string, { types: string[], worker: typeof countedWorkers[0] }> = {};
 
                 for (const training of trainingTypes) {
-                  const trainedWorkers = breakdownWorkers.filter(w => w[training.field]);
+                  const trainedWorkers = countedWorkers.filter(w => w[training.field]);
                   if (trainedWorkers.length === 1) {
                     const worker = trainedWorkers[0];
                     if (!singleCoverageMap[worker.id]) {
@@ -1782,51 +1791,71 @@ function SchedulePageContent() {
 
           {/* Worker list */}
           <div className="space-y-2">
-            <h4 className="font-medium text-sm text-muted-foreground">
-              {breakdownWorkers.length} worker{breakdownWorkers.length !== 1 ? "s" : ""} on {breakdownShift.toLowerCase()} shift:
-            </h4>
+            {(() => {
+              const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false).length
+              const notCountedWorkers = breakdownWorkers.length - countedWorkers
+              return (
+                <h4 className="font-medium text-sm text-muted-foreground">
+                  {countedWorkers} worker{countedWorkers !== 1 ? "s" : ""} counted on {breakdownShift.toLowerCase()} shift
+                  {notCountedWorkers > 0 && (
+                    <span className="text-orange-600 dark:text-orange-400"> (+{notCountedWorkers} not counted)</span>
+                  )}
+                </h4>
+              )
+            })()}
             {breakdownWorkers.length === 0 ? (
               <p className="text-sm text-muted-foreground italic">No workers scheduled</p>
             ) : (
               <div className="grid gap-2">
-                {breakdownWorkers.map((worker) => (
-                  <div
-                    key={worker.id}
-                    className="flex items-center gap-3 p-2 bg-muted/50 rounded-md"
-                  >
+                {breakdownWorkers.map((worker) => {
+                  const isNotCounted = worker.includeInStaffingCount === false
+                  return (
                     <div
-                      className="w-3 h-8 rounded"
-                      style={{ backgroundColor: worker.crew?.color || "#ccc" }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{worker.name || "Unnamed"}</div>
-                      <div className="text-xs text-muted-foreground flex gap-2">
-                        <span>{worker.crew?.name || "No crew"}</span>
-                        {worker.positionType && (
-                          <>
-                            <span>•</span>
-                            <span>{worker.positionType.replace("_", " ")}</span>
-                          </>
+                      key={worker.id}
+                      className={cn(
+                        "flex items-center gap-3 p-2 rounded-md",
+                        isNotCounted ? "bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800" : "bg-muted/50"
+                      )}
+                    >
+                      <div
+                        className="w-3 h-8 rounded"
+                        style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {worker.name || "Unnamed"}
+                          {isNotCounted && (
+                            <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded" title="Not included in staffing counts">Not Counted</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex gap-2">
+                          <span>{worker.crew?.name || "No crew"}</span>
+                          {worker.positionType && (
+                            <>
+                              <span>•</span>
+                              <span>{worker.positionType.replace("_", " ")}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* Training badges */}
+                      <div className="flex gap-1 flex-shrink-0">
+                        {worker.isControlRoomTrained && (
+                          <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded" title="Control Room Trained">CR</span>
+                        )}
+                        {worker.isOilOperatorTrained && (
+                          <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded" title="Oil Operator Trained">Oil</span>
+                        )}
+                        {worker.isGasOperatorTrained && (
+                          <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded" title="Gas Operator Trained">Gas</span>
+                        )}
+                        {worker.isUtilityOperatorTrained && (
+                          <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded" title="Utility Operator Trained">Util</span>
                         )}
                       </div>
                     </div>
-                    {/* Training badges */}
-                    <div className="flex gap-1 flex-shrink-0">
-                      {worker.isControlRoomTrained && (
-                        <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded" title="Control Room Trained">CR</span>
-                      )}
-                      {worker.isOilOperatorTrained && (
-                        <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded" title="Oil Operator Trained">Oil</span>
-                      )}
-                      {worker.isGasOperatorTrained && (
-                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded" title="Gas Operator Trained">Gas</span>
-                      )}
-                      {worker.isUtilityOperatorTrained && (
-                        <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded" title="Utility Operator Trained">Util</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
