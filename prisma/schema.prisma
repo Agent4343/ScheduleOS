@@ -145,6 +145,7 @@ model User {
   isUtilityOperatorTrained Boolean @default(false) // Trained as Utility Operator
   isGasOperatorTrained Boolean @default(false) // Trained as Gas Operator
   includeInStaffingCount Boolean @default(true) // Include this worker in staffing counts/calculations
+  singleTrainingCoverageOnly Boolean @default(false) // When true, can only count toward ONE training coverage per shift
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

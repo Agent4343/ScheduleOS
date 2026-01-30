@@ -69,6 +69,7 @@ export const createUserSchema = z.object({
   isUtilityOperatorTrained: z.boolean().default(false),
   isGasOperatorTrained: z.boolean().default(false),
   includeInStaffingCount: z.boolean().default(true),
+  singleTrainingCoverageOnly: z.boolean().default(false),
 })
 
 // For updates, all fields are optional including email and name
@@ -96,6 +97,7 @@ export const updateUserSchema = z.object({
   isUtilityOperatorTrained: z.boolean().optional(),
   isGasOperatorTrained: z.boolean().optional(),
   includeInStaffingCount: z.boolean().optional(),
+  singleTrainingCoverageOnly: z.boolean().optional(),
 })
 
 // Crew validations

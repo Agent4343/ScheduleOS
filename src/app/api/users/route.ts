@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
           includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
           customRoleId: true,
           crew: {
             select: {
@@ -96,6 +97,7 @@ export async function GET(request: NextRequest) {
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
           includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
           crew: {
             select: {
               id: true,
@@ -260,6 +262,7 @@ export async function POST(request: NextRequest) {
         isUtilityOperatorTrained: validatedData.isUtilityOperatorTrained,
         isGasOperatorTrained: validatedData.isGasOperatorTrained,
         includeInStaffingCount: validatedData.includeInStaffingCount,
+        singleTrainingCoverageOnly: validatedData.singleTrainingCoverageOnly,
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",
@@ -277,6 +280,7 @@ export async function POST(request: NextRequest) {
         isUtilityOperatorTrained: true,
         isGasOperatorTrained: true,
         includeInStaffingCount: true,
+        singleTrainingCoverageOnly: true,
         customRoleId: true,
         crew: {
           select: {

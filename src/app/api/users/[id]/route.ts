@@ -162,6 +162,7 @@ export async function PATCH(
     if (validatedData.isUtilityOperatorTrained !== undefined) updateData.isUtilityOperatorTrained = validatedData.isUtilityOperatorTrained
     if (validatedData.isGasOperatorTrained !== undefined) updateData.isGasOperatorTrained = validatedData.isGasOperatorTrained
     if (validatedData.includeInStaffingCount !== undefined) updateData.includeInStaffingCount = validatedData.includeInStaffingCount
+    if (validatedData.singleTrainingCoverageOnly !== undefined) updateData.singleTrainingCoverageOnly = validatedData.singleTrainingCoverageOnly
 
     try {
       user = await prisma.user.update({
@@ -182,6 +183,7 @@ export async function PATCH(
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
           includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
           customRoleId: true,
           crew: {
             select: {
@@ -223,6 +225,7 @@ export async function PATCH(
           isUtilityOperatorTrained: true,
           isGasOperatorTrained: true,
           includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
           crew: {
             select: {
               id: true,

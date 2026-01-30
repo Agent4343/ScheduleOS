@@ -88,6 +88,7 @@ type WorkerWithTraining = {
   positionType: string | null
   status: string
   includeInStaffingCount: boolean
+  singleTrainingCoverageOnly: boolean
   isControlRoomTrained: boolean
   isOilOperatorTrained: boolean
   isUtilityOperatorTrained: boolean
@@ -185,6 +186,7 @@ export async function GET(request: NextRequest) {
           positionType: true,
           status: true,
           includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
           isControlRoomTrained: true,
           isOilOperatorTrained: true,
           isUtilityOperatorTrained: true,
@@ -557,8 +559,42 @@ export async function GET(request: NextRequest) {
           // Find the workers with their training info
           const shiftWorkers = workersWithTraining.filter((w) => shiftWorkerIds.includes(w.id))
 
+          // Track which trainings each single-coverage worker is assigned to
+          // Workers with singleTrainingCoverageOnly=true can only cover ONE training type
+          const trainingCoverage: Record<string, string[]> = {}
           for (const training of trainingTypes) {
-            const trainedCount = shiftWorkers.filter((w) => w[training.field]).length
+            trainingCoverage[training.field] = []
+          }
+
+          // First pass: assign single-coverage workers to their first training only
+          const assignedSingleCoverageWorkers = new Set<string>()
+          for (const worker of shiftWorkers) {
+            if (worker.singleTrainingCoverageOnly) {
+              // Find the first training this worker has (in priority order)
+              for (const training of trainingTypes) {
+                if (worker[training.field] && !assignedSingleCoverageWorkers.has(worker.id)) {
+                  trainingCoverage[training.field].push(worker.id)
+                  assignedSingleCoverageWorkers.add(worker.id)
+                  break // Only assign to ONE training
+                }
+              }
+            }
+          }
+
+          // Second pass: multi-coverage workers count toward ALL their trainings
+          for (const worker of shiftWorkers) {
+            if (!worker.singleTrainingCoverageOnly) {
+              for (const training of trainingTypes) {
+                if (worker[training.field]) {
+                  trainingCoverage[training.field].push(worker.id)
+                }
+              }
+            }
+          }
+
+          // Check if each training has at least one worker
+          for (const training of trainingTypes) {
+            const trainedCount = trainingCoverage[training.field].length
             if (trainedCount < 1) {
               dayHasIssue = true
               complianceIssues.push({

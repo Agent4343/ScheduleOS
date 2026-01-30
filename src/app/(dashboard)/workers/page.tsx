@@ -61,6 +61,7 @@ interface User {
   isGasOperatorTrained?: boolean
   // Staffing settings
   includeInStaffingCount?: boolean
+  singleTrainingCoverageOnly?: boolean
 }
 
 interface Crew {
@@ -148,6 +149,7 @@ export default function WorkersPage() {
     hireDate: "",
     status: "ACTIVE" as UserStatus,
     includeInStaffingCount: true,
+    singleTrainingCoverageOnly: false,
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -218,6 +220,7 @@ export default function WorkersPage() {
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
       includeInStaffingCount: user.includeInStaffingCount !== false,
+      singleTrainingCoverageOnly: user.singleTrainingCoverageOnly === true,
     })
     // Fetch user's certifications with expiry dates
     try {
@@ -330,6 +333,7 @@ export default function WorkersPage() {
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
           includeInStaffingCount: editFormData.includeInStaffingCount,
+          singleTrainingCoverageOnly: editFormData.singleTrainingCoverageOnly,
         }),
       })
 
@@ -855,7 +859,7 @@ export default function WorkersPage() {
           </div>
 
           {/* Staffing Count Settings */}
-          <div className="p-3 border rounded-lg space-y-2 bg-muted/30">
+          <div className="p-3 border rounded-lg space-y-3 bg-muted/30">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -868,6 +872,21 @@ export default function WorkersPage() {
                 <p className="text-xs text-muted-foreground">
                   When disabled, this worker won&apos;t be counted in shift totals, staffing alerts, or coverage calculations.
                   Useful for supervisors, leads, or administrative staff.
+                </p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.singleTrainingCoverageOnly}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, singleTrainingCoverageOnly: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <div>
+                <span className="font-medium text-sm">Single training coverage only</span>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, this worker can only cover ONE training type per shift, even if trained in multiple areas.
+                  Use for workers who shouldn&apos;t be relied on to cover multiple roles simultaneously.
                 </p>
               </div>
             </label>
