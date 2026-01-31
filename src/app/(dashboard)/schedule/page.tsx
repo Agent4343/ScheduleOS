@@ -1765,8 +1765,9 @@ function SchedulePageContent() {
                 }
 
                 // Find workers who are single points of failure for multiple training types
+                // But if one worker covers ALL three training types, that's acceptable - no warning needed
                 const singlePointsOfFailure = Object.values(singleCoverageMap).filter(
-                  entry => entry.types.length > 1
+                  entry => entry.types.length > 1 && entry.types.length < trainingTypes.length
                 );
 
                 if (singlePointsOfFailure.length === 0) return null;
