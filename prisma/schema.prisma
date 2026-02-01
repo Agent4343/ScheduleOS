@@ -84,6 +84,7 @@ model Organization {
   customRoles      CustomRole[]
   aiChatSessions   AIChatSession[]
   certificationTypes CertificationType[]
+  auditLogs        AuditLog[]
 }
 
 // Subscription tiers with worker limits
@@ -176,6 +177,7 @@ model User {
   createdInvitations Invitation[] @relation("InvitationCreator")
   aiChatSessions  AIChatSession[]
   certifications  UserCertification[]
+  auditLogs       AuditLog[]
 
   @@index([organizationId])
   @@index([departmentId])
@@ -614,4 +616,31 @@ model AIChatMessage {
   session   AIChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+// =====================
+// Audit Logging
+// =====================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // e.g., "USER_CREATED", "SCHEDULE_UPDATED"
+  entity    String   // e.g., "User", "Schedule"
+  entityId  String?  // ID of the affected entity
+  details   Json?    // Additional details about the action
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // User who performed the action
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([createdAt])
 }

@@ -27,6 +27,14 @@ export const registerSchema = z.object({
     .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
 })
 
+export const passwordSchema = z
+  .string()
+  .min(12, "Password must be at least 12 characters")
+  .regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/])/,
+    "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+  )
+
 // Organization validations
 export const createOrganizationSchema = z.object({
   name: z.string()
