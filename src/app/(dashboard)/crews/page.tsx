@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { PageHeader } from "@/components/layout/page-header"
+import { useToast } from "@/components/ui/toast"
+import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Users2,
   Plus,
@@ -59,6 +59,8 @@ const COLORS = [
 ]
 
 export default function CrewsPage() {
+  const { addToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [crews, setCrews] = useState<Crew[]>([])
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,7 +83,6 @@ export default function CrewsPage() {
     currentPhase: 0,
   })
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
 
   useEffect(() => {
     async function fetchData() {
@@ -133,7 +134,6 @@ export default function CrewsPage() {
     e.preventDefault()
     if (!editingCrew) return
     setSubmitting(true)
-    setFeedback(null)
 
     try {
       const response = await fetch(`/api/crews/${editingCrew.id}`, {
@@ -156,48 +156,50 @@ export default function CrewsPage() {
         )
         setIsEditModalOpen(false)
         setEditingCrew(null)
-        setFeedback({ type: "success", message: "Crew updated successfully." })
+        addToast({ type: "success", message: "Crew updated successfully" })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to update crew" })
+        addToast({ type: "error", message: data.error || "Failed to update crew" })
       }
     } catch (error) {
       console.error("Failed to update crew:", error)
-      setFeedback({ type: "error", message: "Failed to update crew" })
+      addToast({ type: "error", message: "Failed to update crew" })
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleDeleteCrew(crewId: string) {
-    if (!confirm("Are you sure you want to delete this crew? This action cannot be undone.")) {
-      return
-    }
+  function handleDeleteCrew(crewId: string) {
     setOpenMenuId(null)
-    setFeedback(null)
+    confirm({
+      title: "Delete Crew",
+      description: "Are you sure you want to delete this crew? This action cannot be undone.",
+      confirmText: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/crews/${crewId}`, {
+            method: "DELETE",
+          })
 
-    try {
-      const response = await fetch(`/api/crews/${crewId}`, {
-        method: "DELETE",
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setCrews((prev) => prev.filter((c) => c.id !== crewId))
-        setFeedback({ type: "success", message: "Crew deleted successfully." })
-      } else {
-        setFeedback({ type: "error", message: data.error || "Failed to delete crew" })
-      }
-    } catch (error) {
-      console.error("Failed to delete crew:", error)
-      setFeedback({ type: "error", message: "Failed to delete crew" })
-    }
+          if (data.success) {
+            setCrews((prev) => prev.filter((c) => c.id !== crewId))
+            addToast({ type: "success", message: "Crew deleted successfully" })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to delete crew" })
+          }
+        } catch (error) {
+          console.error("Failed to delete crew:", error)
+          addToast({ type: "error", message: "Failed to delete crew" })
+        }
+      },
+    })
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setFeedback(null)
 
     try {
       const response = await fetch("/api/crews", {
@@ -220,13 +222,13 @@ export default function CrewsPage() {
           color: "#3B82F6",
           rotationPatternId: "",
         })
-        setFeedback({ type: "success", message: "Crew created successfully." })
+        addToast({ type: "success", message: "Crew created successfully" })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to create crew" })
+        addToast({ type: "error", message: data.error || "Failed to create crew" })
       }
     } catch (error) {
       console.error("Failed to create crew:", error)
-      setFeedback({ type: "error", message: "Failed to create crew" })
+      addToast({ type: "error", message: "Failed to create crew" })
     } finally {
       setSubmitting(false)
     }
@@ -235,10 +237,9 @@ export default function CrewsPage() {
   async function handleGenerateSchedule(crewId: string) {
     const crew = crews.find((c) => c.id === crewId)
     if (!crew?.rotationPattern) {
-      setFeedback({ type: "error", message: "Please assign a rotation pattern to this crew first." })
+      addToast({ type: "warning", message: "Please assign a rotation pattern to this crew first" })
       return
     }
-    setFeedback(null)
 
     const startDate = new Date()
     const endDate = new Date()
@@ -260,36 +261,31 @@ export default function CrewsPage() {
       const data = await response.json()
 
       if (data.success) {
-        setFeedback({ type: "success", message: `Schedule generated. ${data.message}` })
+        addToast({ type: "success", message: `Schedule generated: ${data.message}` })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to generate schedule" })
+        addToast({ type: "error", message: data.error || "Failed to generate schedule" })
       }
     } catch (error) {
       console.error("Failed to generate schedule:", error)
-      setFeedback({ type: "error", message: "Failed to generate schedule" })
+      addToast({ type: "error", message: "Failed to generate schedule" })
     }
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        title="Crews"
-        description={`Manage your crew rotations (${crews.length} crews)`}
-        actions={(
-          <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Crew
-          </Button>
-        )}
-      />
-
-      {feedback ? (
-        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
-          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
-          <AlertDescription>{feedback.message}</AlertDescription>
-        </Alert>
-      ) : null}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Crews</h1>
+          <p className="text-muted-foreground">
+            Manage your crew rotations ({crews.length} crews)
+          </p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Crew
+        </Button>
+      </div>
 
       {/* Crews grid */}
       {loading ? (
@@ -606,6 +602,8 @@ export default function CrewsPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog />
     </div>
   )
 }

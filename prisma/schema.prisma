@@ -62,17 +62,67 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Subscription
+  subscriptionTier   SubscriptionTier @default(TRIAL)
+  subscriptionStatus SubscriptionStatus @default(TRIALING)
+  workerLimit        Int              @default(5)      // Max workers allowed
+  trialEndsAt        DateTime?                         // When trial expires
+  subscriptionEndsAt DateTime?                         // Current billing period end
+  stripeCustomerId   String?          @unique          // For Stripe integration
+  stripeSubscriptionId String?        @unique
+
   // Relations
   users            User[]
   crews            Crew[]
+  departments      Department[]
   rotationPatterns RotationPattern[]
   staffingRules    StaffingRule[]
   shutdowns        Shutdown[]
   holidays         Holiday[]
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
-  auditLogs        AuditLog[]
-  shiftSwapRequests ShiftSwapRequest[]
+  customRoles      CustomRole[]
+  aiChatSessions   AIChatSession[]
+  certificationTypes CertificationType[]
+}
+
+// Subscription tiers with worker limits
+enum SubscriptionTier {
+  TRIAL      // 5 workers, 14 days
+  STARTER    // 15 workers, $39/mo
+  GROWTH     // 40 workers, $79/mo
+  PRO        // 100 workers, $149/mo
+  BUSINESS   // Unlimited, $299/mo
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// Department - allows Enterprise orgs to have separate calendars/teams
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#3B82F6")
+  isDefault   Boolean  @default(false) // First department created is default
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Relations
+  users User[]
+  crews Crew[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model User {
@@ -88,6 +138,14 @@ model User {
   phone          String?
   hireDate       DateTime?
   status         UserStatus   @default(ACTIVE)
+  sortOrder      Int?         // Custom sort order for schedule display
+  // Operator training/certification flags
+  isControlRoomTrained Boolean @default(false) // Trained for control room duties
+  isOilOperatorTrained Boolean @default(false) // Trained as Oil Operator
+  isUtilityOperatorTrained Boolean @default(false) // Trained as Utility Operator
+  isGasOperatorTrained Boolean @default(false) // Trained as Gas Operator
+  includeInStaffingCount Boolean @default(true) // Include this worker in staffing counts/calculations
+  singleTrainingCoverageOnly Boolean @default(false) // When true, can only count toward ONE training coverage per shift
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -95,9 +153,17 @@ model User {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
+  // Department (for Enterprise multi-department support)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Crew assignment
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
+
+  // Custom role (optional, for display/organization purposes)
+  customRoleId String?
+  customRole   CustomRole? @relation(fields: [customRoleId], references: [id], onDelete: SetNull)
 
   // Relations
   accounts        Account[]
@@ -108,12 +174,11 @@ model User {
   holidayTracking HolidayTracking[]
   notifications   Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
-  auditLogs       AuditLog[]
-  requestedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapRequester")
-  receivedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapTarget")
-  approvedShiftSwaps ShiftSwapRequest[] @relation("ShiftSwapApprover")
+  aiChatSessions  AIChatSession[]
+  certifications  UserCertification[]
 
   @@index([organizationId])
+  @@index([departmentId])
   @@index([crewId])
 }
 
@@ -150,6 +215,10 @@ model Crew {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
+  // Department (for Enterprise multi-department support)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
   // Rotation Pattern
   rotationPatternId String?
   rotationPattern   RotationPattern? @relation(fields: [rotationPatternId], references: [id])
@@ -160,6 +229,8 @@ model Crew {
   staffingRules StaffingRule[]
 
   @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([departmentId])
 }
 
 model RotationPattern {
@@ -185,6 +256,7 @@ model RotationPattern {
   crews Crew[]
 
   @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 // =====================
@@ -231,6 +303,28 @@ enum ShiftType {
   CUSTOM
 }
 
+// Custom roles that organizations can create
+model CustomRole {
+  id           String   @id @default(cuid())
+  name         String   // Role name like "Team Lead", "Senior Operator"
+  description  String?
+  color        String   @default("#6b7280") // Hex color for display
+  baseRole     UserRole @default(WORKER)    // Base permission level
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Users with this role
+  users User[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
 // Custom shift types that organizations can create
 model CustomShiftType {
   id           String   @id @default(cuid())
@@ -248,6 +342,60 @@ model CustomShiftType {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// Certification types that organizations can define
+model CertificationType {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Forklift Operator", "Food Safety", "First Aid"
+  description String?
+  color       String   @default("#3B82F6") // Hex color for display
+  isRequired  Boolean  @default(false)     // Required for all workers?
+  isActive    Boolean  @default(true)
+
+  // Schedule staffing requirements
+  requireOnSchedule Boolean @default(false)  // Must have worker with this cert on shift?
+  minPerDayShift    Int     @default(1)      // Minimum workers on day shift
+  minPerNightShift  Int     @default(1)      // Minimum workers on night shift
+
+  // Expiry reminders (days before expiry)
+  expiryWarningDays Int     @default(180)    // Default 6 months warning
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Users with this certification
+  userCertifications UserCertification[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// Junction table for user certifications
+model UserCertification {
+  id        String    @id @default(cuid())
+  earnedAt  DateTime  @default(now())  // When certification was earned
+  expiresAt DateTime?                   // Optional expiration date
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // User
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Certification type
+  certificationTypeId String
+  certificationType   CertificationType @relation(fields: [certificationTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, certificationTypeId])
+  @@index([userId])
+  @@index([certificationTypeId])
 }
 
 model TimeOffRequest {
@@ -315,6 +463,7 @@ model StaffingRule {
   crew   Crew?   @relation(fields: [crewId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, name])
+  @@index([organizationId])
 }
 
 model Shutdown {
@@ -329,6 +478,8 @@ model Shutdown {
   // Organization
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 // =====================
@@ -351,6 +502,7 @@ model Holiday {
   tracking HolidayTracking[]
 
   @@unique([organizationId, name, date])
+  @@index([organizationId])
 }
 
 model HolidayTracking {
@@ -402,63 +554,6 @@ enum NotificationType {
 }
 
 // =====================
-// Audit Logs
-// =====================
-
-model AuditLog {
-  id             String   @id @default(cuid())
-  action         String
-  userId         String
-  organizationId String
-  targetId       String?
-  targetType     String?
-  metadata       Json?
-  ipAddress      String?
-  createdAt      DateTime @default(now())
-
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId, createdAt])
-  @@index([userId])
-}
-
-// =====================
-// Shift Swaps
-// =====================
-
-model ShiftSwapRequest {
-  id             String          @id @default(cuid())
-  date           DateTime        @db.Date
-  shiftType      ShiftType
-  status         ShiftSwapStatus @default(PENDING)
-  reason         String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-
-  requesterId   String
-  targetUserId  String
-  approvedById  String?
-  organizationId String
-
-  requester     User         @relation("ShiftSwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  targetUser    User         @relation("ShiftSwapTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
-  approvedBy    User?        @relation("ShiftSwapApprover", fields: [approvedById], references: [id])
-  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId, status])
-  @@index([requesterId])
-  @@index([targetUserId])
-}
-
-enum ShiftSwapStatus {
-  PENDING
-  APPROVED
-  DENIED
-  CANCELLED
-}
-
-// =====================
 // Invitations
 // =====================
 
@@ -479,4 +574,44 @@ model Invitation {
   createdBy   User   @relation("InvitationCreator", fields: [createdById], references: [id])
 
   @@unique([organizationId, email])
+  @@index([organizationId])
+}
+
+// =====================
+// AI Assistant
+// =====================
+
+model AIChatSession {
+  id        String   @id @default(cuid())
+  title     String?  // Auto-generated from first message
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // User who created the session
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Messages
+  messages AIChatMessage[]
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model AIChatMessage {
+  id        String   @id @default(cuid())
+  role      String   // "user" or "assistant"
+  content   String   @db.Text
+  toolCalls Json?    // Store tool calls for assistant messages
+  createdAt DateTime @default(now())
+
+  // Session
+  sessionId String
+  session   AIChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }

@@ -35,6 +35,10 @@ import {
   AlertTriangle,
   FileText,
   Loader2,
+  Award,
+  CreditCard,
+  Zap,
+  CheckCircle2,
 } from "lucide-react"
 
 interface Organization {
@@ -124,6 +128,47 @@ interface Holiday {
   name: string
   date: string
   isRecurring: boolean
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+  isActive: boolean
+  _count: { users: number }
+}
+
+interface CertificationType {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  isRequired: boolean
+  isActive: boolean
+  requireOnSchedule: boolean
+  minPerDayShift: number
+  minPerNightShift: number
+  expiryWarningDays: number
+  _count: { userCertifications: number }
+}
+
+interface SubscriptionData {
+  tier: string
+  status: string
+  tierName: string
+  price: number
+  workerLimit: number
+  workerCount: number
+  workersRemaining: number
+  trialEndsAt: string | null
+  trialDaysRemaining: number | null
+  subscriptionEndsAt: string | null
+  features: string[]
+  canAddWorkers: boolean
+  isAtLimit: boolean
+  isTrialExpired: boolean
 }
 
 const DEFAULT_SHIFT_COLORS = {
@@ -265,6 +310,41 @@ export default function SettingsPage() {
   const [newHoliday, setNewHoliday] = useState({ name: "", date: "", recurring: true })
   const [savingHoliday, setSavingHoliday] = useState(false)
 
+  // Custom roles state
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
+  const [showRoleForm, setShowRoleForm] = useState(false)
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null)
+  const [savingRole, setSavingRole] = useState(false)
+  const [newRole, setNewRole] = useState<{ name: string; description: string; color: string; baseRole: "ADMIN" | "SUPERVISOR" | "WORKER" }>({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" })
+
+  // Certifications state
+  const [certifications, setCertifications] = useState<CertificationType[]>([])
+  const [showCertForm, setShowCertForm] = useState(false)
+  const [editingCert, setEditingCert] = useState<CertificationType | null>(null)
+  const [savingCert, setSavingCert] = useState(false)
+  const [newCert, setNewCert] = useState<{
+    name: string
+    description: string
+    color: string
+    isRequired: boolean
+    requireOnSchedule: boolean
+    minPerDayShift: number
+    minPerNightShift: number
+    expiryWarningDays: number
+  }>({
+    name: "",
+    description: "",
+    color: "#3B82F6",
+    isRequired: false,
+    requireOnSchedule: false,
+    minPerDayShift: 1,
+    minPerNightShift: 1,
+    expiryWarningDays: 180,
+  })
+
+  // Subscription state
+  const [subscription, setSubscription] = useState<SubscriptionData | null>(null)
+
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
@@ -272,6 +352,7 @@ export default function SettingsPage() {
 
   // Export state
   const [exporting, setExporting] = useState(false)
+  const [exportingPersonalData, setExportingPersonalData] = useState(false)
 
   // Shift colors state
   const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
@@ -284,17 +365,23 @@ export default function SettingsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [orgRes, patternsRes, shiftTypesRes, holidaysRes] = await Promise.all([
+      const [orgRes, patternsRes, shiftTypesRes, holidaysRes, rolesRes, certsRes, subRes] = await Promise.all([
         fetch("/api/organization"),
         fetch("/api/rotation-patterns"),
         fetch("/api/custom-shift-types"),
         fetch("/api/holidays"),
+        fetch("/api/roles"),
+        fetch("/api/certifications"),
+        fetch("/api/subscription"),
       ])
 
       const orgData = await orgRes.json()
       const patternsData = await patternsRes.json()
       const shiftTypesData = await shiftTypesRes.json()
       const holidaysData = await holidaysRes.json()
+      const rolesData = await rolesRes.json()
+      const certsData = await certsRes.json()
+      const subData = await subRes.json()
 
       if (orgData.success) {
         setOrganization(orgData.data)
@@ -310,6 +397,9 @@ export default function SettingsPage() {
       if (patternsData.success) setPatterns(patternsData.data)
       if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
       if (holidaysData.success) setHolidays(holidaysData.data)
+      if (rolesData.success) setCustomRoles(rolesData.data)
+      if (certsData.success) setCertifications(certsData.data)
+      if (subData.success) setSubscription(subData.data)
     } catch (error) {
       console.error("Failed to fetch data:", error)
     } finally {
@@ -514,6 +604,176 @@ export default function SettingsPage() {
     }
   }
 
+  // Custom role handlers
+  const resetRoleForm = () => {
+    setNewRole({ name: "", description: "", color: "#6b7280", baseRole: "WORKER" })
+    setEditingRole(null)
+    setShowRoleForm(false)
+  }
+
+  const startEditRole = (role: CustomRole) => {
+    setEditingRole(role)
+    setNewRole({
+      name: role.name,
+      description: role.description || "",
+      color: role.color,
+      baseRole: role.baseRole,
+    })
+    setShowRoleForm(true)
+  }
+
+  const handleSaveRole = async () => {
+    if (!newRole.name.trim()) {
+      showMessage("Role name is required")
+      return
+    }
+
+    setSavingRole(true)
+
+    try {
+      const url = editingRole
+        ? `/api/roles/${editingRole.id}`
+        : "/api/roles"
+
+      const response = await fetch(url, {
+        method: editingRole ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRole),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        const rolesRes = await fetch("/api/roles")
+        const rolesData = await rolesRes.json()
+        if (rolesData.success) setCustomRoles(rolesData.data)
+
+        showMessage(editingRole ? "Role updated successfully" : "Role created successfully")
+        resetRoleForm()
+      } else {
+        // Show error message longer for database issues
+        const errorMsg = data.error || "Failed to save role"
+        setMessage(errorMsg)
+        if (errorMsg.includes("table") || errorMsg.includes("migration") || errorMsg.includes("redeploy")) {
+          // Keep error visible longer for database migration issues
+          setTimeout(() => setMessage(""), 10000)
+        } else {
+          setTimeout(() => setMessage(""), 3000)
+        }
+      }
+    } catch (err) {
+      console.error("Error saving role:", err)
+      showMessage("Failed to save role. Please try again.")
+    } finally {
+      setSavingRole(false)
+    }
+  }
+
+  const handleDeleteRole = async (roleId: string) => {
+    if (!confirm("Delete this role?")) return
+
+    try {
+      const response = await fetch(`/api/roles/${roleId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setCustomRoles(customRoles.filter(r => r.id !== roleId))
+        showMessage("Role deleted")
+      } else {
+        showMessage(data.error || "Failed to delete")
+      }
+    } catch {
+      showMessage("Failed to delete")
+    }
+  }
+
+  // Certification handlers
+  const resetCertForm = () => {
+    setNewCert({
+      name: "",
+      description: "",
+      color: "#3B82F6",
+      isRequired: false,
+      requireOnSchedule: false,
+      minPerDayShift: 1,
+      minPerNightShift: 1,
+      expiryWarningDays: 180,
+    })
+    setEditingCert(null)
+    setShowCertForm(false)
+  }
+
+  const startEditCert = (cert: CertificationType) => {
+    setEditingCert(cert)
+    setNewCert({
+      name: cert.name,
+      description: cert.description || "",
+      color: cert.color,
+      isRequired: cert.isRequired,
+      requireOnSchedule: cert.requireOnSchedule || false,
+      minPerDayShift: cert.minPerDayShift || 1,
+      minPerNightShift: cert.minPerNightShift || 1,
+      expiryWarningDays: cert.expiryWarningDays || 180,
+    })
+    setShowCertForm(true)
+  }
+
+  const handleSaveCert = async () => {
+    if (!newCert.name.trim()) {
+      showMessage("Certification name is required")
+      return
+    }
+
+    setSavingCert(true)
+
+    try {
+      const url = editingCert
+        ? `/api/certifications/${editingCert.id}`
+        : "/api/certifications"
+
+      const response = await fetch(url, {
+        method: editingCert ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCert),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        const certsRes = await fetch("/api/certifications")
+        const certsData = await certsRes.json()
+        if (certsData.success) setCertifications(certsData.data)
+
+        showMessage(editingCert ? "Certification updated" : "Certification created")
+        resetCertForm()
+      } else {
+        showMessage(data.error || "Failed to save certification")
+      }
+    } catch {
+      showMessage("Failed to save certification")
+    } finally {
+      setSavingCert(false)
+    }
+  }
+
+  const handleDeleteCert = async (certId: string) => {
+    if (!confirm("Delete this certification? Workers with this certification will have it removed.")) return
+
+    try {
+      const response = await fetch(`/api/certifications/${certId}`, { method: "DELETE" })
+      const data = await response.json()
+
+      if (data.success) {
+        setCertifications(certifications.filter(c => c.id !== certId))
+        showMessage("Certification deleted")
+      } else {
+        showMessage(data.error || "Failed to delete")
+      }
+    } catch {
+      showMessage("Failed to delete")
+    }
+  }
+
   // Password change handler
   const handlePasswordChange = async () => {
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -698,6 +958,31 @@ export default function SettingsPage() {
     }
   }
 
+  // Personal data export handler (GDPR)
+  const handleExportPersonalData = async () => {
+    setExportingPersonalData(true)
+
+    try {
+      const response = await fetch("/api/user/export-data")
+      const blob = await response.blob()
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `my-data-export-${new Date().toISOString().split("T")[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+
+      showMessage("Personal data exported successfully")
+    } catch {
+      showMessage("Failed to export personal data")
+    } finally {
+      setExportingPersonalData(false)
+    }
+  }
+
   // Delete account handler
   const handleDeleteAccount = async () => {
     const confirm1 = confirm("Are you sure you want to delete your account? This cannot be undone.")
@@ -796,6 +1081,90 @@ export default function SettingsPage() {
                 <UserPlus className="h-4 w-4 mr-2" />
                 Invite User
               </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Subscription & Billing */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Subscription
+            </CardTitle>
+            <CardDescription>Manage your plan and billing</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {subscription && (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{subscription.tierName} Plan</p>
+                    <p className="text-sm text-muted-foreground">
+                      {subscription.price > 0 ? `$${subscription.price}/month` : "Free Trial"}
+                    </p>
+                  </div>
+                  <Badge variant={
+                    subscription.status === "ACTIVE" ? "default" :
+                    subscription.status === "TRIALING" ? "secondary" :
+                    subscription.isTrialExpired ? "destructive" : "outline"
+                  }>
+                    {subscription.isTrialExpired ? "Expired" : subscription.status}
+                  </Badge>
+                </div>
+
+                {subscription.tier === "TRIAL" && subscription.trialDaysRemaining !== null && (
+                  <Alert variant={subscription.trialDaysRemaining <= 3 ? "destructive" : "default"}>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      {subscription.isTrialExpired
+                        ? "Your trial has expired. Upgrade to continue using ShiftSync."
+                        : `${subscription.trialDaysRemaining} days left in your trial`}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="pt-3 border-t">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>Workers</span>
+                    <span className={subscription.isAtLimit ? "text-destructive font-medium" : ""}>
+                      {subscription.workerCount} / {subscription.workerLimit === 999999 ? "Unlimited" : subscription.workerLimit}
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        subscription.isAtLimit ? "bg-destructive" :
+                        subscription.workerCount / subscription.workerLimit > 0.8 ? "bg-yellow-500" :
+                        "bg-primary"
+                      }`}
+                      style={{ width: `${Math.min(100, (subscription.workerCount / subscription.workerLimit) * 100)}%` }}
+                    />
+                  </div>
+                  {subscription.workersRemaining > 0 && subscription.workerLimit !== 999999 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {subscription.workersRemaining} slot{subscription.workersRemaining !== 1 ? "s" : ""} remaining
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2 pt-3 border-t">
+                  <p className="text-sm font-medium">Plan features:</p>
+                  {subscription.features.slice(0, 4).map((feature, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-green-500" />
+                      {feature}
+                    </div>
+                  ))}
+                </div>
+
+                {isAdmin && subscription.tier !== "BUSINESS" && (
+                  <Button className="w-full" onClick={() => window.open("/pricing", "_blank")}>
+                    <Zap className="h-4 w-4 mr-2" />
+                    {subscription.tier === "TRIAL" ? "Choose a Plan" : "Upgrade Plan"}
+                  </Button>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -1683,6 +2052,337 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Custom Roles */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Custom Roles
+                </CardTitle>
+                <CardDescription>Create custom roles for your organization</CardDescription>
+              </div>
+              {isAdmin && !showRoleForm && (
+                <Button size="sm" onClick={() => setShowRoleForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Role
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <strong>System Roles:</strong> Admin, Supervisor, Worker (control permissions)
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Custom roles are for organizational titles and can be assigned to users alongside system roles.
+              </p>
+            </div>
+
+            {showRoleForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">{editingRole ? "Edit" : "New"} Role</h4>
+                  <Button variant="ghost" size="sm" onClick={resetRoleForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="role-name">Name</Label>
+                    <Input
+                      id="role-name"
+                      placeholder="e.g., Team Lead"
+                      value={newRole.name}
+                      onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-base">Base Permission Level</Label>
+                    <Select
+                      value={newRole.baseRole}
+                      onChange={(e) => setNewRole({ ...newRole, baseRole: e.target.value as "ADMIN" | "SUPERVISOR" | "WORKER" })}
+                      options={[
+                        { value: "WORKER", label: "Worker" },
+                        { value: "SUPERVISOR", label: "Supervisor" },
+                        { value: "ADMIN", label: "Admin" },
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-color">Color</Label>
+                    <div className="flex gap-2">
+                      <input
+                        id="role-color"
+                        type="color"
+                        value={newRole.color}
+                        onChange={(e) => setNewRole({ ...newRole, color: e.target.value })}
+                        className="w-10 h-10 rounded cursor-pointer"
+                      />
+                      <Input
+                        value={newRole.color}
+                        onChange={(e) => setNewRole({ ...newRole, color: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-description">Description</Label>
+                    <Input
+                      id="role-description"
+                      placeholder="Optional description"
+                      value={newRole.description}
+                      onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetRoleForm}>Cancel</Button>
+                  <Button onClick={handleSaveRole} disabled={savingRole}>
+                    {savingRole ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {editingRole ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {customRoles.map((role) => (
+                <div key={role.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: role.color }}
+                    />
+                    <div>
+                      <p className="font-medium">{role.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Base: {role.baseRole} • {role._count.users} user{role._count.users !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditRole(role)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteRole(role.id)}
+                        disabled={role._count.users > 0}
+                        title={role._count.users > 0 ? "Cannot delete: users assigned" : "Delete role"}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {customRoles.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">No custom roles</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Training Certifications */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  Training & Certifications
+                </CardTitle>
+                <CardDescription>Define training certifications for your organization</CardDescription>
+              </div>
+              {isAdmin && !showCertForm && (
+                <Button size="sm" onClick={() => setShowCertForm(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Certification
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                Create certifications specific to your business (e.g., Forklift Operator, Food Safety, First Aid).
+                Workers can be assigned certifications in their profile.
+              </p>
+            </div>
+
+            {showCertForm && (
+              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium">{editingCert ? "Edit" : "New"} Certification</h4>
+                  <Button variant="ghost" size="sm" onClick={resetCertForm}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="cert-name">Name</Label>
+                    <Input
+                      id="cert-name"
+                      placeholder="e.g., Forklift Operator"
+                      value={newCert.name}
+                      onChange={(e) => setNewCert({ ...newCert, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cert-color">Color</Label>
+                    <div className="flex gap-2">
+                      <input
+                        id="cert-color"
+                        type="color"
+                        value={newCert.color}
+                        onChange={(e) => setNewCert({ ...newCert, color: e.target.value })}
+                        className="w-10 h-10 rounded cursor-pointer"
+                      />
+                      <Input
+                        value={newCert.color}
+                        onChange={(e) => setNewCert({ ...newCert, color: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <Label htmlFor="cert-description">Description</Label>
+                    <Input
+                      id="cert-description"
+                      placeholder="Optional description"
+                      value={newCert.description}
+                      onChange={(e) => setNewCert({ ...newCert, description: e.target.value })}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newCert.isRequired}
+                        onChange={(e) => setNewCert({ ...newCert, isRequired: e.target.checked })}
+                        className="h-4 w-4 rounded"
+                      />
+                      Required for all workers
+                    </label>
+                  </div>
+
+                  {/* Schedule Staffing Requirements */}
+                  <div className="md:col-span-2 pt-3 border-t">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newCert.requireOnSchedule}
+                        onChange={(e) => setNewCert({ ...newCert, requireOnSchedule: e.target.checked })}
+                        className="h-4 w-4 rounded"
+                      />
+                      <span className="font-medium">Require on schedule</span>
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1 ml-6">
+                      Alert if no worker with this certification is scheduled
+                    </p>
+                  </div>
+
+                  {newCert.requireOnSchedule && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="min-day">Min. per Day Shift</Label>
+                        <Input
+                          id="min-day"
+                          type="number"
+                          min={1}
+                          value={newCert.minPerDayShift}
+                          onChange={(e) => setNewCert({ ...newCert, minPerDayShift: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="min-night">Min. per Night Shift</Label>
+                        <Input
+                          id="min-night"
+                          type="number"
+                          min={1}
+                          value={newCert.minPerNightShift}
+                          onChange={(e) => setNewCert({ ...newCert, minPerNightShift: parseInt(e.target.value) || 1 })}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Expiry Warning */}
+                  <div className="md:col-span-2 pt-3 border-t space-y-2">
+                    <Label htmlFor="expiry-warning">Expiry Warning (days before)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="expiry-warning"
+                        type="number"
+                        min={7}
+                        className="w-24"
+                        value={newCert.expiryWarningDays}
+                        onChange={(e) => setNewCert({ ...newCert, expiryWarningDays: parseInt(e.target.value) || 180 })}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        ({Math.round(newCert.expiryWarningDays / 30)} months)
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Send reminder when certification is about to expire
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={resetCertForm}>Cancel</Button>
+                  <Button onClick={handleSaveCert} disabled={savingCert}>
+                    {savingCert ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    {editingCert ? "Update" : "Create"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {certifications.map((cert) => (
+                <div key={cert.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: cert.color }}
+                    />
+                    <div>
+                      <p className="font-medium">{cert.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {cert._count.userCertifications} worker{cert._count.userCertifications !== 1 ? "s" : ""}
+                        {cert.isRequired && " • Required for all"}
+                        {cert.requireOnSchedule && ` • Min ${cert.minPerDayShift}D/${cert.minPerNightShift}N per shift`}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditCert(cert)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteCert(cert.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {certifications.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  No certifications defined yet. Add certifications specific to your industry.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Your Account */}
         <Card className="md:col-span-2">
           <CardHeader>
@@ -1712,10 +2412,18 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex gap-2 pt-4 border-t">
+            <div className="flex flex-wrap gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
                 <Key className="h-4 w-4 mr-2" />
                 Change Password
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleExportPersonalData}
+                disabled={exportingPersonalData}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {exportingPersonalData ? "Exporting..." : "Download My Data"}
               </Button>
               <Button
                 variant="outline"
@@ -1726,8 +2434,25 @@ export default function SettingsPage() {
                 Delete Account
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground pt-2">
+              Your rights under GDPR/CCPA: You can download all your personal data or delete your account at any time.
+            </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Legal Links */}
+      <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+        <p>
+          By using ShiftSync, you agree to our{" "}
+          <a href="/terms" className="text-primary hover:underline">
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a href="/privacy" className="text-primary hover:underline">
+            Privacy Policy
+          </a>
+        </p>
       </div>
 
       {/* Password Change Modal */}

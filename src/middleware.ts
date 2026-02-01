@@ -62,6 +62,7 @@ export default withAuth(
         const publicPaths = [
           "/login",
           "/register",
+          "/api/register",
           "/api/auth",
           "/api/health",
           "/api/setup",

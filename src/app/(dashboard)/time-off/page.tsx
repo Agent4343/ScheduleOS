@@ -9,8 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { PageHeader } from "@/components/layout/page-header"
+import { useToast } from "@/components/ui/toast"
 import {
   Table,
   TableBody,
@@ -63,6 +62,7 @@ const TYPE_LABELS: Record<TimeOffType, string> = {
 }
 
 export default function TimeOffPage() {
+  const { addToast } = useToast()
   const { data: session } = useSession()
   const [requests, setRequests] = useState<TimeOffRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,7 +75,6 @@ export default function TimeOffPage() {
     reason: "",
   })
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
 
   const isAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERVISOR"
 
@@ -105,7 +104,6 @@ export default function TimeOffPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setFeedback(null)
 
     try {
       const response = await fetch("/api/time-off", {
@@ -125,20 +123,19 @@ export default function TimeOffPage() {
           type: "VACATION",
           reason: "",
         })
-        setFeedback({ type: "success", message: "Time off request submitted." })
+        addToast({ type: "success", message: "Time off request submitted" })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to submit request" })
+        addToast({ type: "error", message: data.error || "Failed to submit request" })
       }
     } catch (error) {
       console.error("Failed to submit request:", error)
-      setFeedback({ type: "error", message: "Failed to submit request" })
+      addToast({ type: "error", message: "Failed to submit request" })
     } finally {
       setSubmitting(false)
     }
   }
 
   async function handleUpdateStatus(requestId: string, status: "APPROVED" | "DENIED") {
-    setFeedback(null)
     try {
       const response = await fetch(`/api/time-off?id=${requestId}`, {
         method: "PATCH",
@@ -152,13 +149,13 @@ export default function TimeOffPage() {
         setRequests((prev) =>
           prev.map((r) => (r.id === requestId ? { ...r, status } : r))
         )
-        setFeedback({ type: "success", message: `Request ${status.toLowerCase()}.` })
+        addToast({ type: "success", message: `Request ${status.toLowerCase()}` })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to update request" })
+        addToast({ type: "error", message: data.error || "Failed to update request" })
       }
     } catch (error) {
       console.error("Failed to update request:", error)
-      setFeedback({ type: "error", message: "Failed to update request" })
+      addToast({ type: "error", message: "Failed to update request" })
     }
   }
 
@@ -167,27 +164,20 @@ export default function TimeOffPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        title="Time Off Requests"
-        description={
-          pendingCount > 0
-            ? `${pendingCount} pending request${pendingCount > 1 ? "s" : ""}`
-            : "No pending requests"
-        }
-        actions={(
-          <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Request Time Off
-          </Button>
-        )}
-      />
-
-      {feedback ? (
-        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
-          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
-          <AlertDescription>{feedback.message}</AlertDescription>
-        </Alert>
-      ) : null}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Time Off Requests</h1>
+          <p className="text-muted-foreground">
+            {pendingCount > 0
+              ? `${pendingCount} pending request${pendingCount > 1 ? "s" : ""}`
+              : "No pending requests"}
+          </p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Request Time Off
+        </Button>
+      </div>
 
       {/* Filters */}
       <div className="flex items-center gap-4">

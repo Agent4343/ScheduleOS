@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { PageHeader } from "@/components/layout/page-header"
 import {
   Users,
   Users2,
@@ -15,6 +14,10 @@ import {
   Sun,
   Moon,
   TrendingUp,
+  ShieldAlert,
+  Bell,
+  CheckCircle,
+  Award,
 } from "lucide-react"
 
 interface DashboardStats {
@@ -26,46 +29,39 @@ interface DashboardStats {
   staffingGaps: number
 }
 
+// Labels for position types
+const POSITION_TYPE_LABELS: Record<string, string> = {
+  OPERATOR: "Operator",
+  OTHER: "Staff",
+}
+
+interface StaffingGapDetail {
+  date: Date
+  shiftType: string
+  shortage: number
+  positionType?: string
+  certificationName?: string
+}
+
+interface RecentActivity {
+  id: string
+  type: string
+  title: string
+  message: string
+  createdAt: string
+  user: { name: string }
+}
+
 interface DashboardData {
   stats: DashboardStats
-  staffingGapDetails: Array<{
-    date: string
-    shiftType: string
-    shortage: number
-    required: number
-    scheduled: number
-    ruleName: string
-    crew?: { id: string; name: string }
-    positionType?: string
-    role?: string
-    scheduledWorkers: Array<{
-      id: string
-      name: string | null
-      crewName: string | null
-      role: string
-      positionType: string
-    }>
-    availableWorkers: Array<{
-      id: string
-      name: string | null
-      crewName: string | null
-      role: string
-      positionType: string
-    }>
-    eligibility?: {
-      activeCount: number
-      crewMatchCount?: number
-      roleMatchCount?: number
-      positionMatchCount?: number
-      eligibleCount: number
-    }
-  }>
+  staffingGapDetails: StaffingGapDetail[]
   upcomingTimeOff: Array<{
     id: string
     startDate: string
     endDate: string
     user: { name: string; crew: { name: string } | null }
   }>
+  recentActivity: RecentActivity[]
   todayBreakdown: {
     dayShift: number
     nightShift: number
@@ -75,7 +71,6 @@ interface DashboardData {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -84,12 +79,9 @@ export default function DashboardPage() {
         const result = await response.json()
         if (result.success) {
           setData(result.data)
-        } else {
-          setError(result.error || "Failed to load dashboard data.")
         }
       } catch (error) {
         console.error("Failed to fetch dashboard:", error)
-        setError("Failed to load dashboard data.")
       } finally {
         setLoading(false)
       }
@@ -126,31 +118,114 @@ export default function DashboardPage() {
     staffingGaps: 0,
   }
 
+  // Separate staffing gaps by type (position-based vs certification-based)
+  const positionGaps = data?.staffingGapDetails?.filter(gap => !gap.certificationName) || []
+  const certificationGaps = data?.staffingGapDetails?.filter(gap => gap.certificationName) || []
+  const recentActivity = data?.recentActivity || []
+
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <PageHeader
-        title="Dashboard"
-        description="Overview of your workforce scheduling"
-      />
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">Overview of your workforce scheduling</p>
+      </div>
 
-      {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Dashboard unavailable</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {/* Staffing alert */}
+      {/* Staffing Alerts Section - Prominent display when there are issues */}
       {stats.staffingGaps > 0 && (
-        <Alert variant="warning">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Staffing Alert</AlertTitle>
-          <AlertDescription>
-            There are {stats.staffingGaps} staffing gaps in the next 3 weeks that need attention.
-            <a href="/schedule" className="ml-2 underline">View schedule</a>
-          </AlertDescription>
-        </Alert>
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" />
+              Staffing Alerts
+              <Badge variant="destructive" className="ml-2">
+                {stats.staffingGaps} {stats.staffingGaps === 1 ? "issue" : "issues"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              The following staffing gaps require your attention this week
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Position-based gaps */}
+            {positionGaps.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Position Shortages
+                </h4>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {positionGaps.map((gap, i) => {
+                    const positionLabel = gap.positionType ? POSITION_TYPE_LABELS[gap.positionType] || gap.positionType : "All Positions"
+                    return (
+                      <div
+                        key={`pos-${i}`}
+                        className="flex items-center justify-between p-3 rounded-lg bg-background border"
+                      >
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                          <div className="text-sm">
+                            <p className="font-medium">{new Date(gap.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</p>
+                            <p className="text-muted-foreground">{positionLabel}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={gap.shiftType === "DAY" ? "day" : "night"} className="text-xs">
+                            {gap.shiftType === "DAY" ? <Sun className="h-3 w-3 mr-1" /> : <Moon className="h-3 w-3 mr-1" />}
+                            {gap.shiftType === "DAY" ? "Day" : "Night"}
+                          </Badge>
+                          <Badge variant="destructive">-{gap.shortage}</Badge>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Certification-based gaps */}
+            {certificationGaps.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <Award className="h-4 w-4" />
+                  Certification Shortages
+                </h4>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {certificationGaps.map((gap, i) => (
+                    <div
+                      key={`cert-${i}`}
+                      className="flex items-center justify-between p-3 rounded-lg bg-background border"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Award className="h-4 w-4 text-amber-500 shrink-0" />
+                        <div className="text-sm">
+                          <p className="font-medium">{new Date(gap.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</p>
+                          <p className="text-muted-foreground">{gap.certificationName}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={gap.shiftType === "DAY" ? "day" : "night"} className="text-xs">
+                          {gap.shiftType === "DAY" ? <Sun className="h-3 w-3 mr-1" /> : <Moon className="h-3 w-3 mr-1" />}
+                          {gap.shiftType === "DAY" ? "Day" : "Night"}
+                        </Badge>
+                        <Badge variant="destructive">-{gap.shortage}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t">
+              <a
+                href="/schedule"
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                View schedule to resolve these issues →
+              </a>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Stats grid */}
@@ -217,8 +292,19 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Quick actions & info */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* All Clear Banner - Show when no staffing issues */}
+      {stats.staffingGaps === 0 && (
+        <Alert className="border-green-500/50 bg-green-50 dark:bg-green-950/20">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-700 dark:text-green-400">All Staffing Requirements Met</AlertTitle>
+          <AlertDescription className="text-green-600 dark:text-green-500">
+            All shifts are fully staffed this week with proper coverage and certifications.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Info Cards - 3 column layout */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Upcoming time off */}
         <Card>
           <CardHeader>
@@ -257,90 +343,90 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Staffing gaps */}
+        {/* Coverage Summary */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Next 3 Weeks Coverage
+              This Week&apos;s Coverage
             </CardTitle>
-            <CardDescription>Staffing levels for the next 3 weeks</CardDescription>
+            <CardDescription>Staffing levels overview</CardDescription>
           </CardHeader>
           <CardContent>
-            {data?.staffingGapDetails && data.staffingGapDetails.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Gaps</span>
+                <Badge variant={stats.staffingGaps > 0 ? "destructive" : "secondary"}>
+                  {stats.staffingGaps}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Position Issues</span>
+                <Badge variant={positionGaps.length > 0 ? "destructive" : "secondary"}>
+                  {positionGaps.length}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Certification Issues</span>
+                <Badge variant={certificationGaps.length > 0 ? "destructive" : "secondary"}>
+                  {certificationGaps.length}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Upcoming Shutdowns</span>
+                <Badge variant="outline">{stats.upcomingShutdowns}</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Activity */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Recent Activity
+            </CardTitle>
+            <CardDescription>Latest notifications and updates</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recentActivity.length > 0 ? (
               <div className="space-y-3">
-                {data.staffingGapDetails.map((gap, i) => (
+                {recentActivity.slice(0, 5).map((activity) => (
                   <div
-                    key={i}
-                    className="flex flex-col gap-2 py-3 border-b last:border-0"
+                    key={activity.id}
+                    className="flex items-start gap-3 py-2 border-b last:border-0"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-destructive" />
-                        <span className="font-medium">
-                          {new Date(gap.date).toLocaleDateString()} • {gap.shiftType}
-                        </span>
-                      </div>
-                      <Badge variant="destructive">
-                        Missing {gap.shortage}
-                      </Badge>
+                    <div className="shrink-0 mt-0.5">
+                      {activity.type === "STAFFING_ALERT" ? (
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      ) : activity.type === "SCHEDULE_CHANGE" ? (
+                        <Calendar className="h-4 w-4 text-blue-500" />
+                      ) : activity.type.startsWith("TIME_OFF") ? (
+                        <CalendarOff className="h-4 w-4 text-purple-500" />
+                      ) : (
+                        <Bell className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Rule: {gap.ruleName}
-                      {gap.crew ? ` • Crew: ${gap.crew.name}` : ""}
-                      {gap.positionType ? ` • Position: ${gap.positionType}` : ""}
-                      {gap.role ? ` • Role: ${gap.role}` : ""}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Required: {gap.required} • Scheduled: {gap.scheduled}
-                    </div>
-                    {gap.eligibility && (
-                      <div className="text-xs text-muted-foreground">
-                        Eligible workers: {gap.eligibility.eligibleCount} (Active: {gap.eligibility.activeCount}
-                        {gap.eligibility.positionMatchCount !== undefined
-                          ? ` • Position match: ${gap.eligibility.positionMatchCount}`
-                          : ""}
-                        {gap.eligibility.roleMatchCount !== undefined
-                          ? ` • Role match: ${gap.eligibility.roleMatchCount}`
-                          : ""}
-                        {gap.eligibility.crewMatchCount !== undefined
-                          ? ` • Crew match: ${gap.eligibility.crewMatchCount}`
-                          : ""}
-                        )
-                      </div>
-                    )}
-                    {gap.eligibility?.eligibleCount === 0 && (
-                      <div className="text-xs text-destructive">
-                        No eligible workers match this rule. Check worker position types, roles, or crew assignments.
-                      </div>
-                    )}
-                    <div className="text-xs text-muted-foreground">
-                      Scheduled: {gap.scheduledWorkers.length > 0
-                        ? gap.scheduledWorkers.map((w) => w.name || "Unnamed").slice(0, 5).join(", ")
-                        : "None"}
-                      {gap.scheduledWorkers.length > 5 ? ` +${gap.scheduledWorkers.length - 5} more` : ""}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      Available: {gap.availableWorkers.length > 0
-                        ? gap.availableWorkers.map((w) => w.name || "Unnamed").slice(0, 5).join(", ")
-                        : "None"}
-                      {gap.availableWorkers.length > 5 ? ` +${gap.availableWorkers.length - 5} more` : ""}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{activity.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{activity.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(activity.createdAt).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-green-600">
-                <TrendingUp className="h-4 w-4" />
-                <span>All shifts fully staffed this week</span>
-              </div>
+              <p className="text-muted-foreground text-sm">No recent activity</p>
             )}
           </CardContent>
         </Card>
       </div>
 
       {/* Quick links */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <a
           href="/schedule"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
@@ -366,15 +452,6 @@ export default function DashboardPage() {
           <Clock className="h-8 w-8 text-primary mb-2" />
           <h3 className="font-semibold group-hover:text-primary">Time Off Requests</h3>
           <p className="text-sm text-muted-foreground">Review pending requests</p>
-        </a>
-
-        <a
-          href="/staffing"
-          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
-        >
-          <AlertTriangle className="h-8 w-8 text-primary mb-2" />
-          <h3 className="font-semibold group-hover:text-primary">Staffing</h3>
-          <p className="text-sm text-muted-foreground">Review minimums and coverage gaps</p>
         </a>
       </div>
     </div>

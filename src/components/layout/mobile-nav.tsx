@@ -13,11 +13,7 @@ import {
   CalendarOff,
   BarChart3,
   Wand2,
-  AlertTriangle,
-  ArrowRightLeft,
-  LifeBuoy,
-  CreditCard,
-  Shield,
+  Bot,
   X,
 } from "lucide-react"
 
@@ -25,16 +21,11 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Setup", href: "/setup", icon: Wand2 },
   { name: "Schedule", href: "/schedule", icon: Calendar },
-  { name: "My Schedule", href: "/my-schedule", icon: Calendar },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
-  { name: "Shift Swaps", href: "/shift-swaps", icon: ArrowRightLeft },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Staffing", href: "/staffing", icon: AlertTriangle },
-  { name: "Billing", href: "/billing", icon: CreditCard },
-  { name: "Support", href: "/support", icon: LifeBuoy },
-  { name: "Audit Logs", href: "/audit-logs", icon: Shield },
+  { name: "AI Assistant", href: "/assistant", icon: Bot },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 

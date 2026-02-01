@@ -17,31 +17,72 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        id: params.id,
-        organizationId: session.user.organizationId,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        position: true,
-        positionType: true,
-        phone: true,
-        status: true,
-        hireDate: true,
-        createdAt: true,
-        crew: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+    const whereClause = {
+      id: params.id,
+      organizationId: session.user.organizationId,
+    }
+
+    // Try with customRole first, fall back without it if database hasn't been migrated
+    let user
+    try {
+      user = await prisma.user.findFirst({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          customRoleId: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+          customRole: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-      },
-    })
+      })
+    } catch {
+      // Fallback without customRole
+      user = await prisma.user.findFirst({
+        where: whereClause,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          createdAt: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+        },
+      })
+      if (user) {
+        user = { ...user, customRoleId: null, customRole: null }
+      }
+    }
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
@@ -86,19 +127,6 @@ export async function PATCH(
     const body = await request.json()
     const validatedData = updateUserSchema.parse(body)
 
-    let normalizedEmail: string | undefined
-    if (validatedData.email) {
-      normalizedEmail = validatedData.email.toLowerCase()
-      const emailOwner = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
-      })
-
-      if (emailOwner && emailOwner.id !== params.id) {
-        return NextResponse.json({ error: "Email already in use" }, { status: 400 })
-      }
-    }
-
     // Verify crew belongs to organization if provided
     if (validatedData.crewId) {
       const crew = await prisma.crew.findFirst({
@@ -113,42 +141,102 @@ export async function PATCH(
       }
     }
 
-    const user = await prisma.user.update({
-      where: { id: params.id },
-      data: {
-        name: validatedData.name,
-        email: normalizedEmail,
-        role: validatedData.role,
-        position: validatedData.position,
-        positionType: validatedData.positionType,
-        phone: validatedData.phone,
-        crewId: validatedData.crewId,
-        hireDate: validatedData.hireDate,
-        status: validatedData.status,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        position: true,
-        positionType: true,
-        phone: true,
-        status: true,
-        hireDate: true,
-        crew: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
+    // Try with customRoleId first, fall back without it if database hasn't been migrated
+    let user
+
+    // Build update data, only including defined fields (convert null to undefined for Prisma)
+    const updateData: Record<string, unknown> = {}
+    if (validatedData.name !== undefined && validatedData.name !== null) updateData.name = validatedData.name
+    if (validatedData.email !== undefined && validatedData.email !== null) updateData.email = validatedData.email
+    if (validatedData.role !== undefined) updateData.role = validatedData.role
+    if (validatedData.status !== undefined) updateData.status = validatedData.status
+    if (validatedData.positionType !== undefined) updateData.positionType = validatedData.positionType
+    // These fields can be set to null to clear them
+    if (validatedData.position !== undefined) updateData.position = validatedData.position
+    if (validatedData.phone !== undefined) updateData.phone = validatedData.phone
+    if (validatedData.crewId !== undefined) updateData.crewId = validatedData.crewId
+    if (validatedData.customRoleId !== undefined) updateData.customRoleId = validatedData.customRoleId
+    if (validatedData.hireDate !== undefined) updateData.hireDate = validatedData.hireDate
+    if (validatedData.isControlRoomTrained !== undefined) updateData.isControlRoomTrained = validatedData.isControlRoomTrained
+    if (validatedData.isOilOperatorTrained !== undefined) updateData.isOilOperatorTrained = validatedData.isOilOperatorTrained
+    if (validatedData.isUtilityOperatorTrained !== undefined) updateData.isUtilityOperatorTrained = validatedData.isUtilityOperatorTrained
+    if (validatedData.isGasOperatorTrained !== undefined) updateData.isGasOperatorTrained = validatedData.isGasOperatorTrained
+    if (validatedData.includeInStaffingCount !== undefined) updateData.includeInStaffingCount = validatedData.includeInStaffingCount
+    if (validatedData.singleTrainingCoverageOnly !== undefined) updateData.singleTrainingCoverageOnly = validatedData.singleTrainingCoverageOnly
+
+    try {
+      user = await prisma.user.update({
+        where: { id: params.id },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
+          includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
+          customRoleId: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+          customRole: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
           },
         },
-      },
-    })
+      })
+    } catch {
+      // Fallback without customRoleId if database hasn't been migrated
+      // Remove customRoleId from update data for fallback
+      const fallbackData = { ...updateData }
+      delete fallbackData.customRoleId
 
-    const auditChanges = normalizedEmail
-      ? { ...validatedData, email: normalizedEmail }
-      : validatedData
+      user = await prisma.user.update({
+        where: { id: params.id },
+        data: fallbackData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          position: true,
+          positionType: true,
+          phone: true,
+          status: true,
+          hireDate: true,
+          isControlRoomTrained: true,
+          isOilOperatorTrained: true,
+          isUtilityOperatorTrained: true,
+          isGasOperatorTrained: true,
+          includeInStaffingCount: true,
+          singleTrainingCoverageOnly: true,
+          crew: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+            },
+          },
+        },
+      })
+      user = { ...user, customRoleId: null, customRole: null }
+    }
 
     // Log audit event
     await logAudit({
@@ -158,7 +246,7 @@ export async function PATCH(
       targetId: params.id,
       targetType: "User",
       metadata: {
-        changes: auditChanges,
+        changes: validatedData,
       },
       ipAddress: getClientIP(request),
     })
@@ -172,8 +260,20 @@ export async function PATCH(
     console.error("Error updating user:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      // Extract specific validation errors
+      const zodError = error as { errors?: Array<{ path: string[]; message: string }> }
+      const validationErrors = zodError.errors?.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      })) || []
+
+      console.error("Validation errors:", validationErrors)
+
       return NextResponse.json(
-        { error: "Invalid input data" },
+        {
+          error: "Invalid input data",
+          details: validationErrors
+        },
         { status: 400 }
       )
     }
@@ -193,9 +293,9 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Only admins can delete users
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 })
+    // Only admins and supervisors can delete users
+    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
+      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
     }
 
     // Prevent self-deletion

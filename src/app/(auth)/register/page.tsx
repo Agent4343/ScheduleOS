@@ -48,14 +48,22 @@ export default function RegisterPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          organizationName: formData.organizationName || undefined,
+          organizationName: formData.organizationName,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || "Registration failed")
+        // Show detailed validation errors if available
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const errorMessages = data.details.map((d: { field: string; message: string }) => d.message).join(". ")
+          setError(errorMessages || data.error || "Registration failed")
+        } else if (data.hint) {
+          setError(`${data.error}. ${data.hint}`)
+        } else {
+          setError(data.error || "Registration failed")
+        }
         return
       }
 
@@ -130,7 +138,7 @@ export default function RegisterPage() {
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Must include uppercase, lowercase, number, and special character.
+              Must include uppercase, lowercase, number, and special character
             </p>
           </div>
 
@@ -149,7 +157,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Organization Name (Optional)</Label>
+            <Label htmlFor="organizationName">Organization Name</Label>
             <Input
               id="organizationName"
               name="organizationName"
@@ -157,10 +165,11 @@ export default function RegisterPage() {
               placeholder="Your Company Name"
               value={formData.organizationName}
               onChange={handleChange}
+              required
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Create a new organization or leave blank to join an existing one later
+              You will be the admin of this organization
             </p>
           </div>
 

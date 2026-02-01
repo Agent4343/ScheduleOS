@@ -2,14 +2,13 @@
 
 import { Suspense, useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Modal } from "@/components/ui/modal"
-import { PageHeader } from "@/components/layout/page-header"
 import { cn } from "@/lib/utils"
 import {
   ChevronLeft,
@@ -20,8 +19,13 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  Download,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
 } from "lucide-react"
-import { PositionType, ShiftType, UserRole } from "@/types"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ShiftType, UserRole, PositionType } from "@/types"
 
 interface Schedule {
   id: string
@@ -51,11 +55,22 @@ interface Worker {
   name: string | null
   email?: string
   position: string | null
-  positionType?: PositionType | null
+  positionType?: PositionType
   phone?: string | null
   role?: UserRole
+  customRoleId?: string | null
+  customRole?: {
+    id: string
+    name: string
+    color: string
+  } | null
   hireDate?: string | null
   sortOrder?: number
+  isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
+  includeInStaffingCount?: boolean
   crew: {
     id: string
     name: string
@@ -66,11 +81,15 @@ interface Worker {
 interface WorkerEditForm {
   name: string
   position: string
-  positionType: PositionType
   phone: string
   crewId: string
   role: UserRole
+  customRoleId: string
   hireDate: string
+  isControlRoomTrained: boolean
+  isOilOperatorTrained: boolean
+  isUtilityOperatorTrained: boolean
+  isGasOperatorTrained: boolean
 }
 
 interface RotationPattern {
@@ -93,11 +112,45 @@ interface CustomShiftType {
   isActive: boolean
 }
 
+interface CustomRole {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+}
+
+interface StaffingRule {
+  id: string
+  name: string
+  description: string | null
+  shiftType: "DAY" | "NIGHT"
+  minWorkers: number
+  maxVacation: number | null
+  role: string | null
+  positionType: string | null
+  crewId: string | null
+  priority: number
+  isActive: boolean
+  crew: { id: string; name: string; color: string } | null
+}
+
+interface StaffingAlert {
+  date: string
+  shiftType: "DAY" | "NIGHT"
+  ruleName: string
+  required: number
+  actual: number
+  shortage: number
+  positionType?: string
+  trainingType?: "controlRoom" | "oil" | "gas" | "utility"
+}
+
 // Built-in shift colors for the Excel-like cells
 const BUILT_IN_SHIFT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   DAY: { bg: "#22c55e", text: "#ffffff", label: "D" },
   NIGHT: { bg: "#2563eb", text: "#ffffff", label: "N" },
-  OFF: { bg: "#000000", text: "#ffffff", label: "" },
+  OFF: { bg: "#e5e7eb", text: "#6b7280", label: "O" },
   LEAVE: { bg: "#f97316", text: "#ffffff", label: "L" },
   PL_DAY: { bg: "#14b8a6", text: "#ffffff", label: "PD" },
   PL_NIGHT: { bg: "#6366f1", text: "#ffffff", label: "PN" },
@@ -125,108 +178,6 @@ function getYearDays(year: number) {
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-const CALENDAR_SIZE_OPTIONS = [
-  { value: "compact", label: "Compact" },
-  { value: "comfortable", label: "Comfortable" },
-  { value: "large", label: "Large" },
-] as const
-
-type CalendarSize = typeof CALENDAR_SIZE_OPTIONS[number]["value"]
-
-const CALENDAR_SIZE_CLASSES: Record<CalendarSize, {
-  cell: string
-  header: string
-  dayText: string
-  shiftText: string
-}> = {
-  compact: {
-    cell: "w-7 min-w-[28px] h-7",
-    header: "w-7 min-w-[28px]",
-    dayText: "text-xs",
-    shiftText: "text-[10px]",
-  },
-  comfortable: {
-    cell: "w-9 min-w-[36px] h-9",
-    header: "w-9 min-w-[36px]",
-    dayText: "text-sm",
-    shiftText: "text-xs",
-  },
-  large: {
-    cell: "w-11 min-w-[44px] h-11",
-    header: "w-11 min-w-[44px]",
-    dayText: "text-sm",
-    shiftText: "text-sm",
-  },
-}
-
-const WORKER_SORT_OPTIONS = [
-  { value: "custom", label: "Custom order" },
-  { value: "shift", label: "Shift (selected date)" },
-  { value: "positionGroup", label: "Position group" },
-  { value: "name", label: "Name" },
-  { value: "crew", label: "Crew" },
-  { value: "position", label: "Position" },
-  { value: "role", label: "Role" },
-] as const
-
-interface ScheduleGroupingGroup {
-  id: string
-  name: string
-  order: number
-  positionTypes?: PositionType[]
-  roles?: UserRole[]
-  keywords?: string[]
-}
-
-interface ScheduleGroupingSettings {
-  groups?: ScheduleGroupingGroup[]
-}
-
-const DEFAULT_SCHEDULE_GROUPS: ScheduleGroupingGroup[] = [
-  {
-    id: "operators",
-    name: "Operators",
-    order: 1,
-    positionTypes: [PositionType.OPERATOR],
-    roles: [],
-    keywords: ["operator"],
-  },
-  {
-    id: "onshore-control",
-    name: "Onshore Control Room",
-    order: 2,
-    positionTypes: [PositionType.ONSHORE_CONTROL_ROOM],
-    roles: [],
-    keywords: ["onshore", "control room"],
-  },
-  {
-    id: "oim",
-    name: "OIM",
-    order: 3,
-    positionTypes: [],
-    roles: [],
-    keywords: ["oim"],
-  },
-  {
-    id: "supervisor",
-    name: "Supervisor",
-    order: 4,
-    positionTypes: [],
-    roles: [UserRole.SUPERVISOR],
-    keywords: ["supervisor"],
-  },
-  {
-    id: "production-lead",
-    name: "Production Leads",
-    order: 5,
-    positionTypes: [],
-    roles: [],
-    keywords: ["production lead", "prod lead"],
-  },
-]
-
-type WorkerSort = typeof WORKER_SORT_OPTIONS[number]["value"]
-
 function SchedulePageContent() {
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
@@ -246,16 +197,7 @@ function SchedulePageContent() {
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
-  const [calendarSize, setCalendarSize] = useState<CalendarSize>("large")
-  const [workerSort, setWorkerSort] = useState<WorkerSort>("positionGroup")
-  const [shiftGroupDate, setShiftGroupDate] = useState(() => {
-    const today = new Date()
-    return formatDate(today.getFullYear(), today.getMonth(), today.getDate())
-  })
-  const [scheduleGrouping, setScheduleGrouping] = useState<ScheduleGroupingSettings>({
-    groups: DEFAULT_SCHEDULE_GROUPS,
-  })
-  const [hideFiltersLegend, setHideFiltersLegend] = useState(false)
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -263,11 +205,15 @@ function SchedulePageContent() {
   const [editForm, setEditForm] = useState<WorkerEditForm>({
     name: "",
     position: "",
-    positionType: PositionType.OTHER,
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
+    customRoleId: "",
     hireDate: "",
+    isControlRoomTrained: false,
+    isOilOperatorTrained: false,
+    isUtilityOperatorTrained: false,
+    isGasOperatorTrained: false,
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -276,7 +222,6 @@ function SchedulePageContent() {
   const [selectedPatternId, setSelectedPatternId] = useState<string>("")
   const [scheduleStartDate, setScheduleStartDate] = useState<string>("")
   const [startingShift, setStartingShift] = useState<"DAY" | "NIGHT">("DAY")
-  const [replaceExisting, setReplaceExisting] = useState(true)
   const [clearOverrides, setClearOverrides] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generateSuccess, setGenerateSuccess] = useState<string | null>(null)
@@ -291,6 +236,17 @@ function SchedulePageContent() {
   const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
   const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
   const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
+
+  // Focus mode - hides legend and summary for bigger schedule view
+  const [focusMode, setFocusMode] = useState(false)
+
+  // Staffing rules for alerts
+  const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
+
+  // Worker breakdown modal state
+  const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
+  const [breakdownDate, setBreakdownDate] = useState<string>("")
+  const [breakdownShift, setBreakdownShift] = useState<"DAY" | "NIGHT">("DAY")
 
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
@@ -358,25 +314,36 @@ function SchedulePageContent() {
     fetchCustomShiftTypes()
   }, [])
 
-  // Fetch organization settings for grouping rules
+  // Fetch custom roles
   useEffect(() => {
-    async function fetchOrganization() {
+    async function fetchCustomRoles() {
       try {
-        const response = await fetch("/api/organization")
+        const response = await fetch("/api/roles")
         const result = await response.json()
-        if (result.success && result.data?.settings?.scheduleGrouping?.groups?.length) {
-          setScheduleGrouping({
-            groups: result.data.settings.scheduleGrouping.groups,
-          })
-        } else {
-          setScheduleGrouping({ groups: DEFAULT_SCHEDULE_GROUPS })
+        if (result.success) {
+          setCustomRoles(result.data)
         }
       } catch (error) {
-        console.error("Failed to fetch organization settings:", error)
+        console.error("Failed to fetch custom roles:", error)
       }
     }
+    fetchCustomRoles()
+  }, [])
 
-    fetchOrganization()
+  // Fetch staffing rules
+  useEffect(() => {
+    async function fetchStaffingRules() {
+      try {
+        const response = await fetch("/api/staffing-rules?isActive=true")
+        const result = await response.json()
+        if (result.success) {
+          setStaffingRules(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch staffing rules:", error)
+      }
+    }
+    fetchStaffingRules()
   }, [])
 
   // Fetch workers
@@ -422,10 +389,8 @@ function SchedulePageContent() {
           url += `&crewId=${selectedCrew}`
         }
 
-        console.log("Fetching schedules from:", url)
         const response = await fetch(url)
         const result = await response.json()
-        console.log("Fetch schedules response:", response.status, result)
 
         if (result.success) {
           setSchedules(result.data)
@@ -441,18 +406,6 @@ function SchedulePageContent() {
     fetchSchedules()
   }, [currentYear, selectedCrew])
 
-  useEffect(() => {
-    const currentYearPrefix = String(currentYear)
-    if (!shiftGroupDate.startsWith(currentYearPrefix)) {
-      const today = new Date()
-      const nextDate =
-        today.getFullYear() === currentYear
-          ? formatDate(today.getFullYear(), today.getMonth(), today.getDate())
-          : `${currentYear}-01-01`
-      setShiftGroupDate(nextDate)
-    }
-  }, [currentYear, shiftGroupDate])
-
   // Build schedule lookup map
   const scheduleMap = useMemo(() => {
     const map = new Map<string, Schedule>()
@@ -466,168 +419,284 @@ function SchedulePageContent() {
 
   // Sort workers by custom sortOrder, then by crew name, then by name
   const sortedWorkers = useMemo(() => {
-    const list = [...workers]
-    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
-    const groupingRules = (scheduleGrouping.groups?.length
-      ? scheduleGrouping.groups
-      : DEFAULT_SCHEDULE_GROUPS
-    ).slice().sort((a, b) => a.order - b.order)
-
-    const getPositionGroupOrder = (worker: Worker) => {
-      const positionText = (worker.position || "").toLowerCase()
-      for (const group of groupingRules) {
-        const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
-        const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
-        const matchesKeyword =
-          group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
-        if (matchesPositionType || matchesRole || matchesKeyword) {
-          return group.order
-        }
-      }
-      return groupingRules.length + 1
-    }
-
-    const getShiftGroupOrder = (shiftType?: ShiftType | null) => {
-      if (!shiftType) return 5
-      if (shiftType === "DAY") return 0
-      if (shiftType === "NIGHT") return 1
-      if (shiftType === "OFF") return 2
-      if (["VACATION", "SICK", "LEAVE", "TRAINING", "SHUTDOWN"].includes(shiftType)) return 3
-      return 4
-    }
-
-    list.sort((a, b) => {
-      if (workerSort === "shift") {
-        const scheduleA = scheduleMap.get(`${a.id}-${shiftDateKey}`)
-        const scheduleB = scheduleMap.get(`${b.id}-${shiftDateKey}`)
-        const groupA = getShiftGroupOrder(scheduleA?.shiftType)
-        const groupB = getShiftGroupOrder(scheduleB?.shiftType)
-        if (groupA !== groupB) return groupA - groupB
-        return (a.name || "").localeCompare(b.name || "")
-      }
-      if (workerSort === "positionGroup") {
-        const groupA = getPositionGroupOrder(a)
-        const groupB = getPositionGroupOrder(b)
-        if (groupA !== groupB) return groupA - groupB
-        return (a.name || "").localeCompare(b.name || "")
-      }
-      if (workerSort === "name") {
-        return (a.name || "").localeCompare(b.name || "")
-      }
-      if (workerSort === "crew") {
-        const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
-        if (crewCompare !== 0) return crewCompare
-        return (a.name || "").localeCompare(b.name || "")
-      }
-      if (workerSort === "position") {
-        const positionCompare = (a.position || "ZZZ").localeCompare(b.position || "ZZZ")
-        if (positionCompare !== 0) return positionCompare
-        return (a.name || "").localeCompare(b.name || "")
-      }
-      if (workerSort === "role") {
-        const roleCompare = (a.role || "ZZZ").localeCompare(b.role || "ZZZ")
-        if (roleCompare !== 0) return roleCompare
-        return (a.name || "").localeCompare(b.name || "")
-      }
-
-      // Default: custom sortOrder, then crew name, then name
+    return [...workers].sort((a, b) => {
+      // First sort by custom sortOrder (lower numbers first)
       const sortOrderA = a.sortOrder ?? 999999
       const sortOrderB = b.sortOrder ?? 999999
       if (sortOrderA !== sortOrderB) return sortOrderA - sortOrderB
+      // Then by crew name
       const crewCompare = (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ")
       if (crewCompare !== 0) return crewCompare
+      // Finally by worker name
       return (a.name || "").localeCompare(b.name || "")
     })
-    return list
-  }, [workers, workerSort, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
+  }, [workers])
 
-  const rosterData = useMemo(() => {
-    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
-    const day: Worker[] = []
-    const night: Worker[] = []
-    const off: Worker[] = []
-    const other: Worker[] = []
+  // Calculate daily staffing counts by position type and shift
+  const dailyStaffingCounts = useMemo(() => {
+    // Create a map of date -> position type -> shift type -> count
+    const counts: Record<string, {
+      dayOps: number;
+      dayOCR: number;
+      dayCRTrained: number; // Control room trained
+      dayOilTrained: number; // Oil operator trained
+      dayUtilityTrained: number; // Utility operator trained
+      dayGasTrained: number; // Gas operator trained
+      dayTotal: number; // Total day shift workers
+      nightOps: number;
+      nightOCR: number;
+      nightCRTrained: number;
+      nightOilTrained: number;
+      nightUtilityTrained: number;
+      nightGasTrained: number;
+      nightTotal: number; // Total night shift workers
+      totalOnDuty: number;
+    }> = {}
 
-    for (const worker of sortedWorkers) {
-      const schedule = scheduleMap.get(`${worker.id}-${shiftDateKey}`)
-      const shiftType = schedule?.shiftType
-      if (shiftType === "DAY") {
-        day.push(worker)
-      } else if (shiftType === "NIGHT") {
-        night.push(worker)
-      } else if (shiftType === "OFF") {
-        off.push(worker)
-      } else if (shiftType) {
-        other.push(worker)
-      } else {
-        other.push(worker)
+    // Create worker lookup for position and training status
+    const workerInfo: Record<string, {
+      posType: PositionType;
+      isCRTrained: boolean;
+      isOilTrained: boolean;
+      isUtilityTrained: boolean;
+      isGasTrained: boolean;
+      includeInCount: boolean;
+    }> = {}
+    for (const worker of workers) {
+      workerInfo[worker.id] = {
+        posType: worker.positionType || PositionType.OTHER,
+        isCRTrained: worker.isControlRoomTrained || false,
+        isOilTrained: worker.isOilOperatorTrained || false,
+        isUtilityTrained: worker.isUtilityOperatorTrained || false,
+        isGasTrained: worker.isGasOperatorTrained || false,
+        includeInCount: worker.includeInStaffingCount !== false,
       }
     }
 
-    return { day, night, off, other, shiftDateKey }
-  }, [sortedWorkers, scheduleMap, shiftGroupDate, currentYear])
-
-  const roleRoster = useMemo(() => {
-    const shiftDateKey = shiftGroupDate || `${currentYear}-01-01`
-    const groupingRules = (scheduleGrouping.groups?.length
-      ? scheduleGrouping.groups
-      : DEFAULT_SCHEDULE_GROUPS
-    ).slice().sort((a, b) => a.order - b.order)
-
-    const matchesGroup = (worker: Worker, group: ScheduleGroupingGroup) => {
-      const positionText = (worker.position || "").toLowerCase()
-      const matchesPositionType = group.positionTypes?.includes(worker.positionType as PositionType) ?? false
-      const matchesRole = group.roles?.includes(worker.role as UserRole) ?? false
-      const matchesKeyword =
-        group.keywords?.some((keyword) => positionText.includes(keyword.toLowerCase())) ?? false
-      return matchesPositionType || matchesRole || matchesKeyword
-    }
-
-    const groupedWorkers = groupingRules.map((group) => {
-      const workersInGroup = workers.filter((worker) => matchesGroup(worker, group))
-      return { group, workers: workersInGroup }
-    })
-
-    const assignedIds = new Set(
-      groupedWorkers.flatMap((group) => group.workers.map((worker) => worker.id))
-    )
-    const otherWorkers = workers.filter((worker) => !assignedIds.has(worker.id))
-    if (otherWorkers.length > 0) {
-      groupedWorkers.push({
-        group: { id: "other", name: "Other", order: groupingRules.length + 1 },
-        workers: otherWorkers,
-      })
-    }
-
-    const buildShiftRoster = (shiftType: ShiftType) =>
-      groupedWorkers.map(({ group, workers: groupWorkers }) => {
-        const scheduled = groupWorkers.filter(
-          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType === shiftType
-        )
-        const missing = groupWorkers.filter(
-          (worker) => scheduleMap.get(`${worker.id}-${shiftDateKey}`)?.shiftType !== shiftType
-        )
-        return {
-          group,
-          total: groupWorkers.length,
-          scheduled,
-          missing,
+    // Count schedules
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!counts[dateStr]) {
+        counts[dateStr] = {
+          dayOps: 0, dayOCR: 0, dayCRTrained: 0, dayOilTrained: 0, dayUtilityTrained: 0, dayGasTrained: 0, dayTotal: 0,
+          nightOps: 0, nightOCR: 0, nightCRTrained: 0, nightOilTrained: 0, nightUtilityTrained: 0, nightGasTrained: 0, nightTotal: 0,
+          totalOnDuty: 0
         }
-      })
+      }
 
-    return {
-      day: buildShiftRoster(ShiftType.DAY),
-      night: buildShiftRoster(ShiftType.NIGHT),
-      shiftDateKey,
+      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isCRTrained: false, isOilTrained: false, isUtilityTrained: false, isGasTrained: false, includeInCount: true }
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+      const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
+
+      // Only count workers who have includeInStaffingCount enabled
+      if (!info.includeInCount) {
+        // Still count for total on duty display (they're working, just not in staffing minimums)
+        if (isOnDuty) {
+          counts[dateStr].totalOnDuty++
+        }
+        continue
+      }
+
+      if (isOnDuty) {
+        counts[dateStr].totalOnDuty++
+      }
+
+      if (isDay) {
+        counts[dateStr].dayTotal++
+        if (info.posType === "OPERATOR") counts[dateStr].dayOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
+        if (info.isCRTrained) counts[dateStr].dayCRTrained++
+        if (info.isOilTrained) counts[dateStr].dayOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].dayUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].dayGasTrained++
+      } else if (isNight) {
+        counts[dateStr].nightTotal++
+        if (info.posType === "OPERATOR") counts[dateStr].nightOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
+        if (info.isCRTrained) counts[dateStr].nightCRTrained++
+        if (info.isOilTrained) counts[dateStr].nightOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].nightUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].nightGasTrained++
+      }
     }
-  }, [workers, scheduleMap, shiftGroupDate, currentYear, scheduleGrouping])
 
-  const formatWorkerNames = (list: Worker[], max = 6) => {
-    if (list.length === 0) return "None"
-    const names = list.map((worker) => worker.name || "Unnamed")
-    if (names.length <= max) return names.join(", ")
-    return `${names.slice(0, max).join(", ")} +${names.length - max} more`
+    return counts
+  }, [schedules, workers])
+
+  // Helper to get daily count for a specific date
+  function getDailyCount(month: number, day: number, field: keyof typeof dailyStaffingCounts[string]): number {
+    const dateStr = formatDate(currentYear, month, day)
+    return dailyStaffingCounts[dateStr]?.[field] || 0
   }
+
+  // Get workers on a specific day and shift
+  const getWorkersOnShift = useMemo(() => {
+    // Build a map of date -> shift -> workers (using Set to deduplicate)
+    const shiftWorkerIds: Record<string, { DAY: Set<string>; NIGHT: Set<string> }> = {}
+    const shiftWorkers: Record<string, { DAY: Worker[]; NIGHT: Worker[] }> = {}
+
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!shiftWorkerIds[dateStr]) {
+        shiftWorkerIds[dateStr] = { DAY: new Set(), NIGHT: new Set() }
+        shiftWorkers[dateStr] = { DAY: [], NIGHT: [] }
+      }
+
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+
+      const worker = workers.find(w => w.id === schedule.user.id)
+      if (worker) {
+        // Only add if not already in the set (ensures one person per role)
+        if (isDay && !shiftWorkerIds[dateStr].DAY.has(worker.id)) {
+          shiftWorkerIds[dateStr].DAY.add(worker.id)
+          shiftWorkers[dateStr].DAY.push(worker)
+        }
+        if (isNight && !shiftWorkerIds[dateStr].NIGHT.has(worker.id)) {
+          shiftWorkerIds[dateStr].NIGHT.add(worker.id)
+          shiftWorkers[dateStr].NIGHT.push(worker)
+        }
+      }
+    }
+
+    return (dateStr: string, shift: "DAY" | "NIGHT"): Worker[] => {
+      return shiftWorkers[dateStr]?.[shift] || []
+    }
+  }, [schedules, workers])
+
+  // Calculate staffing alerts based on rules
+  const staffingAlerts = useMemo(() => {
+    const alerts: StaffingAlert[] = []
+
+    // Only process rules if we have any
+    if (staffingRules.length === 0) return alerts
+
+    // Check each day in the year that has schedules
+    const datesWithSchedules = Array.from(new Set(schedules.map(s => s.date.split("T")[0])))
+
+    for (const dateStr of datesWithSchedules) {
+      for (const rule of staffingRules) {
+        if (!rule.isActive) continue
+
+        // Get workers on this shift and filter to only those who should be counted
+        const shiftWorkers = getWorkersOnShift(dateStr, rule.shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
+
+        // Filter by position type if specified
+        let relevantWorkers = shiftWorkers
+        if (rule.positionType) {
+          relevantWorkers = shiftWorkers.filter(w => w.positionType === rule.positionType)
+        }
+
+        // Check if we meet the minimum
+        if (relevantWorkers.length < rule.minWorkers) {
+          alerts.push({
+            date: dateStr,
+            shiftType: rule.shiftType,
+            ruleName: rule.name,
+            required: rule.minWorkers,
+            actual: relevantWorkers.length,
+            shortage: rule.minWorkers - relevantWorkers.length,
+            positionType: rule.positionType || undefined,
+          })
+        }
+      }
+
+      // Check training coverage for each shift type
+      // Requirement: At least ONE person on each shift must have each training type
+      const trainingTypes = [
+        { key: "controlRoom" as const, field: "isControlRoomTrained" as const, label: "Control Room Coverage" },
+        { key: "oil" as const, field: "isOilOperatorTrained" as const, label: "Oil Operator Coverage" },
+        { key: "gas" as const, field: "isGasOperatorTrained" as const, label: "Gas Operator Coverage" },
+        { key: "utility" as const, field: "isUtilityOperatorTrained" as const, label: "Utility Operator Coverage" },
+      ]
+
+      for (const shiftType of ["DAY", "NIGHT"] as const) {
+        const shiftWorkers = getWorkersOnShift(dateStr, shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
+
+        // Only check if there are workers scheduled on this shift
+        if (shiftWorkers.length > 0) {
+          for (const training of trainingTypes) {
+            const trainedCount = shiftWorkers.filter(w => w[training.field]).length
+            if (trainedCount < 1) {
+              alerts.push({
+                date: dateStr,
+                shiftType,
+                ruleName: training.label,
+                required: 1,
+                actual: 0,
+                shortage: 1,
+                trainingType: training.key,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    // Sort by date
+    alerts.sort((a, b) => a.date.localeCompare(b.date))
+
+    return alerts
+  }, [schedules, staffingRules, getWorkersOnShift])
+
+  // Group alerts by date for display
+  const alertsByDate = useMemo(() => {
+    const grouped: Record<string, StaffingAlert[]> = {}
+    for (const alert of staffingAlerts) {
+      if (!grouped[alert.date]) {
+        grouped[alert.date] = []
+      }
+      grouped[alert.date].push(alert)
+    }
+    return grouped
+  }, [staffingAlerts])
+
+  // Get alerts for visible month (for the current view)
+  const visibleAlerts = useMemo(() => {
+    // Get current date info
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentDay = now.getDate()
+
+    // Filter to show alerts from today forward, limit to next 30 days
+    const todayStr = formatDate(currentYear, currentMonth, currentDay)
+    const futureDate = new Date(now)
+    futureDate.setDate(futureDate.getDate() + 30)
+    const futureDateStr = formatDate(futureDate.getFullYear(), futureDate.getMonth(), futureDate.getDate())
+
+    return staffingAlerts.filter(alert => {
+      // Only show alerts for current year
+      if (!alert.date.startsWith(String(currentYear))) {
+        // But if viewing past/future year, show that year's alerts
+        if (currentYear !== now.getFullYear()) {
+          return alert.date.startsWith(String(currentYear))
+        }
+        return false
+      }
+      // Show upcoming alerts (from today for next 30 days)
+      return alert.date >= todayStr && alert.date <= futureDateStr
+    })
+  }, [staffingAlerts, currentYear])
+
+  // Open breakdown modal
+  function openBreakdownModal(dateStr: string, shift: "DAY" | "NIGHT") {
+    setBreakdownDate(dateStr)
+    setBreakdownShift(shift)
+    setBreakdownModalOpen(true)
+  }
+
+  function closeBreakdownModal() {
+    setBreakdownModalOpen(false)
+  }
+
+  // Get breakdown workers for the modal
+  const breakdownWorkers = useMemo(() => {
+    if (!breakdownDate) return []
+    return getWorkersOnShift(breakdownDate, breakdownShift)
+  }, [breakdownDate, breakdownShift, getWorkersOnShift])
 
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
@@ -646,11 +715,15 @@ function SchedulePageContent() {
     setEditForm({
       name: worker.name || "",
       position: worker.position || "",
-      positionType: worker.positionType || PositionType.OTHER,
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
+      customRoleId: worker.customRoleId || "",
       hireDate: hireDateStr,
+      isControlRoomTrained: worker.isControlRoomTrained || false,
+      isOilOperatorTrained: worker.isOilOperatorTrained || false,
+      isUtilityOperatorTrained: worker.isUtilityOperatorTrained || false,
+      isGasOperatorTrained: worker.isGasOperatorTrained || false,
     })
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
@@ -680,18 +753,28 @@ function SchedulePageContent() {
         body: JSON.stringify({
           name: editForm.name,
           position: editForm.position || null,
-          positionType: editForm.positionType,
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
+          customRoleId: editForm.customRoleId || null,
           hireDate: editForm.hireDate || null,
+          isControlRoomTrained: editForm.isControlRoomTrained,
+          isOilOperatorTrained: editForm.isOilOperatorTrained,
+          isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+          isGasOperatorTrained: editForm.isGasOperatorTrained,
         }),
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to update worker")
+        // Show detailed validation errors if available
+        let errorMessage = result.error || "Failed to update worker"
+        if (result.details && Array.isArray(result.details) && result.details.length > 0) {
+          const fieldErrors = result.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        throw new Error(errorMessage)
       }
 
       setWorkers((prev) =>
@@ -701,10 +784,17 @@ function SchedulePageContent() {
                 ...w,
                 name: editForm.name,
                 position: editForm.position || null,
-                positionType: editForm.positionType,
                 phone: editForm.phone || null,
                 role: editForm.role,
+                customRoleId: editForm.customRoleId || null,
+                customRole: editForm.customRoleId
+                  ? customRoles.find((r) => r.id === editForm.customRoleId) || null
+                  : null,
                 hireDate: editForm.hireDate || null,
+                isControlRoomTrained: editForm.isControlRoomTrained,
+                isOilOperatorTrained: editForm.isOilOperatorTrained,
+                isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+                isGasOperatorTrained: editForm.isGasOperatorTrained,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
                   : null,
@@ -741,11 +831,8 @@ function SchedulePageContent() {
         endDate: endDateStr,
         startPhase: 0,
         startingShift: startingShift,
-        replaceExisting: replaceExisting,
         clearOverrides: clearOverrides,
       }
-
-      console.log("Generating schedule:", requestBody)
 
       const response = await fetch("/api/schedules", {
         method: "POST",
@@ -754,7 +841,6 @@ function SchedulePageContent() {
       })
 
       const result = await response.json()
-      console.log("Generate response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || result.details || "Failed to generate schedule")
@@ -764,12 +850,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - include crew filter to maintain consistent view
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
@@ -809,13 +891,6 @@ function SchedulePageContent() {
     setScheduleEditWorker(null)
     setScheduleEditError(null)
     setScheduleEditSuccess(null)
-  }
-
-  function handleScheduleEditStartChange(value: string) {
-    setScheduleEditStartDate(value)
-    if (scheduleEditEndDate && value > scheduleEditEndDate) {
-      setScheduleEditEndDate(value)
-    }
   }
 
   async function saveScheduleEdit() {
@@ -859,8 +934,6 @@ function SchedulePageContent() {
           overrideReason: scheduleEditReason || null,
         }
 
-        console.log("Saving schedule:", requestBody)
-
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -868,7 +941,6 @@ function SchedulePageContent() {
         })
 
         const result = await response.json()
-        console.log("Save response:", result)
 
         if (!response.ok) {
           // Extract detailed error message from validation errors if available
@@ -895,12 +967,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - wait for completion
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
@@ -930,407 +998,330 @@ function SchedulePageContent() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <PageHeader
-        title="Schedule Calendar"
-        description={`${currentYear} - Full Year View - ${sortedWorkers.length} Workers`}
-        actions={(
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setHideFiltersLegend((prev) => !prev)}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Schedule Calendar</h1>
+          <p className="text-muted-foreground">
+            {currentYear} - Full Year View - {sortedWorkers.length} Workers
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant={focusMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFocusMode(!focusMode)}
+            title={focusMode ? "Exit focus mode" : "Enter focus mode - hide legend and summary"}
+          >
+            {focusMode ? <Minimize2 className="h-4 w-4 mr-2" /> : <Maximize2 className="h-4 w-4 mr-2" />}
+            {focusMode ? "Exit Focus" : "Focus Mode"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.location.href = `/api/export?type=schedule-grid&year=${currentYear}`
+            }}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+            This Year
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="font-semibold px-4 text-lg">{currentYear}</span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Filter */}
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-muted-foreground">Filter by Crew:</span>
+        <Select
+          id="crew-filter"
+          name="crew-filter"
+          value={selectedCrew}
+          onChange={(e) => setSelectedCrew(e.target.value)}
+          options={[
+            { value: "", label: "All Crews" },
+            ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
+          ]}
+          className="w-40"
+        />
+      </div>
+
+      {/* Legend - hidden in focus mode */}
+      {!focusMode && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+            <div
+              key={type}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: style.bg, color: style.text }}
             >
-              {hideFiltersLegend ? "Show filters/legend" : "Hide filters/legend"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
-              This Year
-            </Button>
-            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="font-semibold px-4 text-lg">{currentYear}</span>
-            <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      />
-
-      {!hideFiltersLegend && (
-        <>
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Filter by Crew:</span>
-              <Select
-                id="crew-filter"
-                name="crew-filter"
-                value={selectedCrew}
-                onChange={(e) => setSelectedCrew(e.target.value)}
-                options={[
-                  { value: "", label: "All Crews" },
-                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-                ]}
-                className="w-40"
-              />
+              <span className="font-bold">{style.label}</span>
+              <span>= {type.replace("_", " ")}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Sort by:</span>
-              <Select
-                id="worker-sort"
-                name="worker-sort"
-                value={workerSort}
-                onChange={(e) => setWorkerSort(e.target.value as WorkerSort)}
-                options={WORKER_SORT_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-                className="w-44"
-              />
+          ))}
+          {customShiftTypes.filter(t => t.isActive).map((t) => (
+            <div
+              key={t.code}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: t.color, color: t.textColor }}
+            >
+              <span className="font-bold">{t.code}</span>
+              <span>= {t.name}</span>
             </div>
-            {workerSort === "shift" && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Shift date:</span>
-                <Input
-                  type="date"
-                  value={shiftGroupDate}
-                  onChange={(e) => setShiftGroupDate(e.target.value)}
-                  className="w-44"
-                />
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Calendar size:</span>
-              <Select
-                id="calendar-size"
-                name="calendar-size"
-                value={calendarSize}
-                onChange={(e) => setCalendarSize(e.target.value as CalendarSize)}
-                options={CALENDAR_SIZE_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-                className="w-44"
-              />
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-              <div
-                key={type}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-                style={{ backgroundColor: style.bg, color: style.text }}
-              >
-                <span className="font-bold">{style.label}</span>
-                <span>= {type.replace("_", " ")}</span>
-              </div>
-            ))}
-            {customShiftTypes.filter(t => t.isActive).map((t) => (
-              <div
-                key={t.code}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-                style={{ backgroundColor: t.color, color: t.textColor }}
-              >
-                <span className="font-bold">{t.code}</span>
-                <span>= {t.name}</span>
-              </div>
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
       )}
 
-      {/* Schedule Table + Roster */}
-      <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              {currentYear} Schedule
-              <Badge variant="secondary" className="ml-2">
-                <Users className="h-3 w-3 mr-1" />
-                {sortedWorkers.length} workers
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : sortedWorkers.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No workers found</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
-                <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
-                  <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
-                    {/* Month headers */}
-                    <tr>
-                      <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
-                        Worker
+      {/* Schedule Table */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            {currentYear} Schedule
+            <Badge variant="secondary" className="ml-2">
+              <Users className="h-3 w-3 mr-1" />
+              {sortedWorkers.length} workers
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : sortedWorkers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No workers found</p>
+            </div>
+          ) : (
+            <div className={cn("overflow-x-auto overflow-y-auto", focusMode ? "max-h-[90vh]" : "max-h-[70vh]")}>
+              <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
+                <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
+                  {/* Month headers */}
+                  <tr>
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
+                      Worker
+                    </th>
+                    {yearMonths.map(({ month, days }) => (
+                      <th
+                        key={month}
+                        colSpan={days.length}
+                        className="border p-2 text-center font-semibold bg-muted text-base"
+                      >
+                        {MONTH_NAMES[month]}
                       </th>
-                      {yearMonths.map(({ month, days }) => (
-                        <th
-                          key={month}
-                          colSpan={days.length}
-                          className="border p-2 text-center font-semibold bg-muted text-base"
-                        >
-                          {MONTH_NAMES[month]}
-                        </th>
-                      ))}
-                    </tr>
-                    {/* Day headers */}
-                    <tr>
-                      <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
+                    ))}
+                  </tr>
+                  {/* Day headers */}
+                  <tr>
+                    <th className="border p-1 sticky left-0 bg-muted/50 z-40"></th>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const date = new Date(currentYear, month, day)
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                        const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+
+                        return (
+                          <th
+                            key={`${month}-${day}`}
+                            className={cn(
+                              "border p-1 text-center font-normal w-8 min-w-[32px]",
+                              isWeekend ? "bg-muted" : "bg-muted/50",
+                              isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
+                            )}
+                          >
+                            <div className={cn("text-sm font-semibold text-foreground", isTodayCell && "text-blue-600 dark:text-blue-300")}>{day}</div>
+                          </th>
+                        )
+                      })
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedWorkers.map((worker) => (
+                    <tr key={worker.id} className="hover:bg-muted/20">
+                      <td
+                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
+                        onClick={() => openEditModal(worker)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-2 h-8 rounded"
+                            style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                          />
+                          <div className="truncate max-w-[160px]">
+                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {worker.crew?.name || "No crew"}
+                            </div>
+                          </div>
+                          <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
+                        </div>
+                      </td>
                       {yearMonths.map(({ month, days }) =>
                         days.map((day) => {
-                          const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
+                          const schedule = getScheduleForDay(worker.id, month, day)
                           const date = new Date(currentYear, month, day)
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6
                           const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
+                          // Handle custom shift types by building the key
+                          const shiftKey = schedule
+                            ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
+                              ? `CUSTOM:${schedule.customShiftCode}`
+                              : schedule.shiftType
+                            : null
+                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
 
                           return (
-                            <th
+                            <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border p-1 text-center font-normal",
-                                sizeClasses.header,
-                                isWeekend ? "bg-muted" : "bg-muted/50",
-                                isTodayCell && "bg-blue-200 dark:bg-blue-900 font-bold"
+                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
+                                isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
+                              style={
+                                style
+                                  ? { backgroundColor: style.bg, color: style.text }
+                                  : undefined
+                              }
+                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                              onClick={() => openScheduleEditModal(worker, month, day)}
                             >
-                              <div className={cn(
-                                "font-semibold text-foreground",
-                                sizeClasses.dayText,
-                                isTodayCell && "text-blue-600 dark:text-blue-300"
-                              )}>{day}</div>
-                            </th>
+                              <span className="text-xs font-bold">
+                                {style ? style.label : ""}
+                              </span>
+                            </td>
                           )
                         })
                       )}
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sortedWorkers.map((worker) => (
-                      <tr key={worker.id} className="hover:bg-muted/20">
-                        <td
-                          className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
-                          onClick={() => openEditModal(worker)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-2 h-8 rounded"
-                              style={{ backgroundColor: worker.crew?.color || "#ccc" }}
-                            />
-                            <div className="truncate max-w-[160px]">
-                              <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {worker.crew?.name || "No crew"}
-                              </div>
-                            </div>
-                            <Pencil className="h-3 w-3 text-muted-foreground ml-auto flex-shrink-0" />
-                          </div>
-                        </td>
-                        {yearMonths.map(({ month, days }) =>
-                          days.map((day) => {
-                            const sizeClasses = CALENDAR_SIZE_CLASSES[calendarSize]
-                            const schedule = getScheduleForDay(worker.id, month, day)
-                            const isTodayCell = isCurrentYear && month === todayMonth && day === todayDate
-                            // Handle custom shift types by building the key
-                            const shiftKey = schedule
-                              ? schedule.shiftType === "CUSTOM" && schedule.customShiftCode
-                                ? `CUSTOM:${schedule.customShiftCode}`
-                                : schedule.shiftType
-                              : null
-                            const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+                  ))}
 
-                            return (
-                              <td
-                                key={`${month}-${day}`}
-                                className={cn(
-                                  "border text-center cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
-                                  sizeClasses.cell,
-                                  !style && "bg-black",
-                                  isTodayCell && "ring-2 ring-blue-400 ring-inset"
-                                )}
-                                style={
-                                  style
-                                    ? { backgroundColor: style.bg, color: style.text }
-                                    : undefined
-                                }
-                                title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
-                                onClick={() => openScheduleEditModal(worker, month, day)}
-                              >
-                                <span className={cn("font-bold", sizeClasses.shiftText)}>
-                                  {style ? style.label : ""}
-                                </span>
-                              </td>
-                            )
-                          })
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card className="h-fit">
-          <CardHeader>
-            <CardTitle>Shift Roster</CardTitle>
-            <CardDescription>
-              {new Date(rosterData.shiftDateKey).toLocaleDateString()}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-sm font-semibold text-green-400">
-                <span>Day Shift</span>
-                <span>{rosterData.day.length}</span>
-              </div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {rosterData.day.length === 0 ? (
-                  <li className="text-muted-foreground">No day shift</li>
-                ) : (
-                  rosterData.day.map((worker) => (
-                    <li key={worker.id} className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: worker.crew?.color || "#22c55e" }}
-                      />
-                      <span className="truncate">{worker.name || "Unnamed"}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm font-semibold text-blue-400">
-                <span>Night Shift</span>
-                <span>{rosterData.night.length}</span>
-              </div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {rosterData.night.length === 0 ? (
-                  <li className="text-muted-foreground">No night shift</li>
-                ) : (
-                  rosterData.night.map((worker) => (
-                    <li key={worker.id} className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: worker.crew?.color || "#2563eb" }}
-                      />
-                      <span className="truncate">{worker.name || "Unnamed"}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
-                <span>Off</span>
-                <span>{rosterData.off.length}</span>
-              </div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {rosterData.off.length === 0 ? (
-                  <li className="text-muted-foreground">No off days</li>
-                ) : (
-                  rosterData.off.map((worker) => (
-                    <li key={worker.id} className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-gray-400" />
-                      <span className="truncate">{worker.name || "Unnamed"}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm font-semibold text-muted-foreground">
-                <span>Other</span>
-                <span>{rosterData.other.length}</span>
-              </div>
-              <ul className="mt-2 space-y-1 text-sm">
-                {rosterData.other.length === 0 ? (
-                  <li className="text-muted-foreground">No other shifts</li>
-                ) : (
-                  rosterData.other.map((worker) => (
-                    <li key={worker.id} className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-gray-400" />
-                      <span className="truncate">{worker.name || "Unnamed"}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
+                  {/* Compliance Issues Row */}
+                  <tr className="bg-muted/30 border-t-2 border-primary/20">
+                    <td className="border p-2 sticky left-0 bg-red-50 dark:bg-red-950 z-20 font-semibold text-red-700 dark:text-red-300 text-xs">
+                      Compliance
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayAlerts = alertsByDate[dateStr] || []
+                        const hasIssues = dayAlerts.length > 0
+                        const issueCount = dayAlerts.length
+                        const dayIssues = dayAlerts.filter(a => a.shiftType === "DAY").length
+                        const nightIssues = dayAlerts.filter(a => a.shiftType === "NIGHT").length
 
-            <div className="border-t pt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Role Coverage • Day</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              {roleRoster.day.map(({ group, total, scheduled, missing }) => (
-                <div key={`day-${group.id}`} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span>{group.name}</span>
-                    <span>{scheduled.length}/{total}</span>
-                  </div>
-                  {total === 0 ? (
-                    <p className="text-xs text-muted-foreground">No workers in this group</p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-muted-foreground">
-                        Scheduled: {formatWorkerNames(scheduled)}
-                      </p>
-                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-                        Missing: {formatWorkerNames(missing)}
-                      </p>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+                        return (
+                          <td
+                            key={`compliance-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium transition-all",
+                              hasIssues
+                                ? "bg-red-100 dark:bg-red-900 cursor-pointer hover:ring-2 hover:ring-red-400 hover:ring-inset"
+                                : "bg-red-50/50 dark:bg-red-950/30"
+                            )}
+                            title={hasIssues ? `${issueCount} compliance issue${issueCount !== 1 ? 's' : ''} - Day: ${dayIssues}, Night: ${nightIssues}` : "No compliance issues"}
+                            onClick={() => hasIssues && openBreakdownModal(dateStr, dayIssues > 0 ? "DAY" : "NIGHT")}
+                          >
+                            {hasIssues && (
+                              <span className="text-red-600 dark:text-red-400 font-bold">
+                                {issueCount > 1 ? issueCount : "!"}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
 
-            <div className="border-t pt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Role Coverage • Night</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(roleRoster.shiftDateKey).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              {roleRoster.night.map(({ group, total, scheduled, missing }) => (
-                <div key={`night-${group.id}`} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs font-semibold">
-                    <span>{group.name}</span>
-                    <span>{scheduled.length}/{total}</span>
-                  </div>
-                  {total === 0 ? (
-                    <p className="text-xs text-muted-foreground">No workers in this group</p>
-                  ) : (
-                    <>
-                      <p className="text-xs text-muted-foreground">
-                        Scheduled: {formatWorkerNames(scheduled)}
-                      </p>
-                      <p className={missing.length ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-                        Missing: {formatWorkerNames(missing)}
-                      </p>
-                    </>
-                  )}
-                </div>
-              ))}
+                  {/* Daily Staffing Summary Rows */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-green-50 dark:bg-green-950 z-20 font-semibold text-green-700 dark:text-green-300 text-xs">
+                      Day Shift
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = getDailyCount(month, day, "dayTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "DAY")
+                        return (
+                          <td
+                            key={`day-total-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-green-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-green-50 dark:bg-green-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on day shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "DAY")}
+                          >
+                            {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-blue-50 dark:bg-blue-950 z-20 font-semibold text-blue-700 dark:text-blue-300 text-xs">
+                      Night Shift
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = getDailyCount(month, day, "nightTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "NIGHT")
+                        return (
+                          <td
+                            key={`night-total-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-blue-50 dark:bg-blue-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on night shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "NIGHT")}
+                          >
+                            {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/50 border-t-2 border-primary/30">
+                    <td className="border p-2 sticky left-0 bg-muted z-20 font-bold text-xs">
+                      Total On Duty
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "totalOnDuty")
+                        return (
+                          <td
+                            key={`total-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-muted text-xs font-bold"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Edit Worker Modal */}
       <Modal
@@ -1363,20 +1354,6 @@ function SchedulePageContent() {
               value={editForm.position}
               onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
               placeholder="e.g., Operator, Technician"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="positionType">Position Type</Label>
-            <Select
-              id="positionType"
-              value={editForm.positionType}
-              onChange={(e) => setEditForm({ ...editForm, positionType: e.target.value as PositionType })}
-              options={[
-                { value: PositionType.OPERATOR, label: "Operator" },
-                { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
-                { value: PositionType.OTHER, label: "Other" },
-              ]}
             />
           </div>
 
@@ -1416,6 +1393,21 @@ function SchedulePageContent() {
               ]}
             />
           </div>
+
+          {customRoles.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="customRole">Custom Role</Label>
+              <Select
+                id="customRole"
+                value={editForm.customRoleId}
+                onChange={(e) => setEditForm({ ...editForm, customRoleId: e.target.value })}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="hireDate">Hire Date</Label>
@@ -1500,24 +1492,6 @@ function SchedulePageContent() {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="replaceExisting"
-                checked={replaceExisting}
-                onChange={(e) => setReplaceExisting(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="replaceExisting" className="text-sm font-normal">
-                Replace existing schedule (clears prior auto-generated shifts)
-              </Label>
-            </div>
-            {replaceExisting && (
-              <p className="text-xs text-muted-foreground">
-                Deletes previous auto-generated shifts for selected workers. Manual edits remain unless cleared.
-              </p>
-            )}
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
                 id="clearOverrides"
                 checked={clearOverrides}
                 onChange={(e) => setClearOverrides(e.target.checked)}
@@ -1586,7 +1560,7 @@ function SchedulePageContent() {
                 id="scheduleStartDate"
                 type="date"
                 value={scheduleEditStartDate}
-                onChange={(e) => handleScheduleEditStartChange(e.target.value)}
+                onChange={(e) => setScheduleEditStartDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -1696,6 +1670,275 @@ function SchedulePageContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Worker Breakdown Modal */}
+      <Modal
+        isOpen={breakdownModalOpen}
+        onClose={closeBreakdownModal}
+        title={`${breakdownShift === "DAY" ? "Day" : "Night"} Shift Workers`}
+        description={breakdownDate ? new Date(breakdownDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+      >
+        <div className="space-y-4">
+          {/* Show any alerts for this date/shift */}
+          {alertsByDate[breakdownDate]?.filter(a => a.shiftType === breakdownShift).map((alert, idx) => (
+            <div key={idx} className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="font-medium">Staffing Alert: {alert.ruleName}</span>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                Need {alert.required} workers{alert.positionType ? ` (${alert.positionType})` : ""}, have {alert.actual} — short by {alert.shortage}
+              </p>
+            </div>
+          ))}
+
+          {/* Training coverage summary */}
+          {breakdownWorkers.length > 0 && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Requirement: At least 1 counted worker on shift must have each training type
+              </p>
+              {(() => {
+                // Only count workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isControlRoomTrained)
+                        ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      CR: {countedWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isControlRoomTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isOilOperatorTrained)
+                        ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Oil: {countedWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isOilOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isGasOperatorTrained)
+                        ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Gas: {countedWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isGasOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isUtilityOperatorTrained)
+                        ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Utility: {countedWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isUtilityOperatorTrained).length})
+                    </span>
+                  </div>
+                )
+              })()}
+              <p className="text-xs text-muted-foreground mt-2">
+                Control Room: backup for onshore operations if needed
+              </p>
+              {/* Single point of failure warning */}
+              {(() => {
+                // Only consider workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+
+                // Find training types with exactly 1 person covering them
+                const trainingTypes = [
+                  { key: 'oil', label: 'Oil', field: 'isOilOperatorTrained' as const },
+                  { key: 'gas', label: 'Gas', field: 'isGasOperatorTrained' as const },
+                  { key: 'utility', label: 'Utility', field: 'isUtilityOperatorTrained' as const },
+                ];
+
+                // For each training type with exactly 1 person, track who that person is
+                const singleCoverageMap: Record<string, { types: string[], worker: typeof countedWorkers[0] }> = {};
+
+                for (const training of trainingTypes) {
+                  const trainedWorkers = countedWorkers.filter(w => w[training.field]);
+                  if (trainedWorkers.length === 1) {
+                    const worker = trainedWorkers[0];
+                    if (!singleCoverageMap[worker.id]) {
+                      singleCoverageMap[worker.id] = { types: [], worker };
+                    }
+                    singleCoverageMap[worker.id].types.push(training.label);
+                  }
+                }
+
+                // Find workers who are single points of failure for multiple training types
+                // But if one worker covers ALL three training types, that's acceptable - no warning needed
+                const singlePointsOfFailure = Object.values(singleCoverageMap).filter(
+                  entry => entry.types.length > 1 && entry.types.length < trainingTypes.length
+                );
+
+                if (singlePointsOfFailure.length === 0) return null;
+
+                return (
+                  <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Single Point of Failure Warning
+                    </p>
+                    {singlePointsOfFailure.map(entry => (
+                      <p key={entry.worker.id} className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {entry.worker.name} is the only person covering {entry.types.join(', ')} training.
+                        If unavailable, {entry.types.length} coverage requirements would fail.
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Worker list */}
+          <div className="space-y-2">
+            {(() => {
+              const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false).length
+              const notCountedWorkers = breakdownWorkers.length - countedWorkers
+              return (
+                <h4 className="font-medium text-sm text-muted-foreground">
+                  {countedWorkers} worker{countedWorkers !== 1 ? "s" : ""} counted on {breakdownShift.toLowerCase()} shift
+                  {notCountedWorkers > 0 && (
+                    <span className="text-orange-600 dark:text-orange-400"> (+{notCountedWorkers} not counted)</span>
+                  )}
+                </h4>
+              )
+            })()}
+            {breakdownWorkers.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No workers scheduled</p>
+            ) : (
+              <div className="grid gap-2">
+                {breakdownWorkers.map((worker) => {
+                  const isNotCounted = worker.includeInStaffingCount === false
+                  return (
+                    <div
+                      key={worker.id}
+                      className={cn(
+                        "flex items-center gap-3 p-2 rounded-md",
+                        isNotCounted ? "bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800" : "bg-muted/50"
+                      )}
+                    >
+                      <div
+                        className="w-3 h-8 rounded"
+                        style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {worker.name || "Unnamed"}
+                          {isNotCounted && (
+                            <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded" title="Not included in staffing counts">Not Counted</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex gap-2">
+                          <span>{worker.crew?.name || "No crew"}</span>
+                          {worker.positionType && (
+                            <>
+                              <span>•</span>
+                              <span>{worker.positionType.replace("_", " ")}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* Training badges */}
+                      <div className="flex gap-1 flex-shrink-0">
+                        {worker.isControlRoomTrained && (
+                          <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded" title="Control Room Trained">CR</span>
+                        )}
+                        {worker.isOilOperatorTrained && (
+                          <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded" title="Oil Operator Trained">Oil</span>
+                        )}
+                        {worker.isGasOperatorTrained && (
+                          <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded" title="Gas Operator Trained">Gas</span>
+                        )}
+                        {worker.isUtilityOperatorTrained && (
+                          <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded" title="Utility Operator Trained">Util</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={closeBreakdownModal}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Staffing Alerts Section - shown below the schedule */}
+      {!focusMode && visibleAlerts.length > 0 && (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300">
+              <AlertTriangle className="h-5 w-5" />
+              Staffing Alerts ({visibleAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {visibleAlerts.slice(0, 20).map((alert, idx) => {
+                const alertDate = new Date(alert.date + "T12:00:00")
+                const isToday = alert.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                const isTomorrow = (() => {
+                  const tomorrow = new Date(today)
+                  tomorrow.setDate(tomorrow.getDate() + 1)
+                  return alert.date === formatDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+                })()
+
+                return (
+                  <Alert
+                    key={`${alert.date}-${alert.shiftType}-${alert.ruleName}-${idx}`}
+                    variant="destructive"
+                    className="py-2"
+                    showIcon={false}
+                  >
+                    <AlertTriangle className="h-4 w-4 absolute left-4 top-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">
+                          {isToday ? "Today" : isTomorrow ? "Tomorrow" : alertDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span className={cn(
+                          "font-medium",
+                          alert.shiftType === "DAY" ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                        )}>
+                          {alert.shiftType}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span>{alert.ruleName}</span>
+                        {alert.positionType && (
+                          <span className="text-muted-foreground ml-1">({alert.positionType})</span>
+                        )}
+                        <span className="ml-2 text-sm">
+                          — Need {alert.required}, have {alert.actual} (short {alert.shortage})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 ml-2"
+                        onClick={() => openBreakdownModal(alert.date, alert.shiftType)}
+                      >
+                        View
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )
+              })}
+              {visibleAlerts.length > 20 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  And {visibleAlerts.length - 20} more alerts...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { PageHeader } from "@/components/layout/page-header"
+import { useToast } from "@/components/ui/toast"
+import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Table,
   TableBody,
@@ -28,8 +28,11 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  AlertTriangle,
+  Zap,
 } from "lucide-react"
-import { PositionType, UserRole, UserStatus } from "@/types"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { UserRole, UserStatus } from "@/types"
 
 interface User {
   id: string
@@ -37,7 +40,6 @@ interface User {
   name: string | null
   role: UserRole
   position: string | null
-  positionType: PositionType
   phone: string | null
   status: UserStatus
   hireDate: string | null
@@ -46,12 +48,52 @@ interface User {
     name: string
     color: string
   } | null
+  customRoleId: string | null
+  customRole: {
+    id: string
+    name: string
+    color: string
+  } | null
+  // Training certifications
+  isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
+  // Staffing settings
+  includeInStaffingCount?: boolean
+  singleTrainingCoverageOnly?: boolean
 }
 
 interface Crew {
   id: string
   name: string
   color: string
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+}
+
+interface CertificationType {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  isRequired: boolean
+}
+
+interface SubscriptionInfo {
+  tier: string
+  tierName: string
+  workerLimit: number
+  workerCount: number
+  workersRemaining: number
+  canAddWorkers: boolean
+  isAtLimit: boolean
+  isTrialExpired: boolean
 }
 
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -67,15 +109,15 @@ const ROLE_LABELS: Record<UserRole, string> = {
   WORKER: "Worker",
 }
 
-const POSITION_TYPE_OPTIONS = [
-  { value: PositionType.OPERATOR, label: "Operator" },
-  { value: PositionType.ONSHORE_CONTROL_ROOM, label: "Onshore Control Room" },
-  { value: PositionType.OTHER, label: "Other" },
-]
-
 export default function WorkersPage() {
+  const { addToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
+  const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
+  const [selectedCertifications, setSelectedCertifications] = useState<Map<string, { expiresAt: string | null; earnedAt: string }>>(new Map())
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -90,9 +132,9 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
-    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
     password: "",
   })
@@ -101,28 +143,38 @@ export default function WorkersPage() {
     email: "",
     role: "WORKER" as UserRole,
     position: "",
-    positionType: PositionType.OTHER as PositionType,
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
+    includeInStaffingCount: true,
+    singleTrainingCoverageOnly: false,
   })
   const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes, subRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
+          fetch("/api/roles"),
+          fetch("/api/certifications"),
+          fetch("/api/subscription"),
         ])
 
         const usersData = await usersRes.json()
         const crewsData = await crewsRes.json()
+        const rolesData = await rolesRes.json()
+        const certsData = await certsRes.json()
+        const subData = await subRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
+        if (rolesData.success) setCustomRoles(rolesData.data)
+        if (certsData.success) setCertificationTypes(certsData.data)
+        if (subData.success) setSubscription(subData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -155,19 +207,40 @@ export default function WorkersPage() {
     return matchesSearch && matchesStatus && matchesCrew
   })
 
-  function openEditModal(user: User) {
+  async function openEditModal(user: User) {
     setEditingUser(user)
     setEditFormData({
       name: user.name || "",
       email: user.email,
       role: user.role,
       position: user.position || "",
-      positionType: user.positionType || PositionType.OTHER,
       phone: user.phone || "",
       crewId: user.crew?.id || "",
+      customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
+      includeInStaffingCount: user.includeInStaffingCount !== false,
+      singleTrainingCoverageOnly: user.singleTrainingCoverageOnly === true,
     })
+    // Fetch user's certifications with expiry dates
+    try {
+      const res = await fetch(`/api/users/${user.id}/certifications`)
+      const data = await res.json()
+      if (data.success) {
+        const certMap = new Map<string, { expiresAt: string | null; earnedAt: string }>()
+        for (const cert of data.data) {
+          certMap.set(cert.certificationTypeId, {
+            expiresAt: cert.expiresAt ? cert.expiresAt.split("T")[0] : null,
+            earnedAt: cert.earnedAt ? cert.earnedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+          })
+        }
+        setSelectedCertifications(certMap)
+      } else {
+        setSelectedCertifications(new Map())
+      }
+    } catch {
+      setSelectedCertifications(new Map())
+    }
     setIsEditModalOpen(true)
     setOpenMenuId(null)
   }
@@ -175,7 +248,6 @@ export default function WorkersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
-    setFeedback(null)
 
     try {
       const response = await fetch("/api/users", {
@@ -185,6 +257,7 @@ export default function WorkersPage() {
           ...formData,
           hireDate: formData.hireDate || undefined,
           crewId: formData.crewId || undefined,
+          customRoleId: formData.customRoleId || undefined,
           password: formData.password || undefined,
         }),
       })
@@ -193,25 +266,47 @@ export default function WorkersPage() {
 
       if (data.success) {
         setUsers((prev) => [...prev, data.data])
+        // Update subscription count
+        if (subscription) {
+          setSubscription({
+            ...subscription,
+            workerCount: subscription.workerCount + 1,
+            workersRemaining: subscription.workersRemaining - 1,
+            canAddWorkers: subscription.workersRemaining - 1 > 0,
+            isAtLimit: subscription.workersRemaining - 1 <= 0,
+          })
+        }
         setIsModalOpen(false)
         setFormData({
           name: "",
           email: "",
           role: "WORKER",
           position: "",
-        positionType: PositionType.OTHER,
           phone: "",
           crewId: "",
+          customRoleId: "",
           hireDate: "",
           password: "",
         })
-        setFeedback({ type: "success", message: "Worker created successfully." })
+        addToast({ type: "success", message: "Worker added successfully" })
+      } else if (data.code === "WORKER_LIMIT_REACHED") {
+        setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: data.message || "Worker limit reached. Please upgrade your plan.",
+        })
+      } else if (data.code === "TRIAL_EXPIRED") {
+        setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: "Your trial has expired. Please upgrade to continue.",
+        })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to create worker" })
+        addToast({ type: "error", message: data.error || "Failed to create worker" })
       }
     } catch (error) {
       console.error("Failed to create worker:", error)
-      setFeedback({ type: "error", message: "Failed to create worker" })
+      addToast({ type: "error", message: "Failed to create worker" })
     } finally {
       setSubmitting(false)
     }
@@ -221,9 +316,9 @@ export default function WorkersPage() {
     e.preventDefault()
     if (!editingUser) return
     setSubmitting(true)
-    setFeedback(null)
 
     try {
+      // Update user info
       const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -232,80 +327,137 @@ export default function WorkersPage() {
           email: editFormData.email,
           role: editFormData.role,
           position: editFormData.position || null,
-          positionType: editFormData.positionType,
           phone: editFormData.phone || null,
           crewId: editFormData.crewId || null,
+          customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
+          includeInStaffingCount: editFormData.includeInStaffingCount,
+          singleTrainingCoverageOnly: editFormData.singleTrainingCoverageOnly,
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
+        // Update certifications if any certification types exist
+        if (certificationTypes.length > 0) {
+          const certifications = Array.from(selectedCertifications.entries()).map(([certId, certData]) => ({
+            certificationId: certId,
+            expiresAt: certData.expiresAt,
+            earnedAt: certData.earnedAt,
+          }))
+          await fetch(`/api/users/${editingUser.id}/certifications`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ certifications }),
+          })
+        }
+
         setUsers((prev) =>
           prev.map((u) => (u.id === editingUser.id ? data.data : u))
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
-        setFeedback({ type: "success", message: "Worker updated successfully." })
+        setSelectedCertifications(new Map())
+        addToast({ type: "success", message: "Worker updated successfully" })
       } else {
-        setFeedback({ type: "error", message: data.error || "Failed to update worker" })
+        // Show detailed validation errors if available
+        let errorMessage = data.error || "Failed to update worker"
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const fieldErrors = data.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        addToast({ type: "error", message: errorMessage })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      setFeedback({ type: "error", message: "Failed to update worker" })
+      addToast({ type: "error", message: "Failed to update worker" })
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleDelete(userId: string) {
-    if (!confirm("Are you sure you want to delete this worker? This action cannot be undone.")) {
-      return
-    }
+  function handleDelete(userId: string) {
     setOpenMenuId(null)
-    setFeedback(null)
+    confirm({
+      title: "Delete Worker",
+      description: "Are you sure you want to delete this worker? This action cannot be undone.",
+      confirmText: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/users/${userId}`, {
+            method: "DELETE",
+          })
 
-    try {
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setUsers((prev) => prev.filter((u) => u.id !== userId))
-        setFeedback({ type: "success", message: "Worker deleted successfully." })
-      } else {
-        setFeedback({ type: "error", message: data.error || "Failed to delete worker" })
-      }
-    } catch (error) {
-      console.error("Failed to delete worker:", error)
-      setFeedback({ type: "error", message: "Failed to delete worker" })
-    }
+          if (data.success) {
+            setUsers((prev) => prev.filter((u) => u.id !== userId))
+            addToast({ type: "success", message: "Worker deleted successfully" })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to delete worker" })
+          }
+        } catch (error) {
+          console.error("Failed to delete worker:", error)
+          addToast({ type: "error", message: "Failed to delete worker" })
+        }
+      },
+    })
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <PageHeader
-        title="Workers"
-        description={`Manage your workforce (${users.length} total)`}
-        actions={(
-          <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Worker
-          </Button>
-        )}
-      />
-
-      {feedback ? (
-        <Alert variant={feedback.type === "error" ? "destructive" : "success"}>
-          <AlertTitle>{feedback.type === "error" ? "Action failed" : "Success"}</AlertTitle>
-          <AlertDescription>{feedback.message}</AlertDescription>
+      {/* Subscription Warning Banner */}
+      {subscription && (subscription.isAtLimit || subscription.isTrialExpired) && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              {subscription.isTrialExpired
+                ? "Your free trial has expired. Upgrade to continue adding workers."
+                : `You've reached your ${subscription.tierName} plan limit of ${subscription.workerLimit} workers.`}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => window.open("/pricing", "_blank")}>
+              <Zap className="h-4 w-4 mr-1" />
+              Upgrade Now
+            </Button>
+          </AlertDescription>
         </Alert>
-      ) : null}
+      )}
+
+      {/* Approaching Limit Warning */}
+      {subscription && !subscription.isAtLimit && subscription.workersRemaining <= 3 && subscription.workersRemaining > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            You have {subscription.workersRemaining} worker slot{subscription.workersRemaining !== 1 ? "s" : ""} remaining on your {subscription.tierName} plan.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Workers</h1>
+          <p className="text-muted-foreground">
+            Manage your workforce ({users.length} total)
+            {subscription && subscription.workerLimit !== 999999 && (
+              <span className="ml-1">
+                · {subscription.workersRemaining} slot{subscription.workersRemaining !== 1 ? "s" : ""} available
+              </span>
+            )}
+          </p>
+        </div>
+        <Button
+          onClick={() => setIsModalOpen(true)}
+          disabled={subscription?.isAtLimit || subscription?.isTrialExpired}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Worker
+        </Button>
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -404,7 +556,19 @@ export default function WorkersPage() {
                       )}
                     </TableCell>
                     <TableCell>{user.position || "-"}</TableCell>
-                    <TableCell>{ROLE_LABELS[user.role]}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm">{ROLE_LABELS[user.role]}</span>
+                        {user.customRole && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full inline-block w-fit"
+                            style={{ backgroundColor: user.customRole.color, color: "#fff" }}
+                          >
+                            {user.customRole.name}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_BADGES[user.status].variant}>
                         {STATUS_BADGES[user.status].label}
@@ -454,7 +618,7 @@ export default function WorkersPage() {
         title="Add Worker"
         description="Add a new worker to your organization"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -463,6 +627,7 @@ export default function WorkersPage() {
                 value={formData.name}
                 onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -473,13 +638,14 @@ export default function WorkersPage() {
                 value={formData.email}
                 onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
+              <Label htmlFor="role">System Role</Label>
               <Select
                 value={formData.role}
                 onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
@@ -491,6 +657,20 @@ export default function WorkersPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="customRoleId">Custom Role</Label>
+              <Select
+                value={formData.customRoleId}
+                onChange={(e) => setFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label htmlFor="crewId">Crew</Label>
               <Select
                 value={formData.crewId}
@@ -501,9 +681,6 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
               <Input
@@ -511,20 +688,22 @@ export default function WorkersPage() {
                 value={formData.position}
                 onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., Operator, Supervisor"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="positionType">Position Type</Label>
-              <Select
-                id="positionType"
-                value={formData.positionType}
-                onChange={(e) => setFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
-                options={POSITION_TYPE_OPTIONS}
+                autoComplete="off"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                autoComplete="off"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="hireDate">Hire Date</Label>
               <Input
@@ -534,28 +713,17 @@ export default function WorkersPage() {
                 onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-              />
-            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Password (Optional)</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                placeholder="Leave blank for invite"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password (Optional)</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+              placeholder="Leave blank for invite"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
@@ -575,11 +743,12 @@ export default function WorkersPage() {
         onClose={() => {
           setIsEditModalOpen(false)
           setEditingUser(null)
+          setSelectedCertifications(new Map())
         }}
         title="Edit Worker"
         description="Update worker information"
       >
-        <form onSubmit={handleUpdate} className="space-y-4">
+        <form onSubmit={handleUpdate} className="space-y-4" autoComplete="off">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
@@ -588,6 +757,7 @@ export default function WorkersPage() {
                 value={editFormData.name}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -598,13 +768,14 @@ export default function WorkersPage() {
                 value={editFormData.email}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-role">Role</Label>
+              <Label htmlFor="edit-role">System Role</Label>
               <Select
                 value={editFormData.role}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
@@ -615,6 +786,20 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-customRoleId">Custom Role</Label>
+              <Select
+                value={editFormData.customRoleId}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-status">Status</Label>
               <Select
@@ -628,9 +813,6 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-crewId">Crew</Label>
               <Select
@@ -649,18 +831,20 @@ export default function WorkersPage() {
                 value={editFormData.position}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., Operator, Supervisor"
+                autoComplete="off"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-positionType">Position Type</Label>
-              <Select
-                id="edit-positionType"
-                value={editFormData.positionType}
-                onChange={(e) => setEditFormData((prev) => ({ ...prev, positionType: e.target.value as PositionType }))}
-                options={POSITION_TYPE_OPTIONS}
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                type="tel"
+                value={editFormData.phone}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -674,22 +858,124 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-phone">Phone</Label>
-              <Input
-                id="edit-phone"
-                type="tel"
-                value={editFormData.phone}
-                onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+          {/* Staffing Count Settings */}
+          <div className="p-3 border rounded-lg space-y-3 bg-muted/30">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.includeInStaffingCount}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, includeInStaffingCount: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
               />
-            </div>
+              <div>
+                <span className="font-medium text-sm">Include in staffing counts</span>
+                <p className="text-xs text-muted-foreground">
+                  When disabled, this worker won&apos;t be counted in shift totals, staffing alerts, or coverage calculations.
+                  Useful for supervisors, leads, or administrative staff.
+                </p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.singleTrainingCoverageOnly}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, singleTrainingCoverageOnly: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <div>
+                <span className="font-medium text-sm">Single training coverage only</span>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, this worker can only cover ONE training type per shift, even if trained in multiple areas.
+                  Use for workers who shouldn&apos;t be relied on to cover multiple roles simultaneously.
+                </p>
+              </div>
+            </label>
           </div>
+
+          {/* Training Certifications */}
+          {certificationTypes.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <Label className="text-sm font-medium">Training & Certifications</Label>
+              <p className="text-xs text-muted-foreground">Select certifications and set expiry dates (optional)</p>
+              <div className="space-y-3">
+                {certificationTypes.map((cert) => {
+                  const isSelected = selectedCertifications.has(cert.id)
+                  const certData = selectedCertifications.get(cert.id)
+                  return (
+                    <div key={cert.id} className="p-3 border rounded-lg space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newMap = new Map(selectedCertifications)
+                            if (e.target.checked) {
+                              newMap.set(cert.id, {
+                                expiresAt: null,
+                                earnedAt: new Date().toISOString().split("T")[0],
+                              })
+                            } else {
+                              newMap.delete(cert.id)
+                            }
+                            setSelectedCertifications(newMap)
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: cert.color }}
+                        />
+                        <span className="font-medium">{cert.name}</span>
+                        {cert.isRequired && <span className="text-xs text-muted-foreground">(Required)</span>}
+                      </label>
+                      {isSelected && (
+                        <div className="ml-6 flex gap-4 text-xs">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Earned</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.earnedAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  earnedAt: e.target.value,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Expires</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.expiresAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  expiresAt: e.target.value || null,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => {
               setIsEditModalOpen(false)
               setEditingUser(null)
+              setSelectedCertifications(new Map())
             }}>
               Cancel
             </Button>
@@ -699,6 +985,8 @@ export default function WorkersPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog />
     </div>
   )
 }
