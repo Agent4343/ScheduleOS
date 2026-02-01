@@ -85,6 +85,7 @@ model Organization {
   aiChatSessions   AIChatSession[]
   certificationTypes CertificationType[]
   auditLogs        AuditLog[]
+  shiftSwapRequests ShiftSwapRequest[]
 }
 
 // Subscription tiers with worker limits
@@ -178,6 +179,9 @@ model User {
   aiChatSessions  AIChatSession[]
   certifications  UserCertification[]
   auditLogs       AuditLog[]
+  swapRequestsMade     ShiftSwapRequest[] @relation("SwapRequester")
+  swapRequestsReceived ShiftSwapRequest[] @relation("SwapTarget")
+  swapRequestsApproved ShiftSwapRequest[] @relation("SwapApprover")
 
   @@index([organizationId])
   @@index([departmentId])
@@ -643,4 +647,47 @@ model AuditLog {
   @@index([organizationId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// =====================
+// Shift Swap Requests
+// =====================
+
+model ShiftSwapRequest {
+  id        String          @id @default(cuid())
+  date      DateTime        @db.Date
+  shiftType ShiftType
+  reason    String?
+  status    ShiftSwapStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Requester (user who wants to swap)
+  requesterId String
+  requester   User   @relation("SwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  // Target user (user being asked to swap with)
+  targetUserId String
+  targetUser   User   @relation("SwapTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  // Approver (admin/supervisor who approved/denied)
+  approvedById String?
+  approvedBy   User?    @relation("SwapApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+
+  @@index([organizationId])
+  @@index([requesterId])
+  @@index([targetUserId])
+  @@index([status])
+}
+
+enum ShiftSwapStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
 }
