@@ -7,7 +7,7 @@ export const SUBSCRIPTION_TIERS = {
     priceId: null, // No Stripe price for trial
     features: [
       "Up to 5 workers",
-      "14-day free trial",
+      "7-day free trial",
       "All core features",
       "AI scheduling assistant",
     ],

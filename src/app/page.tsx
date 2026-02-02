@@ -103,7 +103,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <p className="text-sm text-muted-foreground mt-4">
-              Free 14-day trial &bull; No credit card required &bull; Setup in 5 minutes
+              Free 7-day trial &bull; Setup in 5 minutes
             </p>
           </div>
         </section>
@@ -667,7 +667,7 @@ export default async function HomePage() {
               </Card>
             </div>
             <p className="text-center text-sm text-muted-foreground mt-8">
-              All plans include a 14-day free trial. No credit card required to start.
+              All plans include a 7-day free trial. Credit card required to start.
             </p>
           </div>
         </section>
@@ -714,7 +714,7 @@ export default async function HomePage() {
                 </Link>
               </div>
               <p className="text-primary-foreground/60 text-sm mt-4">
-                No credit card required &bull; Free 14-day trial &bull; Cancel anytime
+                Free 7-day trial &bull; Cancel anytime
               </p>
             </div>
           </div>

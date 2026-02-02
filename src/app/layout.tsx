@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | ShiftSync",
   },
   description:
-    "AI-powered workforce scheduling built for shift work operations. Manage crew rotations, track certifications, and optimize staffing. Free 14-day trial.",
+    "AI-powered workforce scheduling built for shift work operations. Manage crew rotations, track certifications, and optimize staffing. Free 7-day trial.",
   keywords: [
     "shift scheduling",
     "crew rotation software",
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ShiftSync | Shift Work Scheduling Software",
     description:
-      "AI-powered workforce scheduling built for shift work operations. Free 14-day trial.",
+      "AI-powered workforce scheduling built for shift work operations. Free 7-day trial.",
     images: ["/og-image.png"],
   },
   robots: {
