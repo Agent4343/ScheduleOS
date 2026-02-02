@@ -560,6 +560,7 @@ enum NotificationType {
 model Invitation {
   id        String           @id @default(cuid())
   email     String
+  name      String
   role      UserRole         @default(WORKER)
   token     String           @unique
   expiresAt DateTime

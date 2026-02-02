@@ -276,8 +276,9 @@ export default function SettingsPage() {
 
   // User invite state
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER", password: "" })
+  const [inviteForm, setInviteForm] = useState({ email: "", name: "", role: "WORKER" })
   const [sendingInvite, setSendingInvite] = useState(false)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
 
   // Export state
   const [exporting, setExporting] = useState(false)
@@ -788,37 +789,37 @@ export default function SettingsPage() {
       return
     }
 
-    if (!inviteForm.password || inviteForm.password.length < 8) {
-      showMessage("Password must be at least 8 characters")
-      return
-    }
-
     setSendingInvite(true)
+    setInviteLink(null)
 
     try {
-      const response = await fetch("/api/users", {
+      const response = await fetch("/api/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: inviteForm.email,
           name: inviteForm.name,
           role: inviteForm.role,
-          password: inviteForm.password,
-          status: "ACTIVE",
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        showMessage(`User ${inviteForm.name} created successfully. They can now log in with their email and password.`)
-        setShowInviteModal(false)
-        setInviteForm({ email: "", name: "", role: "WORKER", password: "" })
+        if (data.emailSent) {
+          showMessage(`Invitation sent to ${inviteForm.email}. They will receive an email with instructions to set up their account.`)
+          setShowInviteModal(false)
+          setInviteForm({ email: "", name: "", role: "WORKER" })
+        } else {
+          // Email wasn't sent, show the invite link
+          setInviteLink(data.inviteLink)
+          showMessage("Invitation created. Email could not be sent - please share the invite link manually.")
+        }
       } else {
-        showMessage(data.error || "Failed to create user")
+        showMessage(data.error || data.message || "Failed to send invitation")
       }
     } catch {
-      showMessage("Failed to create user")
+      showMessage("Failed to send invitation")
     } finally {
       setSendingInvite(false)
     }
@@ -2273,60 +2274,89 @@ export default function SettingsPage() {
         isOpen={showInviteModal}
         onClose={() => {
           setShowInviteModal(false)
-          setInviteForm({ email: "", name: "", role: "WORKER", password: "" })
+          setInviteForm({ email: "", name: "", role: "WORKER" })
+          setInviteLink(null)
         }}
-        title="Add New User"
-        description="Create a new user account for your organization"
+        title="Invite User"
+        description="Send an invitation email to add a new user to your organization"
       >
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="inviteName">Name</Label>
-            <Input
-              id="inviteName"
-              value={inviteForm.name}
-              onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
-              placeholder="John Doe"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inviteEmail">Email</Label>
-            <Input
-              id="inviteEmail"
-              type="email"
-              value={inviteForm.email}
-              onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-              placeholder="john@example.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invitePassword">Temporary Password</Label>
-            <Input
-              id="invitePassword"
-              type="password"
-              value={inviteForm.password}
-              onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
-              placeholder="Min 8 characters"
-            />
-            <p className="text-xs text-muted-foreground">Share this password with the user so they can log in</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inviteRole">Role</Label>
-            <Select
-              value={inviteForm.role}
-              onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
-              options={[
-                { value: "WORKER", label: "Worker - Can view schedule and request time off" },
-                { value: "SUPERVISOR", label: "Supervisor - Can manage crews and schedules" },
-                { value: "ADMIN", label: "Admin - Full access to all features" },
-              ]}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setShowInviteModal(false)}>Cancel</Button>
-            <Button onClick={handleSendInvite} disabled={sendingInvite}>
-              {sendingInvite ? "Creating..." : "Create User"}
-            </Button>
-          </div>
+          {inviteLink ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                  Email could not be sent. Please share this link with the user:
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={inviteLink}
+                    readOnly
+                    className="text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteLink)
+                      showMessage("Link copied to clipboard")
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button onClick={() => {
+                  setShowInviteModal(false)
+                  setInviteForm({ email: "", name: "", role: "WORKER" })
+                  setInviteLink(null)
+                }}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="inviteName">Name</Label>
+                <Input
+                  id="inviteName"
+                  value={inviteForm.name}
+                  onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inviteEmail">Email</Label>
+                <Input
+                  id="inviteEmail"
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="john@example.com"
+                />
+                <p className="text-xs text-muted-foreground">They will receive an email with a link to set their password</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="inviteRole">Role</Label>
+                <Select
+                  value={inviteForm.role}
+                  onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                  options={[
+                    { value: "WORKER", label: "Worker - Can view schedule and request time off" },
+                    { value: "SUPERVISOR", label: "Supervisor - Can manage crews and schedules" },
+                    { value: "ADMIN", label: "Admin - Full access to all features" },
+                  ]}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowInviteModal(false)}>Cancel</Button>
+                <Button onClick={handleSendInvite} disabled={sendingInvite}>
+                  {sendingInvite ? "Sending..." : "Send Invitation"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

@@ -131,3 +131,36 @@ export function welcomeEmail(userName: string, loginEmail: string): string {
     </div>
   `
 }
+
+export function invitationEmail(
+  organizationName: string,
+  inviterName: string,
+  role: string,
+  inviteLink: string,
+  expiresAt: Date
+): string {
+  const expiresDate = expiresAt.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #1a1a1a;">You've Been Invited to ShiftSync!</h2>
+      <p>Hi there,</p>
+      <p><strong>${inviterName}</strong> has invited you to join <strong>${organizationName}</strong> on ShiftSync as a <strong>${role}</strong>.</p>
+      <p>ShiftSync is a scheduling platform that helps teams manage shifts, time-off requests, and more.</p>
+      <div style="margin: 30px 0; text-align: center;">
+        <a href="${inviteLink}" style="background-color: #4f46e5; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+          Accept Invitation
+        </a>
+      </div>
+      <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+      <p style="color: #4f46e5; font-size: 14px; word-break: break-all;">${inviteLink}</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+      <p style="color: #999; font-size: 12px;">This invitation will expire on ${expiresDate}. If you didn't expect this invitation, you can safely ignore this email.</p>
+    </div>
+  `
+}

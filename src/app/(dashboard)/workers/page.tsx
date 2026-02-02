@@ -136,8 +136,8 @@ export default function WorkersPage() {
     crewId: "",
     customRoleId: "",
     hireDate: "",
-    password: "",
   })
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [editFormData, setEditFormData] = useState({
     name: "",
     email: "",
@@ -248,25 +248,23 @@ export default function WorkersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setInviteLink(null)
 
     try {
-      const response = await fetch("/api/users", {
+      const response = await fetch("/api/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          hireDate: formData.hireDate || undefined,
-          crewId: formData.crewId || undefined,
-          customRoleId: formData.customRoleId || undefined,
-          password: formData.password || undefined,
+          email: formData.email,
+          name: formData.name,
+          role: formData.role,
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setUsers((prev) => [...prev, data.data])
-        // Update subscription count
+        // Update subscription count (invitation counts toward limit)
         if (subscription) {
           setSubscription({
             ...subscription,
@@ -276,19 +274,25 @@ export default function WorkersPage() {
             isAtLimit: subscription.workersRemaining - 1 <= 0,
           })
         }
-        setIsModalOpen(false)
-        setFormData({
-          name: "",
-          email: "",
-          role: "WORKER",
-          position: "",
-          phone: "",
-          crewId: "",
-          customRoleId: "",
-          hireDate: "",
-          password: "",
-        })
-        addToast({ type: "success", message: "Worker added successfully" })
+
+        if (data.emailSent) {
+          setIsModalOpen(false)
+          setFormData({
+            name: "",
+            email: "",
+            role: "WORKER",
+            position: "",
+            phone: "",
+            crewId: "",
+            customRoleId: "",
+            hireDate: "",
+          })
+          addToast({ type: "success", message: `Invitation sent to ${formData.email}` })
+        } else {
+          // Email wasn't sent, show the invite link
+          setInviteLink(data.inviteLink)
+          addToast({ type: "warning", message: "Invitation created. Please share the link manually." })
+        }
       } else if (data.code === "WORKER_LIMIT_REACHED") {
         setIsModalOpen(false)
         addToast({
@@ -302,11 +306,11 @@ export default function WorkersPage() {
           message: "Your trial has expired. Please upgrade to continue.",
         })
       } else {
-        addToast({ type: "error", message: data.error || "Failed to create worker" })
+        addToast({ type: "error", message: data.error || "Failed to send invitation" })
       }
     } catch (error) {
-      console.error("Failed to create worker:", error)
-      addToast({ type: "error", message: "Failed to create worker" })
+      console.error("Failed to send invitation:", error)
+      addToast({ type: "error", message: "Failed to send invitation" })
     } finally {
       setSubmitting(false)
     }
@@ -455,7 +459,7 @@ export default function WorkersPage() {
           disabled={subscription?.isAtLimit || subscription?.isTrialExpired}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Worker
+          Invite Worker
         </Button>
       </div>
 
@@ -614,127 +618,122 @@ export default function WorkersPage() {
       {/* Add Worker Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Add Worker"
-        description="Add a new worker to your organization"
+        onClose={() => {
+          setIsModalOpen(false)
+          setInviteLink(null)
+        }}
+        title="Invite Worker"
+        description="Send an invitation to add a new worker to your organization"
       >
-        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                required
-                autoComplete="off"
-              />
+        {inviteLink ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                Email could not be sent. Please share this link with the worker:
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={inviteLink}
+                  readOnly
+                  className="text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteLink)
+                    addToast({ type: "success", message: "Link copied to clipboard" })
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                required
-                autoComplete="off"
-              />
+            <div className="flex justify-end">
+              <Button onClick={() => {
+                setIsModalOpen(false)
+                setInviteLink(null)
+                setFormData({
+                  name: "",
+                  email: "",
+                  role: "WORKER",
+                  position: "",
+                  phone: "",
+                  crewId: "",
+                  customRoleId: "",
+                  hireDate: "",
+                })
+              }}>
+                Done
+              </Button>
             </div>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                  autoComplete="off"
+                />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="role">System Role</Label>
-              <Select
-                value={formData.role}
-                onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
-                options={[
-                  { value: "WORKER", label: "Worker" },
-                  { value: "SUPERVISOR", label: "Supervisor" },
-                  { value: "ADMIN", label: "Administrator" },
-                ]}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="customRoleId">Custom Role</Label>
-              <Select
-                value={formData.customRoleId}
-                onChange={(e) => setFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
-                options={[
-                  { value: "", label: "None" },
-                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
-                ]}
-              />
-            </div>
-          </div>
+            <p className="text-xs text-muted-foreground">
+              An invitation email will be sent to this address with a link to set up their account.
+            </p>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="crewId">Crew</Label>
-              <Select
-                value={formData.crewId}
-                onChange={(e) => setFormData((prev) => ({ ...prev, crewId: e.target.value }))}
-                options={[
-                  { value: "", label: "No Crew" },
-                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-                ]}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="role">System Role</Label>
+                <Select
+                  value={formData.role}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
+                  options={[
+                    { value: "WORKER", label: "Worker" },
+                    { value: "SUPERVISOR", label: "Supervisor" },
+                    { value: "ADMIN", label: "Administrator" },
+                  ]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customRoleId">Custom Role</Label>
+                <Select
+                  value={formData.customRoleId}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                  options={[
+                    { value: "", label: "None" },
+                    ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                  ]}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="position">Position</Label>
-              <Input
-                id="position"
-                value={formData.position}
-                onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                placeholder="e.g., Operator, Supervisor"
-                autoComplete="off"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-                autoComplete="off"
-              />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Sending..." : "Send Invitation"}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="hireDate">Hire Date</Label>
-              <Input
-                id="hireDate"
-                type="date"
-                value={formData.hireDate}
-                onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="password">Password (Optional)</Label>
-            <Input
-              id="password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder="Leave blank for invite"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding..." : "Add Worker"}
-            </Button>
-          </div>
-        </form>
+          </form>
+        )}
       </Modal>
 
       {/* Edit Worker Modal */}
