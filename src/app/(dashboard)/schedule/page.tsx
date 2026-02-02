@@ -1746,46 +1746,48 @@ function SchedulePageContent() {
             </div>
           ))}
 
-          {/* Training coverage summary */}
-          {breakdownWorkers.length > 0 && (
+          {/* Certification coverage summary */}
+          {breakdownWorkers.length > 0 && requiredCertifications.length > 0 && (
             <div className="p-3 bg-muted/50 rounded-md">
-              <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
+              <h4 className="font-medium text-sm mb-2">Certification Coverage:</h4>
               <p className="text-xs text-muted-foreground mb-2">
-                Requirement: At least 1 counted worker on shift must have each training type
+                Workers scheduled on this shift with required certifications
               </p>
               {(() => {
                 // Only count workers that are included in staffing counts
                 const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+
+                // Build map of user certifications for quick lookup
+                const userCertMap = new Map<string, Set<string>>()
+                const today = new Date()
+                for (const uc of userCertifications) {
+                  if (uc.expiresAt && new Date(uc.expiresAt) < today) continue
+                  if (!userCertMap.has(uc.userId)) {
+                    userCertMap.set(uc.userId, new Set())
+                  }
+                  userCertMap.get(uc.userId)!.add(uc.certificationTypeId)
+                }
+
                 return (
                   <div className="flex flex-wrap gap-2">
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      countedWorkers.some(w => w.isControlRoomTrained)
-                        ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
-                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                    }`}>
-                      CR: {countedWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isControlRoomTrained).length})
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      countedWorkers.some(w => w.isOilOperatorTrained)
-                        ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
-                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                    }`}>
-                      Oil: {countedWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isOilOperatorTrained).length})
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      countedWorkers.some(w => w.isGasOperatorTrained)
-                        ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                    }`}>
-                      Gas: {countedWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isGasOperatorTrained).length})
-                    </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      countedWorkers.some(w => w.isUtilityOperatorTrained)
-                        ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
-                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
-                    }`}>
-                      Utility: {countedWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isUtilityOperatorTrained).length})
-                    </span>
+                    {requiredCertifications.map(cert => {
+                      const minRequired = breakdownShift === "DAY" ? cert.minPerDayShift : cert.minPerNightShift
+                      const certifiedCount = countedWorkers.filter(w => userCertMap.get(w.id)?.has(cert.id)).length
+                      const isMet = certifiedCount >= minRequired
+
+                      return (
+                        <span
+                          key={cert.id}
+                          className={`text-xs px-2 py-1 rounded ${
+                            isMet
+                              ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                              : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                          }`}
+                        >
+                          {cert.name}: {isMet ? "✓" : "✗"} ({certifiedCount}/{minRequired})
+                        </span>
+                      )
+                    })}
                   </div>
                 )
               })()}
@@ -1925,71 +1927,127 @@ function SchedulePageContent() {
 
       {/* Staffing Alerts Section - shown below the schedule */}
       {!focusMode && visibleAlerts.length > 0 && (
-        <Card className="border-red-200 dark:border-red-800">
+        <Card className="border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300">
               <AlertTriangle className="h-5 w-5" />
-              Staffing Alerts ({visibleAlerts.length})
+              Compliance Issues ({visibleAlerts.length} alerts in next 30 days)
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {visibleAlerts.slice(0, 20).map((alert, idx) => {
-                const alertDate = new Date(alert.date + "T12:00:00")
-                const isToday = alert.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
-                const isTomorrow = (() => {
-                  const tomorrow = new Date(today)
-                  tomorrow.setDate(tomorrow.getDate() + 1)
-                  return alert.date === formatDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
-                })()
+          <CardContent className="space-y-4">
+            {/* Summary by Rule/Certification */}
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {(() => {
+                // Group alerts by rule name
+                const alertsByRule: Record<string, { day: number; night: number; dates: string[] }> = {}
+                for (const alert of visibleAlerts) {
+                  if (!alertsByRule[alert.ruleName]) {
+                    alertsByRule[alert.ruleName] = { day: 0, night: 0, dates: [] }
+                  }
+                  if (alert.shiftType === "DAY") {
+                    alertsByRule[alert.ruleName].day++
+                  } else {
+                    alertsByRule[alert.ruleName].night++
+                  }
+                  if (!alertsByRule[alert.ruleName].dates.includes(alert.date)) {
+                    alertsByRule[alert.ruleName].dates.push(alert.date)
+                  }
+                }
 
-                return (
-                  <Alert
-                    key={`${alert.date}-${alert.shiftType}-${alert.ruleName}-${idx}`}
-                    variant="destructive"
-                    className="py-2"
-                    showIcon={false}
-                  >
-                    <AlertTriangle className="h-4 w-4 absolute left-4 top-4" />
-                    <AlertDescription className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">
-                          {isToday ? "Today" : isTomorrow ? "Tomorrow" : alertDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                        </span>
-                        <span className="mx-2">•</span>
-                        <span className={cn(
-                          "font-medium",
-                          alert.shiftType === "DAY" ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
-                        )}>
-                          {alert.shiftType}
-                        </span>
-                        <span className="mx-2">•</span>
-                        <span>{alert.ruleName}</span>
-                        {alert.positionType && (
-                          <span className="text-muted-foreground ml-1">({alert.positionType})</span>
-                        )}
-                        <span className="ml-2 text-sm">
-                          — Need {alert.required}, have {alert.actual} (short {alert.shortage})
-                        </span>
+                return Object.entries(alertsByRule)
+                  .sort((a, b) => (b[1].day + b[1].night) - (a[1].day + a[1].night))
+                  .map(([ruleName, counts]) => (
+                    <div
+                      key={ruleName}
+                      className="p-3 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-lg"
+                    >
+                      <div className="font-semibold text-sm text-red-700 dark:text-red-300 mb-2">
+                        {ruleName}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 ml-2"
-                        onClick={() => openBreakdownModal(alert.date, alert.shiftType)}
-                      >
-                        View
-                      </Button>
-                    </AlertDescription>
-                  </Alert>
-                )
-              })}
-              {visibleAlerts.length > 20 && (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  And {visibleAlerts.length - 20} more alerts...
-                </p>
-              )}
+                      <div className="flex gap-4 text-xs">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                          <span className="text-muted-foreground">Day:</span>
+                          <span className="font-bold text-red-600">{counts.day}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                          <span className="text-muted-foreground">Night:</span>
+                          <span className="font-bold text-red-600">{counts.night}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {counts.dates.length} day{counts.dates.length !== 1 ? 's' : ''} affected
+                      </div>
+                    </div>
+                  ))
+              })()}
             </div>
+
+            {/* Detailed Alert List */}
+            <details className="group">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2">
+                <span className="group-open:rotate-90 transition-transform">▶</span>
+                View all {visibleAlerts.length} alerts
+              </summary>
+              <div className="mt-3 space-y-2 max-h-[300px] overflow-y-auto">
+                {visibleAlerts.slice(0, 50).map((alert, idx) => {
+                  const alertDate = new Date(alert.date + "T12:00:00")
+                  const isToday = alert.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                  const isTomorrow = (() => {
+                    const tomorrow = new Date(today)
+                    tomorrow.setDate(tomorrow.getDate() + 1)
+                    return alert.date === formatDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+                  })()
+
+                  return (
+                    <Alert
+                      key={`${alert.date}-${alert.shiftType}-${alert.ruleName}-${idx}`}
+                      variant="destructive"
+                      className="py-2"
+                      showIcon={false}
+                    >
+                      <AlertTriangle className="h-4 w-4 absolute left-4 top-4" />
+                      <AlertDescription className="flex items-center justify-between">
+                        <div>
+                          <span className="font-medium">
+                            {isToday ? "Today" : isTomorrow ? "Tomorrow" : alertDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                          </span>
+                          <span className="mx-2">•</span>
+                          <span className={cn(
+                            "font-medium",
+                            alert.shiftType === "DAY" ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                          )}>
+                            {alert.shiftType}
+                          </span>
+                          <span className="mx-2">•</span>
+                          <span>{alert.ruleName}</span>
+                          {alert.positionType && (
+                            <span className="text-muted-foreground ml-1">({alert.positionType})</span>
+                          )}
+                          <span className="ml-2 text-sm">
+                            — Need {alert.required}, have {alert.actual} (short {alert.shortage})
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 ml-2"
+                          onClick={() => openBreakdownModal(alert.date, alert.shiftType)}
+                        >
+                          View
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )
+                })}
+                {visibleAlerts.length > 50 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    And {visibleAlerts.length - 50} more alerts...
+                  </p>
+                )}
+              </div>
+            </details>
           </CardContent>
         </Card>
       )}
