@@ -23,6 +23,7 @@ import {
   Maximize2,
   Minimize2,
   AlertTriangle,
+  FastForward,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ShiftType, UserRole, PositionType } from "@/types"
@@ -247,6 +248,13 @@ function SchedulePageContent() {
   const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
   const [breakdownDate, setBreakdownDate] = useState<string>("")
   const [breakdownShift, setBreakdownShift] = useState<"DAY" | "NIGHT">("DAY")
+
+  // Continue schedule modal state
+  const [continueModalOpen, setContinueModalOpen] = useState(false)
+  const [continuing, setContinuing] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
+  const [continueSuccess, setContinueSuccess] = useState<string | null>(null)
+  const [continueClearOverrides, setContinueClearOverrides] = useState(false)
 
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
@@ -692,6 +700,68 @@ function SchedulePageContent() {
     setBreakdownModalOpen(false)
   }
 
+  function openContinueModal() {
+    setContinueError(null)
+    setContinueSuccess(null)
+    setContinueClearOverrides(false)
+    setContinueModalOpen(true)
+  }
+
+  function closeContinueModal() {
+    setContinueModalOpen(false)
+  }
+
+  async function continueScheduleForNextYear() {
+    setContinuing(true)
+    setContinueError(null)
+    setContinueSuccess(null)
+
+    try {
+      const requestBody: {
+        sourceYear: number
+        targetYear: number
+        crewId?: string
+        clearOverrides: boolean
+      } = {
+        sourceYear: currentYear,
+        targetYear: currentYear + 1,
+        clearOverrides: continueClearOverrides,
+      }
+
+      // If filtered by crew, only continue that crew
+      if (selectedCrew) {
+        requestBody.crewId = selectedCrew
+      }
+
+      const response = await fetch("/api/schedules/continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to continue schedules")
+      }
+
+      setContinueSuccess(
+        `Successfully continued ${result.data.workersProcessed} workers' schedules to ${currentYear + 1}. Created ${result.data.totalRecords} schedule entries.`
+      )
+
+      // Navigate to the next year to see the results
+      setTimeout(() => {
+        setCurrentYear(currentYear + 1)
+        closeContinueModal()
+      }, 2000)
+    } catch (error) {
+      console.error("Continue schedule error:", error)
+      setContinueError(error instanceof Error ? error.message : "Failed to continue schedules")
+    } finally {
+      setContinuing(false)
+    }
+  }
+
   // Get breakdown workers for the modal
   const breakdownWorkers = useMemo(() => {
     if (!breakdownDate) return []
@@ -1007,6 +1077,15 @@ function SchedulePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openContinueModal}
+            title={`Continue schedules from ${currentYear} to ${currentYear + 1}`}
+          >
+            <FastForward className="h-4 w-4 mr-2" />
+            Continue to {currentYear + 1}
+          </Button>
           <Button
             variant={focusMode ? "default" : "outline"}
             size="sm"
@@ -1864,6 +1943,90 @@ function SchedulePageContent() {
           <div className="flex justify-end pt-2">
             <Button variant="outline" onClick={closeBreakdownModal}>
               Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Continue Schedule Modal */}
+      <Modal
+        isOpen={continueModalOpen}
+        onClose={closeContinueModal}
+        title={`Continue Schedule to ${currentYear + 1}`}
+        description="Extend rotation schedules from the current year into the next year"
+      >
+        <div className="space-y-4">
+          {continueError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400 rounded-md">
+              {continueError}
+            </div>
+          )}
+
+          {continueSuccess && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 dark:bg-green-950 dark:text-green-400 rounded-md">
+              {continueSuccess}
+            </div>
+          )}
+
+          <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-md space-y-2">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              <strong>This will:</strong>
+            </p>
+            <ul className="text-sm text-blue-800 dark:text-blue-200 list-disc list-inside space-y-1">
+              <li>Continue each worker&apos;s rotation pattern into {currentYear + 1}</li>
+              <li>Calculate the correct phase so shifts flow seamlessly from Dec 31, {currentYear} to Jan 1, {currentYear + 1}</li>
+              <li>Generate schedules for Jan 1 - Dec 31, {currentYear + 1}</li>
+              {selectedCrew ? (
+                <li>Only process workers in the currently filtered crew</li>
+              ) : (
+                <li>Process all active workers with crew rotation patterns</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-md">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              <strong>Note:</strong> Workers must be assigned to a crew that has a rotation pattern configured. Workers without a crew pattern will be skipped.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="continueClearOverrides"
+              checked={continueClearOverrides}
+              onChange={(e) => setContinueClearOverrides(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="continueClearOverrides" className="text-sm font-normal">
+              Clear existing manual edits in {currentYear + 1}
+            </Label>
+          </div>
+          {continueClearOverrides && (
+            <p className="text-xs text-orange-600 dark:text-orange-400">
+              Warning: This will delete any manually edited shifts already in {currentYear + 1}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeContinueModal} disabled={continuing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={continueScheduleForNextYear}
+              disabled={continuing}
+            >
+              {continuing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Continuing...
+                </>
+              ) : (
+                <>
+                  <FastForward className="h-4 w-4 mr-2" />
+                  Continue to {currentYear + 1}
+                </>
+              )}
             </Button>
           </div>
         </div>
