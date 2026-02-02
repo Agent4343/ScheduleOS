@@ -112,6 +112,20 @@ interface CustomShiftType {
   isActive: boolean
 }
 
+interface CertificationType {
+  id: string
+  name: string
+  requireOnSchedule: boolean
+  minPerDayShift: number
+  minPerNightShift: number
+}
+
+interface UserCertification {
+  userId: string
+  certificationTypeId: string
+  expiresAt: string | null
+}
+
 interface CustomRole {
   id: string
   name: string
@@ -143,7 +157,7 @@ interface StaffingAlert {
   actual: number
   shortage: number
   positionType?: string
-  trainingType?: "controlRoom" | "oil" | "gas" | "utility"
+  certificationName?: string
 }
 
 // Built-in shift colors for the Excel-like cells
@@ -243,6 +257,10 @@ function SchedulePageContent() {
   // Staffing rules for alerts
   const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
 
+  // Certification requirements for compliance checks
+  const [requiredCertifications, setRequiredCertifications] = useState<CertificationType[]>([])
+  const [userCertifications, setUserCertifications] = useState<UserCertification[]>([])
+
   // Worker breakdown modal state
   const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
   const [breakdownDate, setBreakdownDate] = useState<string>("")
@@ -330,7 +348,7 @@ function SchedulePageContent() {
     fetchCustomRoles()
   }, [])
 
-  // Fetch staffing rules
+  // Fetch staffing rules and certification requirements
   useEffect(() => {
     async function fetchStaffingRules() {
       try {
@@ -343,7 +361,29 @@ function SchedulePageContent() {
         console.error("Failed to fetch staffing rules:", error)
       }
     }
+
+    async function fetchCertifications() {
+      try {
+        // Fetch certification types that require schedule coverage
+        const certTypesRes = await fetch("/api/certifications?requireOnSchedule=true")
+        const certTypesResult = await certTypesRes.json()
+        if (certTypesResult.success) {
+          setRequiredCertifications(certTypesResult.data)
+        }
+
+        // Fetch user certifications
+        const userCertsRes = await fetch("/api/user-certifications")
+        const userCertsResult = await userCertsRes.json()
+        if (userCertsResult.success) {
+          setUserCertifications(userCertsResult.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch certifications:", error)
+      }
+    }
+
     fetchStaffingRules()
+    fetchCertifications()
   }, [])
 
   // Fetch workers
@@ -603,34 +643,47 @@ function SchedulePageContent() {
         }
       }
 
-      // Check training coverage for each shift type
-      // Requirement: At least ONE person on each shift must have each training type
-      const trainingTypes = [
-        { key: "controlRoom" as const, field: "isControlRoomTrained" as const, label: "Control Room Coverage" },
-        { key: "oil" as const, field: "isOilOperatorTrained" as const, label: "Oil Operator Coverage" },
-        { key: "gas" as const, field: "isGasOperatorTrained" as const, label: "Gas Operator Coverage" },
-        { key: "utility" as const, field: "isUtilityOperatorTrained" as const, label: "Utility Operator Coverage" },
-      ]
+      // Check certification requirements for each shift type
+      // Build a map of userId -> Set of valid (non-expired) certificationTypeIds
+      const userCertMap = new Map<string, Set<string>>()
+      const today = new Date()
+      for (const uc of userCertifications) {
+        // Skip expired certifications
+        if (uc.expiresAt && new Date(uc.expiresAt) < today) continue
+
+        if (!userCertMap.has(uc.userId)) {
+          userCertMap.set(uc.userId, new Set())
+        }
+        userCertMap.get(uc.userId)!.add(uc.certificationTypeId)
+      }
 
       for (const shiftType of ["DAY", "NIGHT"] as const) {
         const shiftWorkers = getWorkersOnShift(dateStr, shiftType)
           .filter(w => w.includeInStaffingCount !== false)
 
-        // Only check if there are workers scheduled on this shift
-        if (shiftWorkers.length > 0) {
-          for (const training of trainingTypes) {
-            const trainedCount = shiftWorkers.filter(w => w[training.field]).length
-            if (trainedCount < 1) {
-              alerts.push({
-                date: dateStr,
-                shiftType,
-                ruleName: training.label,
-                required: 1,
-                actual: 0,
-                shortage: 1,
-                trainingType: training.key,
-              })
-            }
+        // Check each certification that requires schedule coverage
+        for (const cert of requiredCertifications) {
+          const minRequired = shiftType === "DAY" ? cert.minPerDayShift : cert.minPerNightShift
+
+          // Skip if no minimum required for this shift
+          if (minRequired <= 0) continue
+
+          // Count workers who have this certification (and it's not expired)
+          const certifiedCount = shiftWorkers.filter(w => {
+            const certs = userCertMap.get(w.id)
+            return certs?.has(cert.id)
+          }).length
+
+          if (certifiedCount < minRequired) {
+            alerts.push({
+              date: dateStr,
+              shiftType,
+              ruleName: `Certification: ${cert.name}`,
+              required: minRequired,
+              actual: certifiedCount,
+              shortage: minRequired - certifiedCount,
+              certificationName: cert.name,
+            })
           }
         }
       }
@@ -640,7 +693,7 @@ function SchedulePageContent() {
     alerts.sort((a, b) => a.date.localeCompare(b.date))
 
     return alerts
-  }, [schedules, staffingRules, getWorkersOnShift])
+  }, [schedules, staffingRules, requiredCertifications, userCertifications, getWorkersOnShift])
 
   // Group alerts by date for display
   const alertsByDate = useMemo(() => {

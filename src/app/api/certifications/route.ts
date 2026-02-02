@@ -15,7 +15,7 @@ const createCertificationSchema = z.object({
   expiryWarningDays: z.number().int().min(7).optional(),
 })
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -23,11 +23,22 @@ export async function GET(_request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const requireOnSchedule = searchParams.get("requireOnSchedule")
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const whereClause: any = {
+      organizationId: session.user.organizationId,
+      isActive: true,
+    }
+
+    // Filter by requireOnSchedule if specified
+    if (requireOnSchedule === "true") {
+      whereClause.requireOnSchedule = true
+    }
+
     const certifications = await prisma.certificationType.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        isActive: true,
-      },
+      where: whereClause,
       include: {
         _count: {
           select: { userCertifications: true },
