@@ -20,14 +20,25 @@ export async function GET(request: NextRequest) {
     const positionType = searchParams.get("positionType")
     const isActive = searchParams.get("isActive")
 
+    // Build where clause carefully to avoid invalid enum values
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const whereClause: any = {
+      organizationId: session.user.organizationId,
+    }
+
+    if (crewId) whereClause.crewId = crewId
+    if (shiftType && ["DAY", "NIGHT"].includes(shiftType)) {
+      whereClause.shiftType = shiftType as ShiftType
+    }
+    if (positionType && ["OPERATOR", "ONSHORE_CONTROL_ROOM", "OTHER"].includes(positionType)) {
+      whereClause.positionType = positionType as PositionType
+    }
+    if (isActive !== null && isActive !== undefined) {
+      whereClause.isActive = isActive === "true"
+    }
+
     const rules = await prisma.staffingRule.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        ...(crewId && { crewId }),
-        ...(shiftType && { shiftType: shiftType as ShiftType }),
-        ...(positionType && { positionType: positionType as PositionType }),
-        ...(isActive !== null && { isActive: isActive === "true" }),
-      },
+      where: whereClause,
       include: {
         crew: {
           select: {
@@ -43,7 +54,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, data: rules })
   } catch (error) {
     console.error("Error fetching staffing rules:", error)
-    return NextResponse.json({ error: "Failed to fetch staffing rules" }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return NextResponse.json(
+      { error: "Failed to fetch staffing rules", details: errorMessage },
+      { status: 500 }
+    )
   }
 }
 
