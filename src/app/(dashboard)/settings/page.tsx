@@ -1547,6 +1547,18 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs text-muted-foreground">Minimum number of onshore control room staff required per shift</p>
                 </div>
+                <div className="pt-2 border-t">
+                  <a
+                    href="/staffing"
+                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                  >
+                    <Users className="h-4 w-4" />
+                    Manage all staffing rules (add, edit, delete)
+                  </a>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Create custom staffing rules for specific crews, shifts, roles, and positions
+                  </p>
+                </div>
               </div>
             )}
           </CardContent>
