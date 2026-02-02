@@ -67,9 +67,11 @@ interface StaffingGap {
   required: number
   scheduled: number
   ruleName: string
+  ruleType?: "staffing" | "certification"
   crew?: { id: string; name: string }
   positionType?: string
   role?: string
+  certificationName?: string
   scheduledWorkers: GapWorker[]
   availableWorkers: GapWorker[]
 }
@@ -951,13 +953,13 @@ export default function StaffingPage() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Shift</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Rule</TableHead>
                   <TableHead>Required</TableHead>
                   <TableHead>Scheduled</TableHead>
                   <TableHead>Shortage</TableHead>
                   <TableHead>Crew</TableHead>
                   <TableHead>Position</TableHead>
-                  <TableHead>Role</TableHead>
                   <TableHead>Details</TableHead>
                 </TableRow>
               </TableHeader>
@@ -966,6 +968,11 @@ export default function StaffingPage() {
                   <TableRow key={`${gap.date}-${gap.shiftType}-${index}`}>
                     <TableCell>{new Date(gap.date).toLocaleDateString()}</TableCell>
                     <TableCell>{gap.shiftType}</TableCell>
+                    <TableCell>
+                      <Badge variant={gap.ruleType === "certification" ? "secondary" : "outline"}>
+                        {gap.ruleType === "certification" ? "Cert" : "Staff"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{gap.ruleName}</TableCell>
                     <TableCell>{gap.required}</TableCell>
                     <TableCell>{gap.scheduled}</TableCell>
@@ -973,8 +980,7 @@ export default function StaffingPage() {
                       <Badge variant="destructive">-{gap.shortage}</Badge>
                     </TableCell>
                     <TableCell>{gap.crew?.name || "Org-wide"}</TableCell>
-                    <TableCell>{gap.positionType || "Any"}</TableCell>
-                    <TableCell>{gap.role || "Any"}</TableCell>
+                    <TableCell>{gap.positionType || gap.certificationName || "Any"}</TableCell>
                     <TableCell>
                       <details className="text-xs">
                         <summary className="cursor-pointer text-primary">View</summary>

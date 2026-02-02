@@ -17,6 +17,7 @@ interface GapWorkerSummary {
   crewName: string | null
   role: string
   positionType: string
+  certifications?: string[]
 }
 
 interface StaffingGapDetail {
@@ -26,9 +27,11 @@ interface StaffingGapDetail {
   required: number
   scheduled: number
   ruleName: string
+  ruleType?: "staffing" | "certification"
   crew?: { id: string; name: string }
   positionType?: string
   role?: string
+  certificationName?: string
   scheduledWorkers: GapWorkerSummary[]
   availableWorkers: GapWorkerSummary[]
 }
@@ -95,7 +98,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const [staffingRules, organization, activeWorkers] = await Promise.all([
+    const [staffingRules, organization, activeWorkers, requiredCertifications, userCertifications] = await Promise.all([
       prisma.staffingRule.findMany({
         where: { organizationId: session.user.organizationId, isActive: true },
         include: { crew: { select: { id: true, name: true } } },
@@ -116,7 +119,45 @@ export async function GET(request: NextRequest) {
           crew: { select: { id: true, name: true } },
         },
       }),
+      // Fetch certifications that require minimum staff on schedule
+      prisma.certificationType.findMany({
+        where: {
+          organizationId: session.user.organizationId,
+          isActive: true,
+          requireOnSchedule: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          minPerDayShift: true,
+          minPerNightShift: true,
+        },
+      }),
+      // Fetch all user certifications to know who has what
+      prisma.userCertification.findMany({
+        where: {
+          user: { organizationId: session.user.organizationId, status: "ACTIVE" },
+        },
+        select: {
+          userId: true,
+          certificationTypeId: true,
+          expiresAt: true,
+        },
+      }),
     ])
+
+    // Build a map of userId -> Set of valid (non-expired) certificationTypeIds
+    const userCertMap = new Map<string, Set<string>>()
+    const today = new Date()
+    for (const uc of userCertifications) {
+      // Skip expired certifications
+      if (uc.expiresAt && uc.expiresAt < today) continue
+
+      if (!userCertMap.has(uc.userId)) {
+        userCertMap.set(uc.userId, new Set())
+      }
+      userCertMap.get(uc.userId)!.add(uc.certificationTypeId)
+    }
 
     const orgSettings = (organization?.settings || {}) as OrgSettings
     const orgRulesEnabled = orgSettings.minStaffingAlertEnabled !== false
@@ -252,6 +293,7 @@ export async function GET(request: NextRequest) {
             required: rule.minWorkers,
             scheduled: count,
             ruleName: rule.name,
+            ruleType: "staffing",
             crew: rule.crewId ? { id: rule.crewId, name: rule.crew?.name || "Crew" } : undefined,
             positionType: rule.positionType || undefined,
             role: rule.role || undefined,
@@ -293,9 +335,74 @@ export async function GET(request: NextRequest) {
               required: derivedRule.minWorkers,
               scheduled: count,
               ruleName: derivedRule.name,
+              ruleType: "staffing",
               positionType: derivedRule.positionType,
               scheduledWorkers,
               availableWorkers,
+            })
+          }
+        }
+      }
+
+      // Check certification requirements for each shift
+      for (const shiftType of [ShiftType.DAY, ShiftType.NIGHT]) {
+        for (const cert of requiredCertifications) {
+          const minRequired = shiftType === ShiftType.DAY ? cert.minPerDayShift : cert.minPerNightShift
+
+          // Skip if no minimum required for this shift
+          if (minRequired <= 0) continue
+
+          // Get all schedules for this shift
+          const shiftSchedules = daySchedules.filter((s) => s.shiftType === shiftType)
+
+          // Count workers who have this certification (and it's not expired)
+          const certifiedScheduledWorkers = shiftSchedules.filter((s) => {
+            const userCerts = userCertMap.get(s.user.id)
+            return userCerts?.has(cert.id)
+          })
+
+          const certifiedCount = certifiedScheduledWorkers.length
+
+          if (certifiedCount < minRequired) {
+            // Build list of scheduled workers with this cert
+            const scheduledWithCert = certifiedScheduledWorkers.map((s) => ({
+              id: s.user.id,
+              name: s.user.name,
+              crewId: s.user.crewId ?? null,
+              crewName: s.user.crew?.name || null,
+              role: s.user.role,
+              positionType: s.user.positionType,
+              certifications: [cert.name],
+            }))
+
+            // Find available workers who have this certification and aren't scheduled
+            const scheduledIds = new Set(shiftSchedules.map((s) => s.user.id))
+            const availableWithCert = activeWorkerList
+              .filter((worker) => {
+                const userCerts = userCertMap.get(worker.id)
+                return userCerts?.has(cert.id) && !scheduledIds.has(worker.id)
+              })
+              .map((worker) => ({
+                id: worker.id,
+                name: worker.name,
+                crewId: worker.crewId ?? null,
+                crewName: worker.crewName,
+                role: worker.role,
+                positionType: worker.positionType,
+                certifications: [cert.name],
+              }))
+
+            gapDetails.push({
+              date: checkDate,
+              shiftType,
+              shortage: minRequired - certifiedCount,
+              required: minRequired,
+              scheduled: certifiedCount,
+              ruleName: `Certification: ${cert.name}`,
+              ruleType: "certification",
+              certificationName: cert.name,
+              scheduledWorkers: scheduledWithCert,
+              availableWorkers: availableWithCert,
             })
           }
         }
@@ -323,11 +430,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (format === "csv") {
-      let csv = "Date,Shift Type,Rule,Required,Scheduled,Shortage,Crew,Position,Role,Scheduled Workers,Available Workers\n"
+      let csv = "Date,Shift Type,Rule,Rule Type,Required,Scheduled,Shortage,Crew,Position,Role,Certification,Scheduled Workers,Available Workers\n"
       for (const gap of filteredGaps) {
         const scheduledNames = gap.scheduledWorkers.map((w) => w.name || "Unnamed").join("; ")
         const availableNames = gap.availableWorkers.map((w) => w.name || "Unnamed").join("; ")
-        csv += `"${sanitizeCSVValue(toDateString(gap.date))}","${sanitizeCSVValue(gap.shiftType)}","${sanitizeCSVValue(gap.ruleName)}","${sanitizeCSVValue(String(gap.required))}","${sanitizeCSVValue(String(gap.scheduled))}","${sanitizeCSVValue(String(gap.shortage))}","${sanitizeCSVValue(gap.crew?.name)}","${sanitizeCSVValue(gap.positionType)}","${sanitizeCSVValue(gap.role)}","${sanitizeCSVValue(scheduledNames)}","${sanitizeCSVValue(availableNames)}"\n`
+        csv += `"${sanitizeCSVValue(toDateString(gap.date))}","${sanitizeCSVValue(gap.shiftType)}","${sanitizeCSVValue(gap.ruleName)}","${sanitizeCSVValue(gap.ruleType)}","${sanitizeCSVValue(String(gap.required))}","${sanitizeCSVValue(String(gap.scheduled))}","${sanitizeCSVValue(String(gap.shortage))}","${sanitizeCSVValue(gap.crew?.name)}","${sanitizeCSVValue(gap.positionType)}","${sanitizeCSVValue(gap.role)}","${sanitizeCSVValue(gap.certificationName)}","${sanitizeCSVValue(scheduledNames)}","${sanitizeCSVValue(availableNames)}"\n`
       }
 
       return new NextResponse(csv, {
