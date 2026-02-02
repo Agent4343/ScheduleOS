@@ -162,6 +162,9 @@ export const generateScheduleSchema = z.object({
   startingShift: z.enum(["DAY", "NIGHT"]).optional(),
   clearOverrides: z.boolean().default(false),
   replaceExisting: z.boolean().default(true),
+}).refine(data => data.endDate >= data.startDate, {
+  message: "End date must be on or after start date",
+  path: ["endDate"],
 })
 
 // Time off request validations

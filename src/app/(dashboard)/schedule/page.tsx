@@ -901,9 +901,10 @@ function SchedulePageContent() {
     setScheduleEditSuccess(null)
 
     try {
-      // Generate all dates in the range
-      const start = new Date(scheduleEditStartDate)
-      const end = new Date(scheduleEditEndDate)
+      // Parse dates consistently as UTC to avoid timezone issues
+      // Input format is YYYY-MM-DD from date input, interpret as UTC
+      const start = new Date(scheduleEditStartDate + "T00:00:00.000Z")
+      const end = new Date(scheduleEditEndDate + "T00:00:00.000Z")
 
       if (end < start) {
         throw new Error("End date must be on or after start date")
@@ -912,7 +913,7 @@ function SchedulePageContent() {
       const datesToUpdate: string[] = []
       const current = new Date(start)
       while (current <= end) {
-        // Use UTC methods to avoid timezone issues
+        // Use UTC methods consistently since we parsed as UTC
         datesToUpdate.push(formatDate(current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate()))
         current.setUTCDate(current.getUTCDate() + 1)
       }

@@ -31,9 +31,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Parse dates - ensure they're valid
+    // Parse dates as UTC midnight - schedules are stored at midnight UTC
+    // Using T00:00:00.000Z for both dates ensures consistent date comparison
     const startDate = new Date(startDateParam + "T00:00:00.000Z")
-    const endDate = new Date(endDateParam + "T23:59:59.999Z")
+    const endDate = new Date(endDateParam + "T00:00:00.000Z")
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return NextResponse.json(
@@ -230,11 +231,28 @@ async function generateSchedules(
     }
     userIds = [validatedData.userId]
   } else if (validatedData.crewId) {
+    // Validate crew exists and belongs to organization
+    const crew = await prisma.crew.findFirst({
+      where: { id: validatedData.crewId, organizationId },
+      select: { id: true, name: true },
+    })
+    if (!crew) {
+      return NextResponse.json({ error: "Invalid crew" }, { status: 400 })
+    }
+
     // All users in crew
     const crewUsers = await prisma.user.findMany({
       where: { crewId: validatedData.crewId, organizationId, status: "ACTIVE" },
       select: { id: true, crewId: true },
     })
+
+    if (crewUsers.length === 0) {
+      return NextResponse.json(
+        { error: `No active users found in crew "${crew.name}"` },
+        { status: 400 }
+      )
+    }
+
     userIds = crewUsers.map((u: { id: string }) => u.id)
   } else {
     return NextResponse.json(
@@ -304,6 +322,8 @@ async function generateSchedules(
 
   // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
   let deletedCount = 0
+  let createdCount = 0
+  let skippedCount = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await prisma.$transaction(async (tx: any) => {
     // Delete existing schedules for the user(s) ONLY within the date range being generated
@@ -327,21 +347,32 @@ async function generateSchedules(
     deletedCount = deleteResult.count
     console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
 
-    // Create new schedules
-    await tx.schedule.createMany({
+    // Create new schedules using createMany with skipDuplicates
+    // Note: skipDuplicates silently skips conflicts, so we track this separately
+    const createResult = await tx.schedule.createMany({
       data: scheduleData,
       skipDuplicates: true,
     })
-    console.log(`Created ${scheduleData.length} new schedules`)
+    createdCount = createResult.count
+    skippedCount = scheduleData.length - createdCount
+    console.log(`Created ${createdCount} new schedules, skipped ${skippedCount} duplicates`)
   })
+
+  // Build informative message for user
+  let message = `Generated ${createdCount} schedule entries for ${userIds.length} user(s)`
+  if (skippedCount > 0) {
+    message += `. ${skippedCount} entries were skipped (existing manual overrides preserved)`
+  }
 
   return NextResponse.json({
     success: true,
-    message: `Generated ${generatedSchedules.length} schedule days for ${userIds.length} user(s)`,
+    message,
     data: {
       usersProcessed: userIds.length,
       daysGenerated: generatedSchedules.length,
       totalRecords: scheduleData.length,
+      createdRecords: createdCount,
+      skippedRecords: skippedCount,
       deletedRecords: deletedCount,
     },
   })
