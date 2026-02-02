@@ -224,7 +224,7 @@ export default async function HomePage() {
                     ))}
                     {/* Training row */}
                     <div className="grid grid-cols-[200px_repeat(14,1fr)] border-t bg-amber-50 text-sm">
-                      <div className="p-2 border-r text-xs font-medium text-amber-800">Day - Oil Op Trained</div>
+                      <div className="p-2 border-r text-xs font-medium text-amber-800">Day - Lead Trained</div>
                       {[2,2,1,1,1,1,1,2,2,1,1,1,1,1].map((count, j) => (
                         <div key={j} className="p-1 border-r last:border-r-0 flex items-center justify-center">
                           <div className={`w-full h-6 rounded text-[10px] flex items-center justify-center font-bold ${
@@ -368,11 +368,11 @@ export default async function HomePage() {
                 <div className="text-sm font-medium mb-4">Training Coverage Summary</div>
                 <div className="space-y-3">
                   {[
-                    { label: "Day - Oil Operator", count: 2, met: true },
-                    { label: "Day - Utility Operator", count: 2, met: true },
-                    { label: "Day - Gas Operator", count: 1, met: true },
+                    { label: "Day - Shift Lead", count: 2, met: true },
+                    { label: "Day - Machine Operator", count: 2, met: true },
+                    { label: "Day - Safety Certified", count: 1, met: true },
                     { label: "Day - Control Room", count: 0, met: false },
-                    { label: "Night - Oil Operator", count: 3, met: true },
+                    { label: "Night - Shift Lead", count: 3, met: true },
                     { label: "Night - Control Room", count: 1, met: true },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between p-3 bg-background rounded-lg border">
@@ -505,14 +505,14 @@ export default async function HomePage() {
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4">Built for Every Shift-Based Industry</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Whether you&apos;re managing an oil rig, hospital, factory, or security team — ShiftSync adapts to your needs.
+                Whether you&apos;re managing a hospital, factory, warehouse, or security team — ShiftSync adapts to your needs.
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-4xl mx-auto">
               {[
                 { icon: Factory, label: "Manufacturing" },
                 { icon: Stethoscope, label: "Healthcare" },
-                { icon: Building2, label: "Energy & Oil" },
+                { icon: Building2, label: "Utilities" },
                 { icon: ShieldCheck, label: "Security" },
                 { icon: Utensils, label: "Hospitality" },
                 { icon: Truck, label: "Logistics" },
