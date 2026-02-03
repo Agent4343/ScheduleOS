@@ -383,7 +383,7 @@ export default function WorkersPage() {
       message: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
       confirmLabel: "Cancel Invitation",
       cancelLabel: "Keep",
-      variant: "destructive",
+      variant: "danger",
     })
 
     if (!confirmed) return
