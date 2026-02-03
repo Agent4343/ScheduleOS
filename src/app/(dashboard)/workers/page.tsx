@@ -96,6 +96,19 @@ interface SubscriptionInfo {
   isTrialExpired: boolean
 }
 
+interface PendingInvitation {
+  id: string
+  email: string
+  name: string
+  role: UserRole
+  expiresAt: string
+  createdAt: string
+  createdBy: {
+    id: string
+    name: string
+  }
+}
+
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
   ACTIVE: { variant: "default", label: "Active" },
   INACTIVE: { variant: "secondary", label: "Inactive" },
@@ -118,6 +131,7 @@ export default function WorkersPage() {
   const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
   const [selectedCertifications, setSelectedCertifications] = useState<Map<string, { expiresAt: string | null; earnedAt: string }>>(new Map())
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -156,12 +170,13 @@ export default function WorkersPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes, rolesRes, certsRes, subRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes, subRes, invitesRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
           fetch("/api/roles"),
           fetch("/api/certifications"),
           fetch("/api/subscription"),
+          fetch("/api/invitations?status=pending"),
         ])
 
         const usersData = await usersRes.json()
@@ -169,12 +184,14 @@ export default function WorkersPage() {
         const rolesData = await rolesRes.json()
         const certsData = await certsRes.json()
         const subData = await subRes.json()
+        const invitesData = await invitesRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
         if (rolesData.success) setCustomRoles(rolesData.data)
         if (certsData.success) setCertificationTypes(certsData.data)
         if (subData.success) setSubscription(subData.data)
+        if (invitesData.success) setPendingInvitations(invitesData.data)
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -275,6 +292,18 @@ export default function WorkersPage() {
           })
         }
 
+        // Add to pending invitations list
+        const newInvitation: PendingInvitation = {
+          id: data.data.id,
+          email: data.data.email,
+          name: data.data.name,
+          role: data.data.role,
+          expiresAt: data.data.expiresAt,
+          createdAt: new Date().toISOString(),
+          createdBy: { id: "", name: "You" },
+        }
+        setPendingInvitations((prev) => [newInvitation, ...prev])
+
         if (data.emailSent) {
           setIsModalOpen(false)
           setFormData({
@@ -313,6 +342,77 @@ export default function WorkersPage() {
       addToast({ type: "error", message: "Failed to send invitation" })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleResendInvitation(invitation: PendingInvitation) {
+    try {
+      const response = await fetch(`/api/invitations?id=${invitation.id}`, {
+        method: "PUT",
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        // Update the invitation in the list with new expiration
+        setPendingInvitations((prev) =>
+          prev.map((inv) =>
+            inv.id === invitation.id ? { ...inv, expiresAt: data.data.expiresAt } : inv
+          )
+        )
+        if (data.emailSent) {
+          addToast({ type: "success", message: `Invitation resent to ${invitation.email}` })
+        } else {
+          // Show invite link if email wasn't sent
+          addToast({
+            type: "warning",
+            message: `Email could not be sent. Invite link: ${data.inviteLink}`,
+          })
+        }
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to resend invitation" })
+      }
+    } catch (error) {
+      console.error("Failed to resend invitation:", error)
+      addToast({ type: "error", message: "Failed to resend invitation" })
+    }
+  }
+
+  async function handleDeleteInvitation(invitation: PendingInvitation) {
+    const confirmed = await confirm({
+      title: "Cancel Invitation",
+      message: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
+      confirmLabel: "Cancel Invitation",
+      cancelLabel: "Keep",
+      variant: "destructive",
+    })
+
+    if (!confirmed) return
+
+    try {
+      const response = await fetch(`/api/invitations?id=${invitation.id}`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitation.id))
+        // Update subscription count
+        if (subscription) {
+          setSubscription({
+            ...subscription,
+            workerCount: subscription.workerCount,
+            workersRemaining: subscription.workersRemaining + 1,
+            canAddWorkers: true,
+            isAtLimit: false,
+          })
+        }
+        addToast({ type: "success", message: `Invitation for ${invitation.email} cancelled` })
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to cancel invitation" })
+      }
+    } catch (error) {
+      console.error("Failed to delete invitation:", error)
+      addToast({ type: "error", message: "Failed to cancel invitation" })
     }
   }
 
@@ -498,6 +598,68 @@ export default function WorkersPage() {
           />
         </div>
       </div>
+
+      {/* Pending Invitations */}
+      {pendingInvitations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Pending Invitations ({pendingInvitations.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invitee</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead>Invited By</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingInvitations.map((invitation) => (
+                  <TableRow key={invitation.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{invitation.name}</p>
+                        <p className="text-sm text-muted-foreground">{invitation.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>{ROLE_LABELS[invitation.role]}</TableCell>
+                    <TableCell>
+                      {new Date(invitation.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>{invitation.createdBy.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleResendInvitation(invitation)}
+                          title="Resend invitation"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteInvitation(invitation)}
+                          title="Cancel invitation"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Workers table */}
       <Card>
