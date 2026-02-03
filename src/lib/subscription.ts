@@ -119,3 +119,22 @@ export function getDaysRemaining(endDate: Date | null): number {
   const diff = end.getTime() - now.getTime()
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
+
+// First admin (organization creator) always has full access
+// This checks if the user is the earliest ADMIN in their organization
+export async function isFirstAdmin(
+  userId: string,
+  organizationId: string,
+  prisma: { user: { findFirst: (args: { where: { organizationId: string; role: string }; orderBy: { createdAt: "asc" }; select: { id: true } }) => Promise<{ id: string } | null> } }
+): Promise<boolean> {
+  const firstAdmin = await prisma.user.findFirst({
+    where: {
+      organizationId,
+      role: "ADMIN",
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  })
+
+  return firstAdmin?.id === userId
+}

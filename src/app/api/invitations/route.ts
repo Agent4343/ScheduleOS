@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { createInvitationSchema } from "@/lib/validations"
 import { sendEmail, invitationEmail } from "@/lib/email"
 import { generateToken } from "@/lib/utils"
-import { SUBSCRIPTION_TIERS, isTrialExpired } from "@/lib/subscription"
+import { SUBSCRIPTION_TIERS, isTrialExpired, isFirstAdmin } from "@/lib/subscription"
 
 // Invitation expires after 7 days
 const INVITATION_EXPIRY_DAYS = 7
@@ -101,31 +101,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    // Check if trial has expired
-    const tier = organization.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS
-    if (tier === "TRIAL" && isTrialExpired(organization.trialEndsAt)) {
-      return NextResponse.json(
-        {
-          error: "Trial expired",
-          code: "TRIAL_EXPIRED",
-          message: "Your free trial has expired. Please upgrade to continue adding workers."
-        },
-        { status: 402 }
-      )
-    }
+    // First admin (organization creator) bypasses all subscription limits
+    const hasUnlimitedAccess = await isFirstAdmin(session.user.id, session.user.organizationId, prisma)
 
-    // Check worker limit (include pending invitations)
-    const totalCount = organization._count.users + organization._count.invitations
-    if (totalCount >= organization.workerLimit) {
-      const tierInfo = SUBSCRIPTION_TIERS[tier]
-      return NextResponse.json(
-        {
-          error: "Worker limit reached",
-          code: "WORKER_LIMIT_REACHED",
-          message: `You've reached your ${tierInfo.name} plan limit of ${organization.workerLimit} workers (including pending invitations). Upgrade to add more.`,
-        },
-        { status: 402 }
-      )
+    if (!hasUnlimitedAccess) {
+      // Check if trial has expired
+      const tier = organization.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS
+      if (tier === "TRIAL" && isTrialExpired(organization.trialEndsAt)) {
+        return NextResponse.json(
+          {
+            error: "Trial expired",
+            code: "TRIAL_EXPIRED",
+            message: "Your free trial has expired. Please upgrade to continue adding workers."
+          },
+          { status: 402 }
+        )
+      }
+
+      // Check worker limit (include pending invitations)
+      const totalCount = organization._count.users + organization._count.invitations
+      if (totalCount >= organization.workerLimit) {
+        const tierInfo = SUBSCRIPTION_TIERS[tier]
+        return NextResponse.json(
+          {
+            error: "Worker limit reached",
+            code: "WORKER_LIMIT_REACHED",
+            message: `You've reached your ${tierInfo.name} plan limit of ${organization.workerLimit} workers (including pending invitations). Upgrade to add more.`,
+          },
+          { status: 402 }
+        )
+      }
     }
 
     const body = await request.json()
