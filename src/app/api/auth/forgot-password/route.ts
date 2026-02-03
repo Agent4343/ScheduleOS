@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (resend) {
       const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}&email=${encodeURIComponent(email.toLowerCase())}`
 
-      await resend.emails.send({
+      const { error } = await resend.emails.send({
         from: process.env.EMAIL_FROM || "noreply@example.com",
         to: email.toLowerCase(),
         subject: "Reset your password - ShiftSync",
@@ -67,9 +67,22 @@ export async function POST(request: NextRequest) {
           </div>
         `,
       })
+
+      if (error) {
+        console.error("Failed to send password reset email:", error)
+        return NextResponse.json(
+          { error: "Failed to send password reset email. Please try again later." },
+          { status: 500 }
+        )
+      }
     } else {
       // Log token for development
       console.log(`Password reset token for ${email}: ${token}`)
+      console.log("Email not configured - RESEND_API_KEY not set")
+      return NextResponse.json(
+        { error: "Email service is not configured. Please contact support." },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({
