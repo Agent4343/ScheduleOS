@@ -611,9 +611,9 @@ export default function WorkersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Invitee</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead className="hidden sm:table-cell">Role</TableHead>
                   <TableHead>Expires</TableHead>
-                  <TableHead>Invited By</TableHead>
+                  <TableHead className="hidden md:table-cell">Invited By</TableHead>
                   <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -623,14 +623,17 @@ export default function WorkersPage() {
                     <TableCell>
                       <div>
                         <p className="font-medium">{invitation.name}</p>
-                        <p className="text-sm text-muted-foreground">{invitation.email}</p>
+                        <p className="text-sm text-muted-foreground break-all">{invitation.email}</p>
+                        <p className="text-xs text-muted-foreground sm:hidden mt-1">
+                          {ROLE_LABELS[invitation.role]}
+                        </p>
                       </div>
                     </TableCell>
-                    <TableCell>{ROLE_LABELS[invitation.role]}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{ROLE_LABELS[invitation.role]}</TableCell>
                     <TableCell>
                       {new Date(invitation.expiresAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{invitation.createdBy.name}</TableCell>
+                    <TableCell className="hidden md:table-cell">{invitation.createdBy.name}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Button
