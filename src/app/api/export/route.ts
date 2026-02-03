@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
 
       // Create Excel workbook
       const workbook = new ExcelJS.Workbook()
-      workbook.creator = "ScheduleOS"
+      workbook.creator = "ShiftSync"
       workbook.created = new Date()
 
       const worksheet = workbook.addWorksheet(`Schedule ${year}`, {
