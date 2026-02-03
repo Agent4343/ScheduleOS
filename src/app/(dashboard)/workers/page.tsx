@@ -377,43 +377,41 @@ export default function WorkersPage() {
     }
   }
 
-  async function handleDeleteInvitation(invitation: PendingInvitation) {
-    const confirmed = await confirm({
+  function handleDeleteInvitation(invitation: PendingInvitation) {
+    confirm({
       title: "Cancel Invitation",
-      message: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
-      confirmLabel: "Cancel Invitation",
-      cancelLabel: "Keep",
+      description: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
+      confirmText: "Cancel Invitation",
       variant: "danger",
-    })
-
-    if (!confirmed) return
-
-    try {
-      const response = await fetch(`/api/invitations?id=${invitation.id}`, {
-        method: "DELETE",
-      })
-      const data = await response.json()
-
-      if (data.success) {
-        setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitation.id))
-        // Update subscription count
-        if (subscription) {
-          setSubscription({
-            ...subscription,
-            workerCount: subscription.workerCount,
-            workersRemaining: subscription.workersRemaining + 1,
-            canAddWorkers: true,
-            isAtLimit: false,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/invitations?id=${invitation.id}`, {
+            method: "DELETE",
           })
+          const data = await response.json()
+
+          if (data.success) {
+            setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitation.id))
+            // Update subscription count
+            if (subscription) {
+              setSubscription({
+                ...subscription,
+                workerCount: subscription.workerCount,
+                workersRemaining: subscription.workersRemaining + 1,
+                canAddWorkers: true,
+                isAtLimit: false,
+              })
+            }
+            addToast({ type: "success", message: `Invitation for ${invitation.email} cancelled` })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to cancel invitation" })
+          }
+        } catch (error) {
+          console.error("Failed to delete invitation:", error)
+          addToast({ type: "error", message: "Failed to cancel invitation" })
         }
-        addToast({ type: "success", message: `Invitation for ${invitation.email} cancelled` })
-      } else {
-        addToast({ type: "error", message: data.error || "Failed to cancel invitation" })
-      }
-    } catch (error) {
-      console.error("Failed to delete invitation:", error)
-      addToast({ type: "error", message: "Failed to cancel invitation" })
-    }
+      },
+    })
   }
 
   async function handleUpdate(e: React.FormEvent) {
