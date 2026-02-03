@@ -30,6 +30,7 @@ import {
   Trash2,
   AlertTriangle,
   Zap,
+  Copy,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserRole, UserStatus } from "@/types"
@@ -622,8 +623,34 @@ export default function WorkersPage() {
                   <TableRow key={invitation.id}>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{invitation.name}</p>
-                        <p className="text-sm text-muted-foreground break-all">{invitation.email}</p>
+                        <div className="flex items-center gap-1 group">
+                          <p className="font-medium select-text">{invitation.name}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(invitation.name)
+                              addToast({ type: "success", message: "Name copied to clipboard" })
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                            title="Copy name"
+                          >
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1 group">
+                          <p className="text-sm text-muted-foreground break-all select-text">{invitation.email}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(invitation.email)
+                              addToast({ type: "success", message: "Email copied to clipboard" })
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                            title="Copy email"
+                          >
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        </div>
                         <p className="text-xs text-muted-foreground sm:hidden mt-1">
                           {ROLE_LABELS[invitation.role]}
                         </p>
@@ -701,10 +728,38 @@ export default function WorkersPage() {
                       <div className="flex items-center gap-3">
                         <Avatar alt={user.name || user.email} size="sm" />
                         <div>
-                          <p className="font-medium">{user.name || "Unnamed"}</p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            {user.email}
+                          <div className="flex items-center gap-1 group">
+                            <p className="font-medium select-text">{user.name || "Unnamed"}</p>
+                            {user.name && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(user.name!)
+                                  addToast({ type: "success", message: "Name copied to clipboard" })
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                                title="Copy name"
+                              >
+                                <Copy className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 group">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground select-text">
+                              <Mail className="h-3 w-3" />
+                              {user.email}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(user.email)
+                                addToast({ type: "success", message: "Email copied to clipboard" })
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                              title="Copy email"
+                            >
+                              <Copy className="h-3 w-3 text-muted-foreground" />
+                            </button>
                           </div>
                         </div>
                       </div>
