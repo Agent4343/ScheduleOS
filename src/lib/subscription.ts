@@ -120,21 +120,9 @@ export function getDaysRemaining(endDate: Date | null): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-// First admin (organization creator) always has full access
-// This checks if the user is the earliest ADMIN in their organization
-export async function isFirstAdmin(
-  userId: string,
-  organizationId: string,
-  prisma: { user: { findFirst: (args: { where: { organizationId: string; role: string }; orderBy: { createdAt: "asc" }; select: { id: true } }) => Promise<{ id: string } | null> } }
-): Promise<boolean> {
-  const firstAdmin = await prisma.user.findFirst({
-    where: {
-      organizationId,
-      role: "ADMIN",
-    },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  })
+// Specific account with unlimited access (bypasses all subscription limits)
+const UNLIMITED_ACCESS_EMAIL = "mathesonashley@hotmail.com"
 
-  return firstAdmin?.id === userId
+export function hasUnlimitedAccess(email: string | null | undefined): boolean {
+  return email?.toLowerCase() === UNLIMITED_ACCESS_EMAIL
 }
