@@ -94,7 +94,47 @@ const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "de
   TERMINATED: { variant: "destructive", label: "Terminated" },
 }
 
-type TabType = "workers" | "crews" | "patterns" | "generate"
+type TabType = "patterns" | "crews" | "workers" | "generate"
+
+// Setup steps in order
+const SETUP_STEPS = [
+  {
+    id: "patterns" as TabType,
+    step: 1,
+    label: "Rotation Patterns",
+    shortLabel: "Patterns",
+    icon: RefreshCw,
+    description: "Define work schedules (e.g., 14 on/14 off)",
+    requirement: null,
+  },
+  {
+    id: "crews" as TabType,
+    step: 2,
+    label: "Crews",
+    shortLabel: "Crews",
+    icon: Users2,
+    description: "Organize workers into teams",
+    requirement: "patterns",
+  },
+  {
+    id: "workers" as TabType,
+    step: 3,
+    label: "Workers",
+    shortLabel: "Workers",
+    icon: Users,
+    description: "Add your team members",
+    requirement: null,
+  },
+  {
+    id: "generate" as TabType,
+    step: 4,
+    label: "Generate Schedule",
+    shortLabel: "Generate",
+    icon: Wand2,
+    description: "Create schedules for your team",
+    requirement: "all",
+  },
+]
 
 export default function SetupPage() {
   const router = useRouter()
@@ -102,7 +142,7 @@ export default function SetupPage() {
   const { confirm, ConfirmDialog } = useConfirmDialog()
 
   // Main state
-  const [activeTab, setActiveTab] = useState<TabType>("workers")
+  const [activeTab, setActiveTab] = useState<TabType>("patterns")
   const [workers, setWorkers] = useState<Worker[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
@@ -647,6 +687,26 @@ export default function SetupPage() {
 
   const selectedPattern_obj = patterns.find((p) => p.id === selectedPattern)
 
+  // Check if each step is complete
+  const stepStatus = {
+    patterns: patterns.length > 0,
+    crews: crews.length > 0,
+    workers: workers.length > 0,
+    generate: false, // Always actionable
+  }
+
+  // Count completed steps
+  const completedSteps = [stepStatus.patterns, stepStatus.crews, stepStatus.workers].filter(Boolean).length
+
+  // Get current step's requirement status
+  const getStepRequirementMet = (stepId: TabType) => {
+    const step = SETUP_STEPS.find((s) => s.id === stepId)
+    if (!step?.requirement) return true
+    if (step.requirement === "patterns") return patterns.length > 0
+    if (step.requirement === "all") return patterns.length > 0 && workers.length > 0
+    return true
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -661,9 +721,69 @@ export default function SetupPage() {
       <div>
         <h1 className="text-3xl font-bold">Setup Center</h1>
         <p className="text-muted-foreground mt-1">
-          Manage your workers, crews, rotation patterns, and generate schedules - all in one place
+          Complete these steps in order to set up your scheduling system
         </p>
       </div>
+
+      {/* Progress Overview */}
+      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm">Setup Progress</h3>
+            <Badge variant={completedSteps === 3 ? "default" : "secondary"}>
+              {completedSteps}/3 steps complete
+            </Badge>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {SETUP_STEPS.map((step) => {
+              const isComplete = step.id !== "generate" && stepStatus[step.id]
+              const isCurrent = activeTab === step.id
+              const requirementMet = getStepRequirementMet(step.id)
+
+              return (
+                <button
+                  key={step.id}
+                  onClick={() => setActiveTab(step.id)}
+                  className={`relative flex flex-col items-center p-3 rounded-lg transition-all ${
+                    isCurrent
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : isComplete
+                      ? "bg-green-100 text-green-700 hover:bg-green-200"
+                      : !requirementMet
+                      ? "bg-muted/50 text-muted-foreground cursor-not-allowed opacity-60"
+                      : "bg-background hover:bg-muted"
+                  }`}
+                  disabled={!requirementMet}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
+                    isCurrent
+                      ? "bg-primary-foreground/20"
+                      : isComplete
+                      ? "bg-green-200"
+                      : "bg-muted"
+                  }`}>
+                    {isComplete && !isCurrent ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : (
+                      <span className="font-bold text-sm">{step.step}</span>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-center">{step.shortLabel}</span>
+                  {step.id !== "generate" && (
+                    <span className={`text-[10px] mt-0.5 ${
+                      isCurrent ? "text-primary-foreground/70" : "text-muted-foreground"
+                    }`}>
+                      {step.id === "patterns" && `${patterns.length} created`}
+                      {step.id === "crews" && `${crews.length} created`}
+                      {step.id === "workers" && `${workers.length} added`}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {error && (
         <Alert variant="destructive">
@@ -681,37 +801,289 @@ export default function SetupPage() {
 
       {/* Tab Navigation */}
       <div className="border-b">
-        <nav className="flex gap-4">
-          {[
-            { id: "workers" as TabType, label: "Workers", icon: Users, count: workers.length },
-            { id: "crews" as TabType, label: "Crews", icon: Users2, count: crews.length },
-            { id: "patterns" as TabType, label: "Rotation Patterns", icon: RefreshCw, count: patterns.length },
-            { id: "generate" as TabType, label: "Generate Schedule", icon: Wand2 },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
-              }`}
-            >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-              {tab.count !== undefined && (
-                <Badge variant="secondary" className="ml-1">
-                  {tab.count}
-                </Badge>
-              )}
-            </button>
-          ))}
+        <nav className="flex gap-1 md:gap-2">
+          {SETUP_STEPS.map((step) => {
+            const isComplete = step.id !== "generate" && stepStatus[step.id]
+            const count = step.id === "patterns" ? patterns.length : step.id === "crews" ? crews.length : step.id === "workers" ? workers.length : undefined
+            const requirementMet = getStepRequirementMet(step.id)
+
+            return (
+              <button
+                key={step.id}
+                onClick={() => requirementMet && setActiveTab(step.id)}
+                disabled={!requirementMet}
+                className={`flex items-center gap-2 px-3 md:px-4 py-3 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === step.id
+                    ? "border-primary text-primary"
+                    : !requirementMet
+                    ? "border-transparent text-muted-foreground/50 cursor-not-allowed"
+                    : isComplete
+                    ? "border-transparent text-green-600 hover:text-green-700 hover:border-green-300"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted"
+                }`}
+              >
+                <div className={`flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
+                  activeTab === step.id
+                    ? "bg-primary text-primary-foreground"
+                    : isComplete
+                    ? "bg-green-100 text-green-700"
+                    : "bg-muted text-muted-foreground"
+                }`}>
+                  {isComplete && activeTab !== step.id ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    step.step
+                  )}
+                </div>
+                <span className="hidden md:inline">{step.label}</span>
+                <span className="md:hidden">{step.shortLabel}</span>
+                {count !== undefined && count > 0 && (
+                  <Badge variant={isComplete ? "default" : "secondary"} className={`ml-1 ${isComplete ? "bg-green-100 text-green-700" : ""}`}>
+                    {count}
+                  </Badge>
+                )}
+              </button>
+            )
+          })}
         </nav>
       </div>
 
       {/* Tab Content */}
       <div className="min-h-[500px]">
-        {/* ============ WORKERS TAB ============ */}
+        {/* ============ PATTERNS TAB (Step 1) ============ */}
+        {activeTab === "patterns" && (
+          <div className="space-y-4">
+            {/* Step guidance */}
+            <Alert className="border-blue-200 bg-blue-50 text-blue-800">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Step 1:</strong> Start by creating rotation patterns. These define how your work schedules operate (e.g., 14 days on, 14 days off).
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold">Rotation Patterns</h2>
+                <p className="text-sm text-muted-foreground">Define work schedules that can be assigned to crews</p>
+              </div>
+              <Button onClick={() => openPatternModal()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Pattern
+              </Button>
+            </div>
+
+            {patterns.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-12">
+                  <RefreshCw className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">No rotation patterns yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Create your first rotation pattern to define work schedules (e.g., 14 on / 14 off)
+                  </p>
+                  <Button onClick={() => openPatternModal()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Pattern
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {patterns.map((pattern) => (
+                    <Card key={pattern.id}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg">{pattern.name}</CardTitle>
+                            <CardDescription>{pattern.description || "No description"}</CardDescription>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openPatternModal(pattern)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDeletePattern(pattern.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge variant="secondary" className="bg-green-100 text-green-700">
+                            {pattern.daysOn} days on
+                          </Badge>
+                          <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                            {pattern.daysOff} days off
+                          </Badge>
+                          {pattern.includesNights && (
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                              {pattern.alternatesShifts ? "Alternates shifts" : `${pattern.nightDays} nights`}
+                            </Badge>
+                          )}
+                        </div>
+                        {pattern._count && (
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Used by {pattern._count.crews} crew(s)
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {/* Next step hint */}
+                <div className="flex justify-end pt-4">
+                  <Button variant="outline" onClick={() => setActiveTab("crews")} className="gap-2">
+                    Continue to Step 2: Crews
+                    <Users2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ============ CREWS TAB (Step 2) ============ */}
+        {activeTab === "crews" && (
+          <div className="space-y-4">
+            {/* Step guidance */}
+            <Alert className={patterns.length === 0 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-800"}>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {patterns.length === 0 ? (
+                  <>
+                    <strong>Prerequisite:</strong> You should create rotation patterns first before setting up crews.
+                    <Button variant="link" className="h-auto p-0 ml-1" onClick={() => setActiveTab("patterns")}>
+                      Go to Patterns
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <strong>Step 2:</strong> Create crews to organize your workers into teams. You can assign a rotation pattern to each crew.
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-semibold">Crews</h2>
+                <p className="text-sm text-muted-foreground">Organize workers into teams with assigned rotation patterns</p>
+              </div>
+              <Button onClick={() => openCrewModal()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Crew
+              </Button>
+            </div>
+
+            {crews.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-12">
+                  <Users2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-medium mb-2">No crews yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Create your first crew to organize workers into teams
+                  </p>
+                  <Button onClick={() => openCrewModal()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Crew
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {crews.map((crew) => (
+                    <Card key={crew.id} className="relative overflow-hidden">
+                      <div
+                        className="absolute top-0 left-0 w-full h-1"
+                        style={{ backgroundColor: crew.color }}
+                      />
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
+                              style={{ backgroundColor: crew.color }}
+                            >
+                              {crew.name.charAt(0)}
+                            </div>
+                            <div>
+                              <CardTitle className="text-lg">{crew.name}</CardTitle>
+                              <CardDescription>{crew.description || "No description"}</CardDescription>
+                            </div>
+                          </div>
+                          <div className="relative" ref={openCrewMenuId === crew.id ? crewMenuRef : null}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setOpenCrewMenuId(openCrewMenuId === crew.id ? null : crew.id)}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                            {openCrewMenuId === crew.id && (
+                              <div className="absolute right-0 top-full mt-1 w-36 bg-background border rounded-md shadow-lg z-10">
+                                <button
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                                  onClick={() => openCrewModal(crew)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Edit
+                                </button>
+                                <button
+                                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive"
+                                  onClick={() => handleDeleteCrew(crew.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Users className="h-4 w-4" />
+                            <span>Workers</span>
+                          </div>
+                          <Badge variant="secondary">{crew._count?.workers || 0}</Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Calendar className="h-4 w-4" />
+                            <span>Pattern</span>
+                          </div>
+                          {crew.rotationPattern ? (
+                            <Badge>{crew.rotationPattern.daysOn}/{crew.rotationPattern.daysOff}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Not set</span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Settings className="h-4 w-4" />
+                            <span>Phase</span>
+                          </div>
+                          <span className="font-mono">Day {crew.currentPhase + 1}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                {/* Next step hint */}
+                <div className="flex justify-end pt-4">
+                  <Button variant="outline" onClick={() => setActiveTab("workers")} className="gap-2">
+                    Continue to Step 3: Workers
+                    <Users className="h-4 w-4" />
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ============ WORKERS TAB (Step 3) ============ */}
         {activeTab === "workers" && (
           <div className="space-y-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -844,186 +1216,6 @@ export default function SetupPage() {
                 )}
               </CardContent>
             </Card>
-          </div>
-        )}
-
-        {/* ============ CREWS TAB ============ */}
-        {activeTab === "crews" && (
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button onClick={() => openCrewModal()}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Crew
-              </Button>
-            </div>
-
-            {crews.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-12">
-                  <Users2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">No crews yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create your first crew to organize workers into teams
-                  </p>
-                  <Button onClick={() => openCrewModal()}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Crew
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {crews.map((crew) => (
-                  <Card key={crew.id} className="relative overflow-hidden">
-                    <div
-                      className="absolute top-0 left-0 w-full h-1"
-                      style={{ backgroundColor: crew.color }}
-                    />
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                            style={{ backgroundColor: crew.color }}
-                          >
-                            {crew.name.charAt(0)}
-                          </div>
-                          <div>
-                            <CardTitle className="text-lg">{crew.name}</CardTitle>
-                            <CardDescription>{crew.description || "No description"}</CardDescription>
-                          </div>
-                        </div>
-                        <div className="relative" ref={openCrewMenuId === crew.id ? crewMenuRef : null}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setOpenCrewMenuId(openCrewMenuId === crew.id ? null : crew.id)}
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                          {openCrewMenuId === crew.id && (
-                            <div className="absolute right-0 top-full mt-1 w-36 bg-background border rounded-md shadow-lg z-10">
-                              <button
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
-                                onClick={() => openCrewModal(crew)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                Edit
-                              </button>
-                              <button
-                                className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive"
-                                onClick={() => handleDeleteCrew(crew.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Users className="h-4 w-4" />
-                          <span>Workers</span>
-                        </div>
-                        <Badge variant="secondary">{crew._count?.workers || 0}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Pattern</span>
-                        </div>
-                        {crew.rotationPattern ? (
-                          <Badge>{crew.rotationPattern.daysOn}/{crew.rotationPattern.daysOff}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">Not set</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Settings className="h-4 w-4" />
-                          <span>Phase</span>
-                        </div>
-                        <span className="font-mono">Day {crew.currentPhase + 1}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============ PATTERNS TAB ============ */}
-        {activeTab === "patterns" && (
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button onClick={() => openPatternModal()}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Pattern
-              </Button>
-            </div>
-
-            {patterns.length === 0 ? (
-              <Card>
-                <CardContent className="text-center py-12">
-                  <RefreshCw className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">No rotation patterns</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create rotation patterns to define work schedules (e.g., 14 on / 14 off)
-                  </p>
-                  <Button onClick={() => openPatternModal()}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Pattern
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {patterns.map((pattern) => (
-                  <Card key={pattern.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{pattern.name}</CardTitle>
-                          <CardDescription>{pattern.description || "No description"}</CardDescription>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openPatternModal(pattern)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => handleDeletePattern(pattern.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="bg-green-100 text-green-700">
-                          {pattern.daysOn} days on
-                        </Badge>
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          {pattern.daysOff} days off
-                        </Badge>
-                        {pattern.includesNights && (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">
-                            {pattern.alternatesShifts ? "Alternates shifts" : `${pattern.nightDays} nights`}
-                          </Badge>
-                        )}
-                      </div>
-                      {pattern._count && (
-                        <p className="text-xs text-muted-foreground mt-3">
-                          Used by {pattern._count.crews} crew(s)
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
