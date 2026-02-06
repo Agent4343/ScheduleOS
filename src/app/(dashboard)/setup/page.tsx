@@ -29,7 +29,6 @@ import {
   AlertCircle,
   Wand2,
   Plus,
-  X,
   Pencil,
   Trash2,
   MoreVertical,
