@@ -135,18 +135,42 @@ export async function POST(request: NextRequest) {
     const validatedData = createInvitationSchema.parse(body)
     const email = validatedData.email.toLowerCase()
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findFirst({
+    // Check if user already exists in this organization
+    const existingUserInOrg = await prisma.user.findFirst({
       where: {
         email,
         organizationId: session.user.organizationId,
       },
     })
 
-    if (existingUser) {
+    if (existingUserInOrg) {
       return NextResponse.json(
         { error: "A user with this email already exists in your organization" },
         { status: 400 }
+      )
+    }
+
+    // Check if user exists in a different organization
+    const existingUserElsewhere = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        organization: {
+          select: { name: true },
+        },
+      },
+    })
+
+    if (existingUserElsewhere) {
+      // User exists in another organization - suggest transfer request
+      return NextResponse.json(
+        {
+          error: "User already has an account",
+          code: "USER_EXISTS_ELSEWHERE",
+          message: `This email is already registered with another organization. You can send them a transfer request to invite them to join your organization instead.`,
+          userName: existingUserElsewhere.name,
+          userEmail: existingUserElsewhere.email,
+        },
+        { status: 409 }
       )
     }
 

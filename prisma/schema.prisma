@@ -84,6 +84,7 @@ model Organization {
   customRoles      CustomRole[]
   aiChatSessions   AIChatSession[]
   certificationTypes CertificationType[]
+  transferRequests TransferRequest[]
 }
 
 // Subscription tiers with worker limits
@@ -176,6 +177,8 @@ model User {
   createdInvitations Invitation[] @relation("InvitationCreator")
   aiChatSessions  AIChatSession[]
   certifications  UserCertification[]
+  receivedTransferRequests TransferRequest[] @relation("TransferRequestTarget")
+  createdTransferRequests  TransferRequest[] @relation("TransferRequestCreator")
 
   @@index([organizationId])
   @@index([departmentId])
@@ -576,6 +579,44 @@ model Invitation {
 
   @@unique([organizationId, email])
   @@index([organizationId])
+}
+
+// =====================
+// Organization Transfer Requests
+// =====================
+
+// Transfer request to bring existing users from other organizations
+model TransferRequest {
+  id        String                @id @default(cuid())
+  status    TransferRequestStatus @default(PENDING)
+  role      UserRole              @default(WORKER)  // Role they'll have in new org
+  message   String?               // Optional message from admin to user
+  expiresAt DateTime
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  // Target user (the user being invited to transfer)
+  targetUserId String
+  targetUser   User   @relation("TransferRequestTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  // Organization inviting the user
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Admin who created the request
+  createdById String
+  createdBy   User   @relation("TransferRequestCreator", fields: [createdById], references: [id])
+
+  @@unique([organizationId, targetUserId])
+  @@index([organizationId])
+  @@index([targetUserId])
+}
+
+enum TransferRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }
 
 // =====================

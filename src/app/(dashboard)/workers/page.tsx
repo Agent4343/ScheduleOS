@@ -110,6 +110,33 @@ interface PendingInvitation {
   }
 }
 
+interface PendingTransferRequest {
+  id: string
+  status: string
+  role: UserRole
+  message: string | null
+  expiresAt: string
+  createdAt: string
+  targetUser: {
+    id: string
+    email: string
+    name: string | null
+    organization: {
+      name: string
+    } | null
+  }
+  createdBy: {
+    id: string
+    name: string | null
+  }
+}
+
+interface ExistingUserInfo {
+  email: string
+  name: string | null
+  role: UserRole
+}
+
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
   ACTIVE: { variant: "default", label: "Active" },
   INACTIVE: { variant: "secondary", label: "Inactive" },
@@ -133,6 +160,9 @@ export default function WorkersPage() {
   const [selectedCertifications, setSelectedCertifications] = useState<Map<string, { expiresAt: string | null; earnedAt: string }>>(new Map())
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([])
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransferRequest[]>([])
+  const [existingUserInfo, setExistingUserInfo] = useState<ExistingUserInfo | null>(null)
+  const [showTransferDialog, setShowTransferDialog] = useState(false)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -171,13 +201,14 @@ export default function WorkersPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes, rolesRes, certsRes, subRes, invitesRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes, subRes, invitesRes, transfersRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
           fetch("/api/roles"),
           fetch("/api/certifications"),
           fetch("/api/subscription"),
           fetch("/api/invitations?status=pending"),
+          fetch("/api/transfer-requests?type=outgoing"),
         ])
 
         const usersData = await usersRes.json()
@@ -186,6 +217,7 @@ export default function WorkersPage() {
         const certsData = await certsRes.json()
         const subData = await subRes.json()
         const invitesData = await invitesRes.json()
+        const transfersData = await transfersRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
@@ -193,6 +225,7 @@ export default function WorkersPage() {
         if (certsData.success) setCertificationTypes(certsData.data)
         if (subData.success) setSubscription(subData.data)
         if (invitesData.success) setPendingInvitations(invitesData.data)
+        if (transfersData.success) setPendingTransfers(transfersData.data.filter((t: PendingTransferRequest) => t.status === "PENDING"))
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -323,6 +356,14 @@ export default function WorkersPage() {
           setInviteLink(data.inviteLink)
           addToast({ type: "warning", message: "Invitation created. Please share the link manually." })
         }
+      } else if (data.code === "USER_EXISTS_ELSEWHERE") {
+        // User exists in another organization - offer to send transfer request
+        setExistingUserInfo({
+          email: data.userEmail,
+          name: data.userName,
+          role: formData.role,
+        })
+        setShowTransferDialog(true)
       } else if (data.code === "WORKER_LIMIT_REACHED") {
         setIsModalOpen(false)
         addToast({
@@ -413,6 +454,71 @@ export default function WorkersPage() {
         }
       },
     })
+  }
+
+  async function handleSendTransferRequest() {
+    if (!existingUserInfo) return
+    setSubmitting(true)
+
+    try {
+      const response = await fetch("/api/transfer-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: existingUserInfo.email,
+          role: existingUserInfo.role,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setPendingTransfers((prev) => [data.data, ...prev])
+        setShowTransferDialog(false)
+        setIsModalOpen(false)
+        setExistingUserInfo(null)
+        setFormData({
+          name: "",
+          email: "",
+          role: "WORKER",
+          position: "",
+          phone: "",
+          crewId: "",
+          customRoleId: "",
+          hireDate: "",
+        })
+        addToast({
+          type: "success",
+          message: `Transfer request sent to ${existingUserInfo.email}`,
+        })
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to send transfer request" })
+      }
+    } catch (error) {
+      console.error("Failed to send transfer request:", error)
+      addToast({ type: "error", message: "Failed to send transfer request" })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleCancelTransferRequest(transferId: string) {
+    try {
+      const response = await fetch(`/api/transfer-requests/${transferId}`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setPendingTransfers((prev) => prev.filter((t) => t.id !== transferId))
+        addToast({ type: "success", message: "Transfer request cancelled" })
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to cancel transfer request" })
+      }
+    } catch (error) {
+      console.error("Failed to cancel transfer request:", error)
+      addToast({ type: "error", message: "Failed to cancel transfer request" })
+    }
   }
 
   async function handleUpdate(e: React.FormEvent) {
@@ -685,6 +791,64 @@ export default function WorkersPage() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Transfer Requests */}
+      {pendingTransfers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Pending Transfer Requests ({pendingTransfers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead className="hidden sm:table-cell">Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingTransfers.map((transfer) => (
+                  <TableRow key={transfer.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{transfer.targetUser.name || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground">{transfer.targetUser.email}</p>
+                        {transfer.targetUser.organization && (
+                          <p className="text-xs text-muted-foreground">
+                            Currently in: {transfer.targetUser.organization.name}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{ROLE_LABELS[transfer.role]}</TableCell>
+                    <TableCell>
+                      {new Date(transfer.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancelTransferRequest(transfer.id)}
+                        title="Cancel transfer request"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="text-xs text-muted-foreground mt-2">
+              These users have been invited to join your organization. They need to accept the request from their account.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1201,6 +1365,47 @@ export default function WorkersPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Transfer Request Dialog */}
+      <Modal
+        isOpen={showTransferDialog}
+        onClose={() => {
+          setShowTransferDialog(false)
+          setExistingUserInfo(null)
+        }}
+        title="User Already Has an Account"
+        description="This person already has an account with another organization"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+              <strong>{existingUserInfo?.name || existingUserInfo?.email}</strong> already has an account in the ShiftSync system.
+            </p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              You can send them a <strong>transfer request</strong> to invite them to join your organization.
+              They&apos;ll receive a notification and can choose to accept, which will move them to your team.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTransferDialog(false)
+                setExistingUserInfo(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendTransferRequest}
+              disabled={submitting}
+            >
+              {submitting ? "Sending..." : "Send Transfer Request"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <ConfirmDialog />

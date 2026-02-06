@@ -18,7 +18,12 @@ import {
   Bell,
   CheckCircle,
   Award,
+  UserPlus,
+  Building,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/toast"
+import { useRouter } from "next/navigation"
 
 interface DashboardStats {
   totalWorkers: number
@@ -52,6 +57,23 @@ interface RecentActivity {
   user: { name: string }
 }
 
+interface TransferRequest {
+  id: string
+  status: string
+  role: string
+  message: string | null
+  expiresAt: string
+  organization: {
+    id: string
+    name: string
+  }
+  createdBy: {
+    id: string
+    name: string | null
+    email: string
+  }
+}
+
 interface DashboardData {
   stats: DashboardStats
   staffingGapDetails: StaffingGapDetail[]
@@ -71,14 +93,27 @@ interface DashboardData {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [transferRequests, setTransferRequests] = useState<TransferRequest[]>([])
+  const [processingTransfer, setProcessingTransfer] = useState<string | null>(null)
+  const { addToast } = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     async function fetchDashboard() {
       try {
-        const response = await fetch("/api/dashboard")
-        const result = await response.json()
-        if (result.success) {
-          setData(result.data)
+        const [dashboardRes, transfersRes] = await Promise.all([
+          fetch("/api/dashboard"),
+          fetch("/api/transfer-requests?type=incoming"),
+        ])
+
+        const dashboardResult = await dashboardRes.json()
+        const transfersResult = await transfersRes.json()
+
+        if (dashboardResult.success) {
+          setData(dashboardResult.data)
+        }
+        if (transfersResult.success) {
+          setTransferRequests(transfersResult.data)
         }
       } catch (error) {
         console.error("Failed to fetch dashboard:", error)
@@ -89,6 +124,42 @@ export default function DashboardPage() {
 
     fetchDashboard()
   }, [])
+
+  async function handleTransferAction(transferId: string, action: "accept" | "decline") {
+    setProcessingTransfer(transferId)
+    try {
+      const response = await fetch(`/api/transfer-requests/${transferId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      })
+      const result = await response.json()
+
+      if (result.success) {
+        setTransferRequests((prev) => prev.filter((t) => t.id !== transferId))
+        if (action === "accept") {
+          addToast({
+            type: "success",
+            message: `You have joined ${result.data.organizationName}! Refreshing...`,
+          })
+          // Refresh the page to load the new organization context
+          setTimeout(() => {
+            router.refresh()
+            window.location.reload()
+          }, 1500)
+        } else {
+          addToast({ type: "success", message: "Transfer request declined" })
+        }
+      } else {
+        addToast({ type: "error", message: result.error || "Failed to process request" })
+      }
+    } catch (error) {
+      console.error("Failed to process transfer request:", error)
+      addToast({ type: "error", message: "Failed to process request" })
+    } finally {
+      setProcessingTransfer(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -125,6 +196,69 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Transfer Request Alerts */}
+      {transferRequests.length > 0 && (
+        <Card className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+              <UserPlus className="h-5 w-5" />
+              Organization Transfer Request
+              <Badge variant="secondary" className="ml-2">
+                {transferRequests.length}
+              </Badge>
+            </CardTitle>
+            <CardDescription className="text-blue-600 dark:text-blue-300">
+              You have been invited to join another organization
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {transferRequests.map((request) => (
+              <div
+                key={request.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-background border gap-4"
+              >
+                <div className="flex items-start gap-3">
+                  <Building className="h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium">{request.organization.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Invited by {request.createdBy.name || request.createdBy.email} as{" "}
+                      <span className="font-medium">{request.role}</span>
+                    </p>
+                    {request.message && (
+                      <p className="text-sm text-muted-foreground mt-1 italic">&ldquo;{request.message}&rdquo;</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Expires: {new Date(request.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2 sm:flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTransferAction(request.id, "decline")}
+                    disabled={processingTransfer === request.id}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleTransferAction(request.id, "accept")}
+                    disabled={processingTransfer === request.id}
+                  >
+                    {processingTransfer === request.id ? "Processing..." : "Accept & Join"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Accepting will transfer you to the new organization. Your current schedules and data will be removed.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold">Dashboard</h1>
