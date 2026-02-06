@@ -21,6 +21,7 @@ import {
   UserPlus,
   Building,
 } from "lucide-react"
+import { GettingStartedChecklist } from "@/components/onboarding/getting-started-checklist"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
@@ -264,6 +265,9 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Overview of your workforce scheduling</p>
       </div>
+
+      {/* Getting Started Checklist - shown for new users */}
+      <GettingStartedChecklist />
 
       {/* Staffing Alerts Section - Prominent display when there are issues */}
       {stats.staffingGaps > 0 && (

@@ -147,6 +147,10 @@ model User {
   isGasOperatorTrained Boolean @default(false) // Trained as Gas Operator
   includeInStaffingCount Boolean @default(true) // Include this worker in staffing counts/calculations
   singleTrainingCoverageOnly Boolean @default(false) // When true, can only count toward ONE training coverage per shift
+  // Onboarding state
+  hasSeenWelcome       Boolean  @default(false) // Has dismissed welcome modal
+  hasCompletedTour     Boolean  @default(false) // Has completed guided tour
+  onboardingProgress   Json     @default("{}") // Tracks completed onboarding steps
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

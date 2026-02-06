@@ -37,7 +37,11 @@ import {
   CreditCard,
   Zap,
   CheckCircle2,
+  HelpCircle,
+  Sparkles,
+  RotateCcw,
 } from "lucide-react"
+import { useOnboarding } from "@/contexts/onboarding-context"
 
 interface Organization {
   id: string
@@ -186,6 +190,100 @@ const TIMEZONES = [
   { value: "Asia/Singapore", label: "Singapore (SGT)" },
   { value: "Australia/Sydney", label: "Sydney (AEST)" },
 ]
+
+function HelpOnboardingCard() {
+  const { state, startTour, refreshOnboarding } = useOnboarding()
+  const [resetting, setResetting] = useState(false)
+
+  const handleRestartTour = () => {
+    startTour()
+  }
+
+  const handleResetOnboarding = async () => {
+    setResetting(true)
+    try {
+      await fetch("/api/onboarding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hasSeenWelcome: false,
+          hasCompletedTour: false,
+        }),
+      })
+      await refreshOnboarding()
+      window.location.reload()
+    } catch (error) {
+      console.error("Failed to reset onboarding:", error)
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <HelpCircle className="h-5 w-5" />
+          Help & Onboarding
+        </CardTitle>
+        <CardDescription>Get help with using ShiftSync</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-sm">Guided Tour</p>
+            <p className="text-xs text-muted-foreground">
+              Take a walkthrough of all the features
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRestartTour}
+          >
+            <Sparkles className="h-4 w-4 mr-1" />
+            Start Tour
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-sm">Reset Onboarding</p>
+            <p className="text-xs text-muted-foreground">
+              Show welcome message and tour again
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResetOnboarding}
+            disabled={resetting}
+          >
+            <RotateCcw className={`h-4 w-4 mr-1 ${resetting ? "animate-spin" : ""}`} />
+            Reset
+          </Button>
+        </div>
+
+        {state && !state.isOnboardingComplete && (
+          <div className="pt-3 border-t">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="text-muted-foreground">Setup Progress</span>
+              <span className="font-medium">
+                {state.completedSteps} of {state.totalSteps} complete
+              </span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${(state.completedSteps / state.totalSteps) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -1318,6 +1416,9 @@ export default function SettingsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Help & Onboarding */}
+        <HelpOnboardingCard />
 
         {/* Data Export */}
         <Card>
