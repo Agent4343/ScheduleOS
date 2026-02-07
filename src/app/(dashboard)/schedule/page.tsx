@@ -538,6 +538,30 @@ function SchedulePageContent() {
     return dailyStaffingCounts[dateStr]?.[field] || 0
   }
 
+  // Get minimum staffing requirement for a position type and shift
+  const getMinimumForPosition = useMemo(() => {
+    // Build a lookup map: positionType -> shiftType -> minWorkers
+    const minimums: Record<string, Record<"DAY" | "NIGHT", number>> = {
+      OPERATOR: { DAY: 0, NIGHT: 0 },
+      ONSHORE_CONTROL_ROOM: { DAY: 0, NIGHT: 0 },
+    }
+
+    for (const rule of staffingRules) {
+      if (!rule.isActive || !rule.positionType) continue
+      if (rule.positionType === "OPERATOR" || rule.positionType === "ONSHORE_CONTROL_ROOM") {
+        // Use the highest minimum if multiple rules exist for same position/shift
+        const current = minimums[rule.positionType][rule.shiftType]
+        if (rule.minWorkers > current) {
+          minimums[rule.positionType][rule.shiftType] = rule.minWorkers
+        }
+      }
+    }
+
+    return (positionType: "OPERATOR" | "ONSHORE_CONTROL_ROOM", shiftType: "DAY" | "NIGHT"): number => {
+      return minimums[positionType]?.[shiftType] || 0
+    }
+  }, [staffingRules])
+
   // Get workers on a specific day and shift
   const getWorkersOnShift = useMemo(() => {
     // Build a map of date -> shift -> workers (using Set to deduplicate)
@@ -1377,6 +1401,89 @@ function SchedulePageContent() {
                       })
                     )}
                   </tr>
+
+                  {/* Operators Count Row */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-amber-50 dark:bg-amber-950 z-20 font-semibold text-amber-700 dark:text-amber-300 text-xs">
+                      Operators (D/N)
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayCount = getDailyCount(month, day, "dayOps")
+                        const nightCount = getDailyCount(month, day, "nightOps")
+                        const dayMin = getMinimumForPosition("OPERATOR", "DAY")
+                        const nightMin = getMinimumForPosition("OPERATOR", "NIGHT")
+                        const dayBelowMin = dayMin > 0 && dayCount < dayMin
+                        const nightBelowMin = nightMin > 0 && nightCount < nightMin
+                        const hasCounts = dayCount > 0 || nightCount > 0
+
+                        return (
+                          <td
+                            key={`ops-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-inset transition-all",
+                              (dayBelowMin || nightBelowMin) ? "bg-red-100 dark:bg-red-900" : "bg-amber-50 dark:bg-amber-950"
+                            )}
+                            title={`Operators - Day: ${dayCount}${dayMin > 0 ? ` (min: ${dayMin})` : ""}, Night: ${nightCount}${nightMin > 0 ? ` (min: ${nightMin})` : ""}`}
+                            onClick={() => hasCounts && openBreakdownModal(dateStr, dayCount >= nightCount ? "DAY" : "NIGHT")}
+                          >
+                            {hasCounts && (
+                              <span className={cn(
+                                (dayBelowMin || nightBelowMin) && "text-red-600 dark:text-red-400 font-bold"
+                              )}>
+                                <span className={cn(dayBelowMin && "text-red-600 dark:text-red-400")}>{dayCount}</span>
+                                /
+                                <span className={cn(nightBelowMin && "text-red-600 dark:text-red-400")}>{nightCount}</span>
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  {/* Onshore Control Room Count Row */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-purple-50 dark:bg-purple-950 z-20 font-semibold text-purple-700 dark:text-purple-300 text-xs">
+                      Control Room (D/N)
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayCount = getDailyCount(month, day, "dayOCR")
+                        const nightCount = getDailyCount(month, day, "nightOCR")
+                        const dayMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "DAY")
+                        const nightMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "NIGHT")
+                        const dayBelowMin = dayMin > 0 && dayCount < dayMin
+                        const nightBelowMin = nightMin > 0 && nightCount < nightMin
+                        const hasCounts = dayCount > 0 || nightCount > 0
+
+                        return (
+                          <td
+                            key={`ocr-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-inset transition-all",
+                              (dayBelowMin || nightBelowMin) ? "bg-red-100 dark:bg-red-900" : "bg-purple-50 dark:bg-purple-950"
+                            )}
+                            title={`Control Room - Day: ${dayCount}${dayMin > 0 ? ` (min: ${dayMin})` : ""}, Night: ${nightCount}${nightMin > 0 ? ` (min: ${nightMin})` : ""}`}
+                            onClick={() => hasCounts && openBreakdownModal(dateStr, dayCount >= nightCount ? "DAY" : "NIGHT")}
+                          >
+                            {hasCounts && (
+                              <span className={cn(
+                                (dayBelowMin || nightBelowMin) && "text-red-600 dark:text-red-400 font-bold"
+                              )}>
+                                <span className={cn(dayBelowMin && "text-red-600 dark:text-red-400")}>{dayCount}</span>
+                                /
+                                <span className={cn(nightBelowMin && "text-red-600 dark:text-red-400")}>{nightCount}</span>
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
                   <tr className="bg-muted/50 border-t-2 border-primary/30">
                     <td className="border p-2 sticky left-0 bg-muted z-20 font-bold text-xs">
                       Total On Duty
