@@ -713,6 +713,62 @@ function SchedulePageContent() {
     })
   }, [staffingAlerts, currentYear])
 
+  // Calculate upcoming staffing shortages for operators and control room (next 7 days)
+  const upcomingStaffingShortages = useMemo(() => {
+    const now = new Date()
+
+    // Get minimums from staffing rules
+    const opDayMin = getMinimumForPosition("OPERATOR", "DAY")
+    const opNightMin = getMinimumForPosition("OPERATOR", "NIGHT")
+    const ocrDayMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "DAY")
+    const ocrNightMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "NIGHT")
+
+    const operatorShortages: { date: string; shift: "DAY" | "NIGHT"; have: number; need: number }[] = []
+    const controlRoomShortages: { date: string; shift: "DAY" | "NIGHT"; have: number; need: number }[] = []
+
+    // Check each day in the next 7 days
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(now)
+      checkDate.setDate(checkDate.getDate() + i)
+      const dateStr = formatDate(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate())
+
+      // Skip dates outside current year view
+      if (!dateStr.startsWith(String(currentYear))) continue
+
+      const counts = dailyStaffingCounts[dateStr]
+      const dayOps = counts?.dayOps || 0
+      const nightOps = counts?.nightOps || 0
+      const dayOCR = counts?.dayOCR || 0
+      const nightOCR = counts?.nightOCR || 0
+
+      // Check operators
+      if (opDayMin > 0 && dayOps < opDayMin) {
+        operatorShortages.push({ date: dateStr, shift: "DAY", have: dayOps, need: opDayMin })
+      }
+      if (opNightMin > 0 && nightOps < opNightMin) {
+        operatorShortages.push({ date: dateStr, shift: "NIGHT", have: nightOps, need: opNightMin })
+      }
+
+      // Check control room
+      if (ocrDayMin > 0 && dayOCR < ocrDayMin) {
+        controlRoomShortages.push({ date: dateStr, shift: "DAY", have: dayOCR, need: ocrDayMin })
+      }
+      if (ocrNightMin > 0 && nightOCR < ocrNightMin) {
+        controlRoomShortages.push({ date: dateStr, shift: "NIGHT", have: nightOCR, need: ocrNightMin })
+      }
+    }
+
+    return {
+      operatorShortages,
+      controlRoomShortages,
+      hasShortages: operatorShortages.length > 0 || controlRoomShortages.length > 0,
+      totalDaysWithIssues: new Set([
+        ...operatorShortages.map(s => s.date),
+        ...controlRoomShortages.map(s => s.date)
+      ]).size
+    }
+  }, [dailyStaffingCounts, getMinimumForPosition, currentYear])
+
   // Open breakdown modal
   function openBreakdownModal(dateStr: string, shift: "DAY" | "NIGHT") {
     setBreakdownDate(dateStr)
@@ -1157,6 +1213,68 @@ function SchedulePageContent() {
           className="w-40"
         />
       </div>
+
+      {/* Prominent Staffing Shortage Alert - shown when operators or control room are below minimum */}
+      {upcomingStaffingShortages.hasShortages && (
+        <Alert variant="destructive" className="border-2">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertDescription className="ml-2">
+            <div className="flex flex-col gap-2">
+              <div className="font-semibold text-base">
+                Staffing Shortage Alert - {upcomingStaffingShortages.totalDaysWithIssues} day{upcomingStaffingShortages.totalDaysWithIssues !== 1 ? 's' : ''} affected in the next 7 days
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                {upcomingStaffingShortages.operatorShortages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded">
+                      Operators
+                    </span>
+                    <span>
+                      {upcomingStaffingShortages.operatorShortages.length} shift{upcomingStaffingShortages.operatorShortages.length !== 1 ? 's' : ''} below minimum
+                      {upcomingStaffingShortages.operatorShortages.slice(0, 3).map((s, i) => {
+                        const d = new Date(s.date + 'T12:00:00')
+                        const isToday = s.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                        const label = isToday ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        return (
+                          <span key={i} className="ml-1">
+                            ({label} {s.shift}: {s.have}/{s.need})
+                          </span>
+                        )
+                      })}
+                      {upcomingStaffingShortages.operatorShortages.length > 3 && (
+                        <span className="ml-1 text-muted-foreground">+{upcomingStaffingShortages.operatorShortages.length - 3} more</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {upcomingStaffingShortages.controlRoomShortages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900 px-2 py-0.5 rounded">
+                      Control Room
+                    </span>
+                    <span>
+                      {upcomingStaffingShortages.controlRoomShortages.length} shift{upcomingStaffingShortages.controlRoomShortages.length !== 1 ? 's' : ''} below minimum
+                      {upcomingStaffingShortages.controlRoomShortages.slice(0, 3).map((s, i) => {
+                        const d = new Date(s.date + 'T12:00:00')
+                        const isToday = s.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                        const label = isToday ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        return (
+                          <span key={i} className="ml-1">
+                            ({label} {s.shift}: {s.have}/{s.need})
+                          </span>
+                        )
+                      })}
+                      {upcomingStaffingShortages.controlRoomShortages.length > 3 && (
+                        <span className="ml-1 text-muted-foreground">+{upcomingStaffingShortages.controlRoomShortages.length - 3} more</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Legend - hidden in focus mode */}
       {!focusMode && (
