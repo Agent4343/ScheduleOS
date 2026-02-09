@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { createInvitationSchema } from "@/lib/validations"
 import { sendEmail, invitationEmail } from "@/lib/email"
 import { generateToken } from "@/lib/utils"
-import { SUBSCRIPTION_TIERS, isTrialExpired, hasUnlimitedAccess } from "@/lib/subscription"
+import { SUBSCRIPTION_TIERS, isTrialExpired, isFirstAdmin } from "@/lib/subscription"
 
 // Invitation expires after 7 days
 const INVITATION_EXPIRY_DAYS = 7
@@ -101,8 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Organization not found" }, { status: 404 })
     }
 
-    // Check if user has unlimited access (specific account bypass)
-    if (!hasUnlimitedAccess(session.user.email)) {
+    // Check if user is the first admin (organization creator) - they have unlimited access
+    const userIsFirstAdmin = await isFirstAdmin(session.user.id, session.user.organizationId)
+    if (!userIsFirstAdmin) {
       // Check if trial has expired
       const tier = organization.subscriptionTier as keyof typeof SUBSCRIPTION_TIERS
       if (tier === "TRIAL" && isTrialExpired(organization.trialEndsAt)) {

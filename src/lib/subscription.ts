@@ -120,9 +120,27 @@ export function getDaysRemaining(endDate: Date | null): number {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
 }
 
-// Specific account with unlimited access (bypasses all subscription limits)
-const UNLIMITED_ACCESS_EMAIL = "mathesonashley@hotmail.com"
+// Check if a user is the first admin (organization creator) of their organization
+// The first admin has unlimited access to bypass subscription limits
+export async function isFirstAdmin(
+  userId: string,
+  organizationId: string
+): Promise<boolean> {
+  // Dynamic import to avoid circular dependencies
+  const { prisma } = await import("@/lib/prisma")
 
-export function hasUnlimitedAccess(email: string | null | undefined): boolean {
-  return email?.toLowerCase() === UNLIMITED_ACCESS_EMAIL
+  const firstAdmin = await prisma.user.findFirst({
+    where: {
+      organizationId,
+      role: "ADMIN",
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  return firstAdmin?.id === userId
 }
