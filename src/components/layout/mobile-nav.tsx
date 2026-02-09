@@ -17,6 +17,7 @@ import {
   Bot,
   X,
   Sparkles,
+  GraduationCap,
 } from "lucide-react"
 import { useOnboarding } from "@/contexts/onboarding-context"
 
@@ -40,6 +41,7 @@ const advancedNavigation: NavItem[] = [
   { name: "Time Off", href: "/time-off", icon: CalendarOff, requiredProgress: "basic" },
   { name: "Reports", href: "/reports", icon: BarChart3, requiredProgress: "advanced" },
   { name: "AI Assistant", href: "/assistant", icon: Bot, requiredProgress: "advanced" },
+  { name: "Training", href: "/training", icon: GraduationCap },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 

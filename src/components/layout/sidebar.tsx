@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  GraduationCap,
 } from "lucide-react"
 import { useOnboarding } from "@/contexts/onboarding-context"
 import { useState } from "react"
@@ -42,6 +43,7 @@ const advancedNavigation: NavItem[] = [
   { name: "Time Off", href: "/time-off", icon: CalendarOff, tourId: "time-off", requiredProgress: "basic" },
   { name: "Reports", href: "/reports", icon: BarChart3, tourId: "reports", requiredProgress: "advanced" },
   { name: "AI Assistant", href: "/assistant", icon: Bot, tourId: "assistant", requiredProgress: "advanced" },
+  { name: "Training", href: "/training", icon: GraduationCap, tourId: "training" },
   { name: "Settings", href: "/settings", icon: Settings, tourId: "settings" },
 ]
 
