@@ -20,7 +20,7 @@ export function Footer() {
           {/* Product */}
           <div className="space-y-4">
             <h3 className="font-semibold">Product</h3>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3 text-sm">
               <li>
                 <Link href="/login" className="text-muted-foreground hover:text-foreground transition-colors">
                   Sign In
@@ -47,7 +47,7 @@ export function Footer() {
           {/* Company */}
           <div className="space-y-4">
             <h3 className="font-semibold">Company</h3>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3 text-sm">
               <li>
                 <Link href="/contact" className="text-muted-foreground hover:text-foreground transition-colors">
                   Contact
@@ -59,7 +59,7 @@ export function Footer() {
           {/* Legal */}
           <div className="space-y-4">
             <h3 className="font-semibold">Legal</h3>
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3 text-sm">
               <li>
                 <Link href="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">
                   Privacy Policy

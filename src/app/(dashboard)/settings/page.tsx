@@ -1104,7 +1104,7 @@ export default function SettingsPage() {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="patternName">Pattern Name</Label>
                     <Input
@@ -1145,7 +1145,7 @@ export default function SettingsPage() {
                       onChange={(e) => setNewPattern({ ...newPattern, daysOff: parseInt(e.target.value) || 1 })}
                     />
                   </div>
-                  <div className="md:col-span-2 space-y-3">
+                  <div className="sm:col-span-2 space-y-3">
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
@@ -1173,7 +1173,7 @@ export default function SettingsPage() {
                           <Label htmlFor="alternatesShifts">Alternates Between Day/Night Rotations</Label>
                         </div>
                         {!newPattern.alternatesShifts && (
-                          <div className="grid gap-4 md:grid-cols-2">
+                          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                             <div className="space-y-2">
                               <Label htmlFor="nightDays">Number of Night Days</Label>
                               <Input
@@ -1334,7 +1334,7 @@ export default function SettingsPage() {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="shift-type-code">Code</Label>
                     <Input
@@ -1394,7 +1394,7 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
-                  <div className="md:col-span-2">
+                  <div className="sm:col-span-2">
                     <Label>Preview</Label>
                     <div className="mt-2">
                       <span
@@ -1417,17 +1417,17 @@ export default function SettingsPage() {
 
             <div className="space-y-2">
               {customShiftTypes.map((st) => (
-                <div key={st.id} className="flex items-center justify-between p-3 rounded border">
-                  <div className="flex items-center gap-3">
+                <div key={st.id} className="flex items-center justify-between p-3 rounded border gap-2 min-h-[44px]">
+                  <div className="flex items-center gap-3 min-w-0">
                     <span
-                      className="px-2 py-1 rounded text-xs font-bold"
+                      className="px-2 py-1 rounded text-xs font-bold shrink-0"
                       style={{ backgroundColor: st.color, color: st.textColor }}
                     >
                       {st.code}
                     </span>
-                    <div>
-                      <p className="font-medium">{st.name}</p>
-                      {st.description && <p className="text-sm text-muted-foreground">{st.description}</p>}
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{st.name}</p>
+                      {st.description && <p className="text-sm text-muted-foreground truncate">{st.description}</p>}
                     </div>
                   </div>
                   {isAdmin && (

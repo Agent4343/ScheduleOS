@@ -629,7 +629,7 @@ function SchedulePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())} className="min-h-[44px] sm:min-h-0">
+          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())} className="min-h-[44px]">
             This Year
           </Button>
           <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)} aria-label="Previous year" className="min-h-[44px] min-w-[44px]">

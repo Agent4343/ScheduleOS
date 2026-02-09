@@ -264,7 +264,7 @@ export default function TimeOffPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-green-600 hover:text-green-700 min-h-[44px] sm:min-h-0"
+                              className="text-green-600 hover:text-green-700 min-h-[44px]"
                               onClick={() => handleUpdateStatus(request.id, "APPROVED")}
                               aria-label={`Approve request from ${request.user.name || request.user.email}`}
                             >
@@ -274,7 +274,7 @@ export default function TimeOffPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-red-600 hover:text-red-700 min-h-[44px] sm:min-h-0"
+                              className="text-red-600 hover:text-red-700 min-h-[44px]"
                               onClick={() => handleUpdateStatus(request.id, "DENIED")}
                               aria-label={`Deny request from ${request.user.name || request.user.email}`}
                             >
