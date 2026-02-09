@@ -4,7 +4,7 @@ AI-Powered Workforce Scheduling Platform
 
 ## Overview
 
-ShiftSync is a comprehensive workforce scheduling platform designed for industries with complex rotating shift patterns, including offshore oil and gas, manufacturing, healthcare, and construction.
+ShiftSync is a comprehensive workforce scheduling platform designed for industries with complex rotating shift patterns, including manufacturing, healthcare, security, and logistics.
 
 ## Features
 

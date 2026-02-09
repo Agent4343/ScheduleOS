@@ -20,12 +20,11 @@ export const registerSchema = z.object({
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   organizationName: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
-    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters")
-    .optional(),
+    .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
 })
 
 // Organization validations
@@ -51,21 +50,55 @@ export const createUserSchema = z.object({
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
-    .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
   status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
   position: z.string()
     .max(100, "Position must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
-    .optional(),
+    .nullish(),
   positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
-  phone: z.string().optional(),
-  crewId: z.string().optional(),
-  hireDate: z.coerce.date().optional(),
+  phone: z.string().nullish(),
+  crewId: z.string().nullish(),
+  departmentId: z.string().nullish(),
+  customRoleId: z.string().nullish(),
+  hireDate: z.coerce.date().nullish(),
   password: z.string().min(8).optional(),
+  isControlRoomTrained: z.boolean().default(false),
+  isOilOperatorTrained: z.boolean().default(false),
+  isUtilityOperatorTrained: z.boolean().default(false),
+  isGasOperatorTrained: z.boolean().default(false),
+  includeInStaffingCount: z.boolean().default(true),
+  singleTrainingCoverageOnly: z.boolean().default(false),
 })
 
-export const updateUserSchema = createUserSchema.partial()
+// For updates, all fields are optional including email and name
+export const updateUserSchema = z.object({
+  email: z.string().email("Invalid email address").nullish(),
+  name: z.string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters")
+    .nullish(),
+  role: z.nativeEnum(UserRole).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
+  position: z.string()
+    .max(100, "Position must be at most 100 characters")
+    .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
+    .nullish(),
+  positionType: z.nativeEnum(PositionType).optional(),
+  phone: z.string().nullish(),
+  crewId: z.string().nullish(),
+  departmentId: z.string().nullish(),
+  customRoleId: z.string().nullish(),
+  hireDate: z.coerce.date().nullish(),
+  isControlRoomTrained: z.boolean().optional(),
+  isOilOperatorTrained: z.boolean().optional(),
+  isUtilityOperatorTrained: z.boolean().optional(),
+  isGasOperatorTrained: z.boolean().optional(),
+  includeInStaffingCount: z.boolean().optional(),
+  singleTrainingCoverageOnly: z.boolean().optional(),
+})
 
 // Crew validations
 export const createCrewSchema = z.object({
@@ -78,6 +111,7 @@ export const createCrewSchema = z.object({
     .optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format"),
   rotationPatternId: z.string().optional(),
+  departmentId: z.string().nullish(),
 })
 
 export const updateCrewSchema = createCrewSchema.partial()
@@ -181,8 +215,25 @@ export const createHolidaySchema = z.object({
 // Invitation validations
 export const createInvitationSchema = z.object({
   email: z.string().email("Invalid email address"),
+  name: z.string()
+    .min(2, "Name must be at least 2 characters")
+    .max(100, "Name must be at most 100 characters")
+    .regex(/^[a-zA-Z\s\-'.*]+$/, "Name contains invalid characters"),
   role: z.nativeEnum(UserRole).default(UserRole.WORKER),
 })
+
+export const acceptInvitationSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  password: z
+    .string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/])/,
+      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    ),
+})
+
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>
 
 // Excel import validations
 export const importUsersSchema = z.array(z.object({

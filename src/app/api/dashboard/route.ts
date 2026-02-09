@@ -2,14 +2,9 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { ShiftType, PositionType } from "@/types"
+import { ShiftType } from "@/types"
 import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
 
-interface OrgSettings {
-  minStaffOperators?: number
-  minStaffOnshoreControlRoom?: number
-  minStaffingAlertEnabled?: boolean
-}
 
 export async function GET() {
   try {
@@ -60,7 +55,8 @@ export async function GET() {
       upcomingShutdowns,
       weekSchedules,
       staffingRules,
-      organization,
+      _organization,
+      requiredCertifications,
     ] = await Promise.all([
       // Total active workers
       prisma.user.count({
@@ -105,7 +101,17 @@ export async function GET() {
           shiftType: { in: [ShiftType.DAY, ShiftType.NIGHT] },
         },
         include: {
-          user: { select: { id: true, name: true, positionType: true } },
+          user: {
+            select: {
+              id: true,
+              name: true,
+              positionType: true,
+              includeInStaffingCount: true,
+              certifications: {
+                select: { certificationTypeId: true },
+              },
+            },
+          },
         },
       }),
 
@@ -119,16 +125,26 @@ export async function GET() {
         where: { id: organizationId },
         select: { settings: true },
       }),
+
+      // Certification types with schedule requirements
+      prisma.certificationType.findMany({
+        where: {
+          organizationId,
+          isActive: true,
+          requireOnSchedule: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          minPerDayShift: true,
+          minPerNightShift: true,
+        },
+      }),
     ])
 
-    // Calculate staffing gaps for the week
+    // Calculate staffing gaps for the week based on staffing rules
     let staffingGaps = 0
-    const gapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string }> = []
-
-    // Get organization settings for position-based minimums
-    const orgSettings = (organization?.settings || {}) as OrgSettings
-    const minOperators = orgSettings.minStaffOperators ?? 1
-    const minOnshoreControlRoom = orgSettings.minStaffOnshoreControlRoom ?? 1
+    const gapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string; certificationName?: string }> = []
 
     // Group schedules by date
     const schedulesByDate = new Map<string, typeof weekSchedules>()
@@ -140,17 +156,20 @@ export async function GET() {
       schedulesByDate.get(dateKey)!.push(schedule)
     }
 
-    // Check each day against staffing rules and position-based minimums
+    // Check each day against staffing rules
     for (let i = 0; i < 7; i++) {
       const checkDate = addDaysUTC(weekStart, i)
       const dateKey = checkDate.toISOString().split("T")[0]
       const daySchedules = schedulesByDate.get(dateKey) || []
 
-      // Check traditional staffing rules
+      // Check staffing rules
       for (const rule of staffingRules) {
-        // Filter by position type if the rule specifies one
-        let filteredSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === rule.shiftType)
+        // Filter by shift type and only include workers who should be counted
+        let filteredSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === rule.shiftType && s.user.includeInStaffingCount !== false
+        )
 
+        // Filter by position type if the rule specifies one
         if (rule.positionType) {
           filteredSchedules = filteredSchedules.filter(
             (s: { user: { positionType: string } }) => s.user.positionType === rule.positionType
@@ -169,55 +188,42 @@ export async function GET() {
         }
       }
 
-      // Check position-based minimums from organization settings
-      const workShifts = [ShiftType.DAY, ShiftType.NIGHT]
-      for (const shiftType of workShifts) {
-        const shiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === shiftType)
-
-        // Count operators
-        const operatorCount = shiftSchedules.filter(
-          (s: { user: { positionType: string } }) => s.user.positionType === PositionType.OPERATOR
-        ).length
-
-        if (operatorCount < minOperators) {
-          // Avoid duplicating gap if a rule already caught this
-          const existingGap = gapDetails.find(
-            g => g.date.getTime() === checkDate.getTime() &&
-                 g.shiftType === shiftType &&
-                 g.positionType === PositionType.OPERATOR
-          )
-          if (!existingGap) {
-            staffingGaps++
-            gapDetails.push({
-              date: checkDate,
-              shiftType: shiftType,
-              shortage: minOperators - operatorCount,
-              positionType: PositionType.OPERATOR,
-            })
-          }
+      // Check certification-based staffing requirements (only count workers with includeInStaffingCount)
+      for (const cert of requiredCertifications) {
+        // Check day shift - filter to only include workers who should be counted
+        const dayShiftSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === ShiftType.DAY && s.user.includeInStaffingCount !== false
+        )
+        const dayShiftWithCert = dayShiftSchedules.filter(
+          (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
+            s.user.certifications.some(c => c.certificationTypeId === cert.id)
+        )
+        if (dayShiftWithCert.length < cert.minPerDayShift) {
+          staffingGaps++
+          gapDetails.push({
+            date: checkDate,
+            shiftType: ShiftType.DAY,
+            shortage: cert.minPerDayShift - dayShiftWithCert.length,
+            certificationName: cert.name,
+          })
         }
 
-        // Count onshore control room staff
-        const onshoreCount = shiftSchedules.filter(
-          (s: { user: { positionType: string } }) => s.user.positionType === PositionType.ONSHORE_CONTROL_ROOM
-        ).length
-
-        if (onshoreCount < minOnshoreControlRoom) {
-          // Avoid duplicating gap if a rule already caught this
-          const existingGap = gapDetails.find(
-            g => g.date.getTime() === checkDate.getTime() &&
-                 g.shiftType === shiftType &&
-                 g.positionType === PositionType.ONSHORE_CONTROL_ROOM
-          )
-          if (!existingGap) {
-            staffingGaps++
-            gapDetails.push({
-              date: checkDate,
-              shiftType: shiftType,
-              shortage: minOnshoreControlRoom - onshoreCount,
-              positionType: PositionType.ONSHORE_CONTROL_ROOM,
-            })
-          }
+        // Check night shift - filter to only include workers who should be counted
+        const nightShiftSchedules = daySchedules.filter((s: { shiftType: string; user: { includeInStaffingCount: boolean } }) =>
+          s.shiftType === ShiftType.NIGHT && s.user.includeInStaffingCount !== false
+        )
+        const nightShiftWithCert = nightShiftSchedules.filter(
+          (s: { user: { certifications: Array<{ certificationTypeId: string }> } }) =>
+            s.user.certifications.some(c => c.certificationTypeId === cert.id)
+        )
+        if (nightShiftWithCert.length < cert.minPerNightShift) {
+          staffingGaps++
+          gapDetails.push({
+            date: checkDate,
+            shiftType: ShiftType.NIGHT,
+            shortage: cert.minPerNightShift - nightShiftWithCert.length,
+            certificationName: cert.name,
+          })
         }
       }
     }

@@ -11,17 +11,17 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    default: "ShiftSync | Shift Work Scheduling & Rotation Management Software",
     template: "%s | ShiftSync",
   },
   description:
-    "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing. Free 14-day trial.",
+    "AI-powered workforce scheduling built for shift work operations. Manage crew rotations, track certifications, and optimize staffing. Free 7-day trial.",
   keywords: [
-    "offshore scheduling",
+    "shift scheduling",
     "crew rotation software",
     "workforce management",
-    "shift scheduling",
-    "offshore oil and gas",
+    "rotating schedule",
+    "shift work",
     "rotation pattern",
     "14/14 schedule",
     "21/21 rotation",
@@ -35,9 +35,9 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "ShiftSync",
-    title: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    title: "ShiftSync | Shift Work Scheduling & Rotation Management Software",
     description:
-      "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing.",
+      "AI-powered workforce scheduling built for shift work operations. Manage crew rotations, track certifications, and optimize staffing.",
     images: [
       {
         url: "/og-image.png",
@@ -49,9 +49,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ShiftSync | Offshore Crew Scheduling Software",
+    title: "ShiftSync | Shift Work Scheduling Software",
     description:
-      "AI-powered workforce scheduling built for offshore oil & gas operations. Free 14-day trial.",
+      "AI-powered workforce scheduling built for shift work operations. Free 7-day trial.",
     images: ["/og-image.png"],
   },
   robots: {
@@ -86,7 +86,7 @@ export default function RootLayout({
               applicationCategory: "BusinessApplication",
               operatingSystem: "Web",
               description:
-                "AI-powered workforce scheduling software for offshore oil & gas operations",
+                "AI-powered workforce scheduling software for shift work operations",
               offers: {
                 "@type": "Offer",
                 price: "49",
