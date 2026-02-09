@@ -30,6 +30,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if there's a pending invitation for this email
+    const pendingInvitation = await prisma.invitation.findFirst({
+      where: {
+        email: validatedData.email.toLowerCase(),
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        organization: {
+          select: { name: true },
+        },
+      },
+    })
+
+    if (pendingInvitation) {
+      return NextResponse.json(
+        {
+          error: "You have a pending invitation",
+          code: "PENDING_INVITATION",
+          organizationName: pendingInvitation.organization.name,
+          message: `You have been invited to join "${pendingInvitation.organization.name}". Please check your email for the invitation link, or contact your administrator to resend it.`,
+        },
+        { status: 409 }
+      )
+    }
+
     // Hash password
     const passwordHash = await hashPassword(validatedData.password)
 
@@ -191,8 +216,19 @@ export async function POST(request: NextRequest) {
     console.error("Registration error:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      // Extract specific validation errors
+      const zodError = error as { errors?: Array<{ path: string[]; message: string }> }
+      const validationErrors = zodError.errors?.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      })) || []
+
       return NextResponse.json(
-        { error: "Invalid input data" },
+        {
+          error: "Invalid input data",
+          details: validationErrors,
+          hint: "Password must be at least 12 characters with uppercase, lowercase, number, and special character"
+        },
         { status: 400 }
       )
     }

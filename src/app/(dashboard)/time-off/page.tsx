@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
+import { useToast } from "@/components/ui/toast"
 import {
   Table,
   TableBody,
@@ -61,6 +62,7 @@ const TYPE_LABELS: Record<TimeOffType, string> = {
 }
 
 export default function TimeOffPage() {
+  const { addToast } = useToast()
   const { data: session } = useSession()
   const [requests, setRequests] = useState<TimeOffRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,12 +123,13 @@ export default function TimeOffPage() {
           type: "VACATION",
           reason: "",
         })
+        addToast({ type: "success", message: "Time off request submitted" })
       } else {
-        alert(data.error || "Failed to submit request")
+        addToast({ type: "error", message: data.error || "Failed to submit request" })
       }
     } catch (error) {
       console.error("Failed to submit request:", error)
-      alert("Failed to submit request")
+      addToast({ type: "error", message: "Failed to submit request" })
     } finally {
       setSubmitting(false)
     }
@@ -146,12 +149,13 @@ export default function TimeOffPage() {
         setRequests((prev) =>
           prev.map((r) => (r.id === requestId ? { ...r, status } : r))
         )
+        addToast({ type: "success", message: `Request ${status.toLowerCase()}` })
       } else {
-        alert(data.error || "Failed to update request")
+        addToast({ type: "error", message: data.error || "Failed to update request" })
       }
     } catch (error) {
       console.error("Failed to update request:", error)
-      alert("Failed to update request")
+      addToast({ type: "error", message: "Failed to update request" })
     }
   }
 

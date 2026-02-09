@@ -20,8 +20,14 @@ import {
   CalendarPlus,
   RotateCcw,
   MoveHorizontal,
+  Download,
+  Maximize2,
+  Minimize2,
+  AlertTriangle,
+  FastForward,
 } from "lucide-react"
-import { ShiftType, UserRole } from "@/types"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ShiftType, UserRole, PositionType } from "@/types"
 
 interface Schedule {
   id: string
@@ -51,10 +57,22 @@ interface Worker {
   name: string | null
   email?: string
   position: string | null
+  positionType?: PositionType
   phone?: string | null
   role?: UserRole
+  customRoleId?: string | null
+  customRole?: {
+    id: string
+    name: string
+    color: string
+  } | null
   hireDate?: string | null
   sortOrder?: number
+  isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
+  includeInStaffingCount?: boolean
   crew: {
     id: string
     name: string
@@ -68,7 +86,12 @@ interface WorkerEditForm {
   phone: string
   crewId: string
   role: UserRole
+  customRoleId: string
   hireDate: string
+  isControlRoomTrained: boolean
+  isOilOperatorTrained: boolean
+  isUtilityOperatorTrained: boolean
+  isGasOperatorTrained: boolean
 }
 
 interface RotationPattern {
@@ -89,6 +112,40 @@ interface CustomShiftType {
   textColor: string
   description: string | null
   isActive: boolean
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+}
+
+interface StaffingRule {
+  id: string
+  name: string
+  description: string | null
+  shiftType: "DAY" | "NIGHT"
+  minWorkers: number
+  maxVacation: number | null
+  role: string | null
+  positionType: string | null
+  crewId: string | null
+  priority: number
+  isActive: boolean
+  crew: { id: string; name: string; color: string } | null
+}
+
+interface StaffingAlert {
+  date: string
+  shiftType: "DAY" | "NIGHT"
+  ruleName: string
+  required: number
+  actual: number
+  shortage: number
+  positionType?: string
+  trainingType?: "controlRoom" | "oil" | "gas" | "utility"
 }
 
 // Built-in shift colors for the Excel-like cells
@@ -142,6 +199,7 @@ function SchedulePageContent() {
   const [loading, setLoading] = useState(true)
   const [rotationPatterns, setRotationPatterns] = useState<RotationPattern[]>([])
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -152,7 +210,12 @@ function SchedulePageContent() {
     phone: "",
     crewId: "",
     role: "WORKER" as UserRole,
+    customRoleId: "",
     hireDate: "",
+    isControlRoomTrained: false,
+    isOilOperatorTrained: false,
+    isUtilityOperatorTrained: false,
+    isGasOperatorTrained: false,
   })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -175,6 +238,24 @@ function SchedulePageContent() {
   const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
   const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
   const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
+
+  // Focus mode - hides legend and summary for bigger schedule view
+  const [focusMode, setFocusMode] = useState(false)
+
+  // Staffing rules for alerts
+  const [staffingRules, setStaffingRules] = useState<StaffingRule[]>([])
+
+  // Worker breakdown modal state
+  const [breakdownModalOpen, setBreakdownModalOpen] = useState(false)
+  const [breakdownDate, setBreakdownDate] = useState<string>("")
+  const [breakdownShift, setBreakdownShift] = useState<"DAY" | "NIGHT">("DAY")
+
+  // Continue schedule modal state
+  const [continueModalOpen, setContinueModalOpen] = useState(false)
+  const [continuing, setContinuing] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
+  const [continueSuccess, setContinueSuccess] = useState<string | null>(null)
+  const [continueClearOverrides, setContinueClearOverrides] = useState(false)
 
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
@@ -242,6 +323,38 @@ function SchedulePageContent() {
     fetchCustomShiftTypes()
   }, [])
 
+  // Fetch custom roles
+  useEffect(() => {
+    async function fetchCustomRoles() {
+      try {
+        const response = await fetch("/api/roles")
+        const result = await response.json()
+        if (result.success) {
+          setCustomRoles(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch custom roles:", error)
+      }
+    }
+    fetchCustomRoles()
+  }, [])
+
+  // Fetch staffing rules
+  useEffect(() => {
+    async function fetchStaffingRules() {
+      try {
+        const response = await fetch("/api/staffing-rules?isActive=true")
+        const result = await response.json()
+        if (result.success) {
+          setStaffingRules(result.data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch staffing rules:", error)
+      }
+    }
+    fetchStaffingRules()
+  }, [])
+
   // Fetch workers
   useEffect(() => {
     async function fetchWorkers() {
@@ -285,10 +398,8 @@ function SchedulePageContent() {
           url += `&crewId=${selectedCrew}`
         }
 
-        console.log("Fetching schedules from:", url)
         const response = await fetch(url)
         const result = await response.json()
-        console.log("Fetch schedules response:", response.status, result)
 
         if (result.success) {
           setSchedules(result.data)
@@ -330,6 +441,414 @@ function SchedulePageContent() {
     })
   }, [workers])
 
+  // Calculate daily staffing counts by position type and shift
+  const dailyStaffingCounts = useMemo(() => {
+    // Create a map of date -> position type -> shift type -> count
+    const counts: Record<string, {
+      dayOps: number;
+      dayOCR: number;
+      dayCRTrained: number; // Control room trained
+      dayOilTrained: number; // Oil operator trained
+      dayUtilityTrained: number; // Utility operator trained
+      dayGasTrained: number; // Gas operator trained
+      dayTotal: number; // Total day shift workers
+      nightOps: number;
+      nightOCR: number;
+      nightCRTrained: number;
+      nightOilTrained: number;
+      nightUtilityTrained: number;
+      nightGasTrained: number;
+      nightTotal: number; // Total night shift workers
+      totalOnDuty: number;
+    }> = {}
+
+    // Create worker lookup for position and training status
+    const workerInfo: Record<string, {
+      posType: PositionType;
+      isCRTrained: boolean;
+      isOilTrained: boolean;
+      isUtilityTrained: boolean;
+      isGasTrained: boolean;
+      includeInCount: boolean;
+    }> = {}
+    for (const worker of workers) {
+      workerInfo[worker.id] = {
+        posType: worker.positionType || PositionType.OTHER,
+        isCRTrained: worker.isControlRoomTrained || false,
+        isOilTrained: worker.isOilOperatorTrained || false,
+        isUtilityTrained: worker.isUtilityOperatorTrained || false,
+        isGasTrained: worker.isGasOperatorTrained || false,
+        includeInCount: worker.includeInStaffingCount !== false,
+      }
+    }
+
+    // Count schedules
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!counts[dateStr]) {
+        counts[dateStr] = {
+          dayOps: 0, dayOCR: 0, dayCRTrained: 0, dayOilTrained: 0, dayUtilityTrained: 0, dayGasTrained: 0, dayTotal: 0,
+          nightOps: 0, nightOCR: 0, nightCRTrained: 0, nightOilTrained: 0, nightUtilityTrained: 0, nightGasTrained: 0, nightTotal: 0,
+          totalOnDuty: 0
+        }
+      }
+
+      const info = workerInfo[schedule.user.id] || { posType: "OTHER", isCRTrained: false, isOilTrained: false, isUtilityTrained: false, isGasTrained: false, includeInCount: true }
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+      const isOnDuty = isDay || isNight || schedule.shiftType === "TRAINING" || schedule.shiftType === "SHUTDOWN"
+
+      // Only count workers who have includeInStaffingCount enabled
+      if (!info.includeInCount) {
+        // Still count for total on duty display (they're working, just not in staffing minimums)
+        if (isOnDuty) {
+          counts[dateStr].totalOnDuty++
+        }
+        continue
+      }
+
+      if (isOnDuty) {
+        counts[dateStr].totalOnDuty++
+      }
+
+      if (isDay) {
+        counts[dateStr].dayTotal++
+        if (info.posType === "OPERATOR") counts[dateStr].dayOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].dayOCR++
+        if (info.isCRTrained) counts[dateStr].dayCRTrained++
+        if (info.isOilTrained) counts[dateStr].dayOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].dayUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].dayGasTrained++
+      } else if (isNight) {
+        counts[dateStr].nightTotal++
+        if (info.posType === "OPERATOR") counts[dateStr].nightOps++
+        if (info.posType === "ONSHORE_CONTROL_ROOM") counts[dateStr].nightOCR++
+        if (info.isCRTrained) counts[dateStr].nightCRTrained++
+        if (info.isOilTrained) counts[dateStr].nightOilTrained++
+        if (info.isUtilityTrained) counts[dateStr].nightUtilityTrained++
+        if (info.isGasTrained) counts[dateStr].nightGasTrained++
+      }
+    }
+
+    return counts
+  }, [schedules, workers])
+
+  // Helper to get daily count for a specific date
+  function getDailyCount(month: number, day: number, field: keyof typeof dailyStaffingCounts[string]): number {
+    const dateStr = formatDate(currentYear, month, day)
+    return dailyStaffingCounts[dateStr]?.[field] || 0
+  }
+
+  // Get minimum staffing requirement for a position type and shift
+  const getMinimumForPosition = useMemo(() => {
+    // Build a lookup map: positionType -> shiftType -> minWorkers
+    const minimums: Record<string, Record<"DAY" | "NIGHT", number>> = {
+      OPERATOR: { DAY: 0, NIGHT: 0 },
+      ONSHORE_CONTROL_ROOM: { DAY: 0, NIGHT: 0 },
+    }
+
+    for (const rule of staffingRules) {
+      if (!rule.isActive || !rule.positionType) continue
+      if (rule.positionType === "OPERATOR" || rule.positionType === "ONSHORE_CONTROL_ROOM") {
+        // Use the highest minimum if multiple rules exist for same position/shift
+        const current = minimums[rule.positionType][rule.shiftType]
+        if (rule.minWorkers > current) {
+          minimums[rule.positionType][rule.shiftType] = rule.minWorkers
+        }
+      }
+    }
+
+    return (positionType: "OPERATOR" | "ONSHORE_CONTROL_ROOM", shiftType: "DAY" | "NIGHT"): number => {
+      return minimums[positionType]?.[shiftType] || 0
+    }
+  }, [staffingRules])
+
+  // Get workers on a specific day and shift
+  const getWorkersOnShift = useMemo(() => {
+    // Build a map of date -> shift -> workers (using Set to deduplicate)
+    const shiftWorkerIds: Record<string, { DAY: Set<string>; NIGHT: Set<string> }> = {}
+    const shiftWorkers: Record<string, { DAY: Worker[]; NIGHT: Worker[] }> = {}
+
+    for (const schedule of schedules) {
+      const dateStr = schedule.date.split("T")[0]
+      if (!shiftWorkerIds[dateStr]) {
+        shiftWorkerIds[dateStr] = { DAY: new Set(), NIGHT: new Set() }
+        shiftWorkers[dateStr] = { DAY: [], NIGHT: [] }
+      }
+
+      const isDay = schedule.shiftType === "DAY" || schedule.shiftType === "PL_DAY"
+      const isNight = schedule.shiftType === "NIGHT" || schedule.shiftType === "PL_NIGHT"
+
+      const worker = workers.find(w => w.id === schedule.user.id)
+      if (worker) {
+        // Only add if not already in the set (ensures one person per role)
+        if (isDay && !shiftWorkerIds[dateStr].DAY.has(worker.id)) {
+          shiftWorkerIds[dateStr].DAY.add(worker.id)
+          shiftWorkers[dateStr].DAY.push(worker)
+        }
+        if (isNight && !shiftWorkerIds[dateStr].NIGHT.has(worker.id)) {
+          shiftWorkerIds[dateStr].NIGHT.add(worker.id)
+          shiftWorkers[dateStr].NIGHT.push(worker)
+        }
+      }
+    }
+
+    return (dateStr: string, shift: "DAY" | "NIGHT"): Worker[] => {
+      return shiftWorkers[dateStr]?.[shift] || []
+    }
+  }, [schedules, workers])
+
+  // Calculate staffing alerts based on rules
+  const staffingAlerts = useMemo(() => {
+    const alerts: StaffingAlert[] = []
+
+    // Only process rules if we have any
+    if (staffingRules.length === 0) return alerts
+
+    // Check each day in the year that has schedules
+    const datesWithSchedules = Array.from(new Set(schedules.map(s => s.date.split("T")[0])))
+
+    for (const dateStr of datesWithSchedules) {
+      for (const rule of staffingRules) {
+        if (!rule.isActive) continue
+
+        // Get workers on this shift and filter to only those who should be counted
+        const shiftWorkers = getWorkersOnShift(dateStr, rule.shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
+
+        // Filter by position type if specified
+        let relevantWorkers = shiftWorkers
+        if (rule.positionType) {
+          relevantWorkers = shiftWorkers.filter(w => w.positionType === rule.positionType)
+        }
+
+        // Check if we meet the minimum
+        if (relevantWorkers.length < rule.minWorkers) {
+          alerts.push({
+            date: dateStr,
+            shiftType: rule.shiftType,
+            ruleName: rule.name,
+            required: rule.minWorkers,
+            actual: relevantWorkers.length,
+            shortage: rule.minWorkers - relevantWorkers.length,
+            positionType: rule.positionType || undefined,
+          })
+        }
+      }
+
+      // Check training coverage for each shift type
+      // Requirement: At least ONE person on each shift must have each training type
+      const trainingTypes = [
+        { key: "controlRoom" as const, field: "isControlRoomTrained" as const, label: "Control Room Coverage" },
+        { key: "oil" as const, field: "isOilOperatorTrained" as const, label: "Oil Operator Coverage" },
+        { key: "gas" as const, field: "isGasOperatorTrained" as const, label: "Gas Operator Coverage" },
+        { key: "utility" as const, field: "isUtilityOperatorTrained" as const, label: "Utility Operator Coverage" },
+      ]
+
+      for (const shiftType of ["DAY", "NIGHT"] as const) {
+        const shiftWorkers = getWorkersOnShift(dateStr, shiftType)
+          .filter(w => w.includeInStaffingCount !== false)
+
+        // Only check if there are workers scheduled on this shift
+        if (shiftWorkers.length > 0) {
+          for (const training of trainingTypes) {
+            const trainedCount = shiftWorkers.filter(w => w[training.field]).length
+            if (trainedCount < 1) {
+              alerts.push({
+                date: dateStr,
+                shiftType,
+                ruleName: training.label,
+                required: 1,
+                actual: 0,
+                shortage: 1,
+                trainingType: training.key,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    // Sort by date
+    alerts.sort((a, b) => a.date.localeCompare(b.date))
+
+    return alerts
+  }, [schedules, staffingRules, getWorkersOnShift])
+
+  // Group alerts by date for display
+  const alertsByDate = useMemo(() => {
+    const grouped: Record<string, StaffingAlert[]> = {}
+    for (const alert of staffingAlerts) {
+      if (!grouped[alert.date]) {
+        grouped[alert.date] = []
+      }
+      grouped[alert.date].push(alert)
+    }
+    return grouped
+  }, [staffingAlerts])
+
+  // Get alerts for visible month (for the current view)
+  const visibleAlerts = useMemo(() => {
+    // Get current date info
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentDay = now.getDate()
+
+    // Filter to show alerts from today forward, limit to next 30 days
+    const todayStr = formatDate(currentYear, currentMonth, currentDay)
+    const futureDate = new Date(now)
+    futureDate.setDate(futureDate.getDate() + 30)
+    const futureDateStr = formatDate(futureDate.getFullYear(), futureDate.getMonth(), futureDate.getDate())
+
+    return staffingAlerts.filter(alert => {
+      // Only show alerts for current year
+      if (!alert.date.startsWith(String(currentYear))) {
+        // But if viewing past/future year, show that year's alerts
+        if (currentYear !== now.getFullYear()) {
+          return alert.date.startsWith(String(currentYear))
+        }
+        return false
+      }
+      // Show upcoming alerts (from today for next 30 days)
+      return alert.date >= todayStr && alert.date <= futureDateStr
+    })
+  }, [staffingAlerts, currentYear])
+
+  // Calculate upcoming staffing shortages for operators and control room (next 7 days)
+  const upcomingStaffingShortages = useMemo(() => {
+    const now = new Date()
+
+    // Get minimums from staffing rules
+    const opDayMin = getMinimumForPosition("OPERATOR", "DAY")
+    const opNightMin = getMinimumForPosition("OPERATOR", "NIGHT")
+    const ocrDayMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "DAY")
+    const ocrNightMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "NIGHT")
+
+    const operatorShortages: { date: string; shift: "DAY" | "NIGHT"; have: number; need: number }[] = []
+    const controlRoomShortages: { date: string; shift: "DAY" | "NIGHT"; have: number; need: number }[] = []
+
+    // Check each day in the next 7 days
+    for (let i = 0; i < 7; i++) {
+      const checkDate = new Date(now)
+      checkDate.setDate(checkDate.getDate() + i)
+      const dateStr = formatDate(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate())
+
+      // Skip dates outside current year view
+      if (!dateStr.startsWith(String(currentYear))) continue
+
+      const counts = dailyStaffingCounts[dateStr]
+      const dayOps = counts?.dayOps || 0
+      const nightOps = counts?.nightOps || 0
+      const dayOCR = counts?.dayOCR || 0
+      const nightOCR = counts?.nightOCR || 0
+
+      // Check operators
+      if (opDayMin > 0 && dayOps < opDayMin) {
+        operatorShortages.push({ date: dateStr, shift: "DAY", have: dayOps, need: opDayMin })
+      }
+      if (opNightMin > 0 && nightOps < opNightMin) {
+        operatorShortages.push({ date: dateStr, shift: "NIGHT", have: nightOps, need: opNightMin })
+      }
+
+      // Check control room
+      if (ocrDayMin > 0 && dayOCR < ocrDayMin) {
+        controlRoomShortages.push({ date: dateStr, shift: "DAY", have: dayOCR, need: ocrDayMin })
+      }
+      if (ocrNightMin > 0 && nightOCR < ocrNightMin) {
+        controlRoomShortages.push({ date: dateStr, shift: "NIGHT", have: nightOCR, need: ocrNightMin })
+      }
+    }
+
+    return {
+      operatorShortages,
+      controlRoomShortages,
+      hasShortages: operatorShortages.length > 0 || controlRoomShortages.length > 0,
+      totalDaysWithIssues: new Set([
+        ...operatorShortages.map(s => s.date),
+        ...controlRoomShortages.map(s => s.date)
+      ]).size
+    }
+  }, [dailyStaffingCounts, getMinimumForPosition, currentYear])
+
+  // Open breakdown modal
+  function openBreakdownModal(dateStr: string, shift: "DAY" | "NIGHT") {
+    setBreakdownDate(dateStr)
+    setBreakdownShift(shift)
+    setBreakdownModalOpen(true)
+  }
+
+  function closeBreakdownModal() {
+    setBreakdownModalOpen(false)
+  }
+
+  function openContinueModal() {
+    setContinueError(null)
+    setContinueSuccess(null)
+    setContinueClearOverrides(false)
+    setContinueModalOpen(true)
+  }
+
+  function closeContinueModal() {
+    setContinueModalOpen(false)
+  }
+
+  async function continueScheduleForNextYear() {
+    setContinuing(true)
+    setContinueError(null)
+    setContinueSuccess(null)
+
+    try {
+      const requestBody: {
+        sourceYear: number
+        targetYear: number
+        crewId?: string
+        clearOverrides: boolean
+      } = {
+        sourceYear: currentYear,
+        targetYear: currentYear + 1,
+        clearOverrides: continueClearOverrides,
+      }
+
+      // If filtered by crew, only continue that crew
+      if (selectedCrew) {
+        requestBody.crewId = selectedCrew
+      }
+
+      const response = await fetch("/api/schedules/continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to continue schedules")
+      }
+
+      setContinueSuccess(
+        `Successfully continued ${result.data.workersProcessed} workers' schedules to ${currentYear + 1}. Created ${result.data.totalRecords} schedule entries.`
+      )
+
+      // Navigate to the next year to see the results
+      setTimeout(() => {
+        setCurrentYear(currentYear + 1)
+        closeContinueModal()
+      }, 2000)
+    } catch (error) {
+      console.error("Continue schedule error:", error)
+      setContinueError(error instanceof Error ? error.message : "Failed to continue schedules")
+    } finally {
+      setContinuing(false)
+    }
+  }
+
+  // Get breakdown workers for the modal
+  const breakdownWorkers = useMemo(() => {
+    if (!breakdownDate) return []
+    return getWorkersOnShift(breakdownDate, breakdownShift)
+  }, [breakdownDate, breakdownShift, getWorkersOnShift])
+
   function openEditModal(worker: Worker) {
     setSelectedWorker(worker)
 
@@ -350,7 +869,12 @@ function SchedulePageContent() {
       phone: worker.phone || "",
       crewId: worker.crew?.id || "",
       role: worker.role || "WORKER",
+      customRoleId: worker.customRoleId || "",
       hireDate: hireDateStr,
+      isControlRoomTrained: worker.isControlRoomTrained || false,
+      isOilOperatorTrained: worker.isOilOperatorTrained || false,
+      isUtilityOperatorTrained: worker.isUtilityOperatorTrained || false,
+      isGasOperatorTrained: worker.isGasOperatorTrained || false,
     })
     setSelectedPatternId("")
     setScheduleStartDate(todayStr)
@@ -383,14 +907,25 @@ function SchedulePageContent() {
           phone: editForm.phone || null,
           crewId: editForm.crewId || null,
           role: editForm.role,
+          customRoleId: editForm.customRoleId || null,
           hireDate: editForm.hireDate || null,
+          isControlRoomTrained: editForm.isControlRoomTrained,
+          isOilOperatorTrained: editForm.isOilOperatorTrained,
+          isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+          isGasOperatorTrained: editForm.isGasOperatorTrained,
         }),
       })
 
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to update worker")
+        // Show detailed validation errors if available
+        let errorMessage = result.error || "Failed to update worker"
+        if (result.details && Array.isArray(result.details) && result.details.length > 0) {
+          const fieldErrors = result.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        throw new Error(errorMessage)
       }
 
       setWorkers((prev) =>
@@ -402,7 +937,15 @@ function SchedulePageContent() {
                 position: editForm.position || null,
                 phone: editForm.phone || null,
                 role: editForm.role,
+                customRoleId: editForm.customRoleId || null,
+                customRole: editForm.customRoleId
+                  ? customRoles.find((r) => r.id === editForm.customRoleId) || null
+                  : null,
                 hireDate: editForm.hireDate || null,
+                isControlRoomTrained: editForm.isControlRoomTrained,
+                isOilOperatorTrained: editForm.isOilOperatorTrained,
+                isUtilityOperatorTrained: editForm.isUtilityOperatorTrained,
+                isGasOperatorTrained: editForm.isGasOperatorTrained,
                 crew: editForm.crewId
                   ? crews.find((c) => c.id === editForm.crewId) || null
                   : null,
@@ -442,8 +985,6 @@ function SchedulePageContent() {
         clearOverrides: clearOverrides,
       }
 
-      console.log("Generating schedule:", requestBody)
-
       const response = await fetch("/api/schedules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -451,7 +992,6 @@ function SchedulePageContent() {
       })
 
       const result = await response.json()
-      console.log("Generate response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || result.details || "Failed to generate schedule")
@@ -461,12 +1001,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - include crew filter to maintain consistent view
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
@@ -549,8 +1085,6 @@ function SchedulePageContent() {
           overrideReason: scheduleEditReason || null,
         }
 
-        console.log("Saving schedule:", requestBody)
-
         const response = await fetch("/api/schedules", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -558,7 +1092,6 @@ function SchedulePageContent() {
         })
 
         const result = await response.json()
-        console.log("Save response:", result)
 
         if (!response.ok) {
           // Extract detailed error message from validation errors if available
@@ -585,12 +1118,8 @@ function SchedulePageContent() {
 
       // Refresh schedules - wait for completion
       const refreshUrl = `/api/schedules?startDate=${currentYear}-01-01&endDate=${currentYear}-12-31${selectedCrew ? `&crewId=${selectedCrew}` : ""}`
-      console.log("Refreshing schedules from:", refreshUrl)
-
       const schedulesResponse = await fetch(refreshUrl)
       const schedulesResult = await schedulesResponse.json()
-
-      console.log("Refresh result:", schedulesResult.success, "count:", schedulesResult.data?.length)
 
       if (schedulesResult.success && schedulesResult.data) {
         setSchedules(schedulesResult.data)
@@ -629,6 +1158,37 @@ function SchedulePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openContinueModal}
+            title={`Continue schedules from ${currentYear} to ${currentYear + 1}`}
+            className="min-h-[44px]"
+          >
+            <FastForward className="h-4 w-4 mr-2" />
+            Continue to {currentYear + 1}
+          </Button>
+          <Button
+            variant={focusMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setFocusMode(!focusMode)}
+            title={focusMode ? "Exit focus mode" : "Enter focus mode - hide legend and summary"}
+            className="min-h-[44px]"
+          >
+            {focusMode ? <Minimize2 className="h-4 w-4 mr-2" /> : <Maximize2 className="h-4 w-4 mr-2" />}
+            {focusMode ? "Exit Focus" : "Focus Mode"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.location.href = `/api/export?type=schedule-grid&year=${currentYear}`
+            }}
+            className="min-h-[44px]"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())} className="min-h-[44px]">
             This Year
           </Button>
@@ -658,29 +1218,93 @@ function SchedulePageContent() {
         />
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: style.bg, color: style.text }}
-          >
-            <span className="font-bold">{style.label}</span>
-            <span>= {type.replace("_", " ")}</span>
-          </div>
-        ))}
-        {customShiftTypes.filter(t => t.isActive).map((t) => (
-          <div
-            key={t.code}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: t.color, color: t.textColor }}
-          >
-            <span className="font-bold">{t.code}</span>
-            <span>= {t.name}</span>
-          </div>
-        ))}
-      </div>
+      {/* Prominent Staffing Shortage Alert - shown when operators or control room are below minimum */}
+      {upcomingStaffingShortages.hasShortages && (
+        <Alert variant="destructive" className="border-2">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertDescription className="ml-2">
+            <div className="flex flex-col gap-2">
+              <div className="font-semibold text-base">
+                Staffing Shortage Alert - {upcomingStaffingShortages.totalDaysWithIssues} day{upcomingStaffingShortages.totalDaysWithIssues !== 1 ? 's' : ''} affected in the next 7 days
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm">
+                {upcomingStaffingShortages.operatorShortages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900 px-2 py-0.5 rounded">
+                      Operators
+                    </span>
+                    <span>
+                      {upcomingStaffingShortages.operatorShortages.length} shift{upcomingStaffingShortages.operatorShortages.length !== 1 ? 's' : ''} below minimum
+                      {upcomingStaffingShortages.operatorShortages.slice(0, 3).map((s, i) => {
+                        const d = new Date(s.date + 'T12:00:00')
+                        const isToday = s.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                        const label = isToday ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        return (
+                          <span key={i} className="ml-1">
+                            ({label} {s.shift}: {s.have}/{s.need})
+                          </span>
+                        )
+                      })}
+                      {upcomingStaffingShortages.operatorShortages.length > 3 && (
+                        <span className="ml-1 text-muted-foreground">+{upcomingStaffingShortages.operatorShortages.length - 3} more</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {upcomingStaffingShortages.controlRoomShortages.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900 px-2 py-0.5 rounded">
+                      Control Room
+                    </span>
+                    <span>
+                      {upcomingStaffingShortages.controlRoomShortages.length} shift{upcomingStaffingShortages.controlRoomShortages.length !== 1 ? 's' : ''} below minimum
+                      {upcomingStaffingShortages.controlRoomShortages.slice(0, 3).map((s, i) => {
+                        const d = new Date(s.date + 'T12:00:00')
+                        const isToday = s.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                        const label = isToday ? 'Today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        return (
+                          <span key={i} className="ml-1">
+                            ({label} {s.shift}: {s.have}/{s.need})
+                          </span>
+                        )
+                      })}
+                      {upcomingStaffingShortages.controlRoomShortages.length > 3 && (
+                        <span className="ml-1 text-muted-foreground">+{upcomingStaffingShortages.controlRoomShortages.length - 3} more</span>
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Legend - hidden in focus mode */}
+      {!focusMode && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+            <div
+              key={type}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: style.bg, color: style.text }}
+            >
+              <span className="font-bold">{style.label}</span>
+              <span>= {type.replace("_", " ")}</span>
+            </div>
+          ))}
+          {customShiftTypes.filter(t => t.isActive).map((t) => (
+            <div
+              key={t.code}
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+              style={{ backgroundColor: t.color, color: t.textColor }}
+            >
+              <span className="font-bold">{t.code}</span>
+              <span>= {t.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Schedule Table */}
       <Card>
@@ -710,7 +1334,7 @@ function SchedulePageContent() {
               <p>No workers found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+            <div className={cn("overflow-x-auto overflow-y-auto", focusMode ? "max-h-[90vh]" : "max-h-[70vh]")}>
               <table className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700" style={{ minWidth: "max-content" }}>
                 <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
                   {/* Month headers */}
@@ -813,6 +1437,198 @@ function SchedulePageContent() {
                       )}
                     </tr>
                   ))}
+
+                  {/* Compliance Issues Row */}
+                  <tr className="bg-muted/30 border-t-2 border-primary/20">
+                    <td className="border p-2 sticky left-0 bg-red-50 dark:bg-red-950 z-20 font-semibold text-red-700 dark:text-red-300 text-xs">
+                      Compliance
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayAlerts = alertsByDate[dateStr] || []
+                        const hasIssues = dayAlerts.length > 0
+                        const issueCount = dayAlerts.length
+                        const dayIssues = dayAlerts.filter(a => a.shiftType === "DAY").length
+                        const nightIssues = dayAlerts.filter(a => a.shiftType === "NIGHT").length
+
+                        return (
+                          <td
+                            key={`compliance-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium transition-all",
+                              hasIssues
+                                ? "bg-red-100 dark:bg-red-900 cursor-pointer hover:ring-2 hover:ring-red-400 hover:ring-inset"
+                                : "bg-red-50/50 dark:bg-red-950/30"
+                            )}
+                            title={hasIssues ? `${issueCount} compliance issue${issueCount !== 1 ? 's' : ''} - Day: ${dayIssues}, Night: ${nightIssues}` : "No compliance issues"}
+                            onClick={() => hasIssues && openBreakdownModal(dateStr, dayIssues > 0 ? "DAY" : "NIGHT")}
+                          >
+                            {hasIssues && (
+                              <span className="text-red-600 dark:text-red-400 font-bold">
+                                {issueCount > 1 ? issueCount : "!"}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  {/* Daily Staffing Summary Rows */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-green-50 dark:bg-green-950 z-20 font-semibold text-green-700 dark:text-green-300 text-xs">
+                      Day Shift
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = getDailyCount(month, day, "dayTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "DAY")
+                        return (
+                          <td
+                            key={`day-total-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-green-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-green-50 dark:bg-green-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on day shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "DAY")}
+                          >
+                            {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-blue-50 dark:bg-blue-950 z-20 font-semibold text-blue-700 dark:text-blue-300 text-xs">
+                      Night Shift
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const count = getDailyCount(month, day, "nightTotal")
+                        const hasAlert = alertsByDate[dateStr]?.some(a => a.shiftType === "NIGHT")
+                        return (
+                          <td
+                            key={`night-total-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-inset transition-all",
+                              hasAlert ? "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300" : "bg-blue-50 dark:bg-blue-950"
+                            )}
+                            title={hasAlert ? "Click to see workers - Staffing alert!" : "Click to see workers on night shift"}
+                            onClick={() => count > 0 && openBreakdownModal(dateStr, "NIGHT")}
+                          >
+                            {count > 0 ? count : ""}
+                            {hasAlert && count > 0 && <span className="text-red-500">!</span>}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  {/* Operators Count Row */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-amber-50 dark:bg-amber-950 z-20 font-semibold text-amber-700 dark:text-amber-300 text-xs">
+                      Operators (D/N)
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayCount = getDailyCount(month, day, "dayOps")
+                        const nightCount = getDailyCount(month, day, "nightOps")
+                        const dayMin = getMinimumForPosition("OPERATOR", "DAY")
+                        const nightMin = getMinimumForPosition("OPERATOR", "NIGHT")
+                        const dayBelowMin = dayMin > 0 && dayCount < dayMin
+                        const nightBelowMin = nightMin > 0 && nightCount < nightMin
+                        const hasCounts = dayCount > 0 || nightCount > 0
+
+                        return (
+                          <td
+                            key={`ops-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-inset transition-all",
+                              (dayBelowMin || nightBelowMin) ? "bg-red-100 dark:bg-red-900" : "bg-amber-50 dark:bg-amber-950"
+                            )}
+                            title={`Operators - Day: ${dayCount}${dayMin > 0 ? ` (min: ${dayMin})` : ""}, Night: ${nightCount}${nightMin > 0 ? ` (min: ${nightMin})` : ""}`}
+                            onClick={() => hasCounts && openBreakdownModal(dateStr, dayCount >= nightCount ? "DAY" : "NIGHT")}
+                          >
+                            {hasCounts && (
+                              <span className={cn(
+                                (dayBelowMin || nightBelowMin) && "text-red-600 dark:text-red-400 font-bold"
+                              )}>
+                                <span className={cn(dayBelowMin && "text-red-600 dark:text-red-400")}>{dayCount}</span>
+                                /
+                                <span className={cn(nightBelowMin && "text-red-600 dark:text-red-400")}>{nightCount}</span>
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  {/* Onshore Control Room Count Row */}
+                  <tr className="bg-muted/30">
+                    <td className="border p-2 sticky left-0 bg-purple-50 dark:bg-purple-950 z-20 font-semibold text-purple-700 dark:text-purple-300 text-xs">
+                      Control Room (D/N)
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const dateStr = formatDate(currentYear, month, day)
+                        const dayCount = getDailyCount(month, day, "dayOCR")
+                        const nightCount = getDailyCount(month, day, "nightOCR")
+                        const dayMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "DAY")
+                        const nightMin = getMinimumForPosition("ONSHORE_CONTROL_ROOM", "NIGHT")
+                        const dayBelowMin = dayMin > 0 && dayCount < dayMin
+                        const nightBelowMin = nightMin > 0 && nightCount < nightMin
+                        const hasCounts = dayCount > 0 || nightCount > 0
+
+                        return (
+                          <td
+                            key={`ocr-${month}-${day}`}
+                            className={cn(
+                              "border text-center w-8 min-w-[32px] h-6 text-xs font-medium cursor-pointer hover:ring-2 hover:ring-purple-400 hover:ring-inset transition-all",
+                              (dayBelowMin || nightBelowMin) ? "bg-red-100 dark:bg-red-900" : "bg-purple-50 dark:bg-purple-950"
+                            )}
+                            title={`Control Room - Day: ${dayCount}${dayMin > 0 ? ` (min: ${dayMin})` : ""}, Night: ${nightCount}${nightMin > 0 ? ` (min: ${nightMin})` : ""}`}
+                            onClick={() => hasCounts && openBreakdownModal(dateStr, dayCount >= nightCount ? "DAY" : "NIGHT")}
+                          >
+                            {hasCounts && (
+                              <span className={cn(
+                                (dayBelowMin || nightBelowMin) && "text-red-600 dark:text-red-400 font-bold"
+                              )}>
+                                <span className={cn(dayBelowMin && "text-red-600 dark:text-red-400")}>{dayCount}</span>
+                                /
+                                <span className={cn(nightBelowMin && "text-red-600 dark:text-red-400")}>{nightCount}</span>
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
+
+                  <tr className="bg-muted/50 border-t-2 border-primary/30">
+                    <td className="border p-2 sticky left-0 bg-muted z-20 font-bold text-xs">
+                      Total On Duty
+                    </td>
+                    {yearMonths.map(({ month, days }) =>
+                      days.map((day) => {
+                        const count = getDailyCount(month, day, "totalOnDuty")
+                        return (
+                          <td
+                            key={`total-${month}-${day}`}
+                            className="border text-center w-8 min-w-[32px] h-6 bg-muted text-xs font-bold"
+                          >
+                            {count > 0 ? count : ""}
+                          </td>
+                        )
+                      })
+                    )}
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -890,6 +1706,21 @@ function SchedulePageContent() {
               ]}
             />
           </div>
+
+          {customRoles.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="customRole">Custom Role</Label>
+              <Select
+                id="customRole"
+                value={editForm.customRoleId}
+                onChange={(e) => setEditForm({ ...editForm, customRoleId: e.target.value })}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="hireDate">Hire Date</Label>
@@ -1152,6 +1983,359 @@ function SchedulePageContent() {
           </div>
         </div>
       </Modal>
+
+      {/* Worker Breakdown Modal */}
+      <Modal
+        isOpen={breakdownModalOpen}
+        onClose={closeBreakdownModal}
+        title={`${breakdownShift === "DAY" ? "Day" : "Night"} Shift Workers`}
+        description={breakdownDate ? new Date(breakdownDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+      >
+        <div className="space-y-4">
+          {/* Show any alerts for this date/shift */}
+          {alertsByDate[breakdownDate]?.filter(a => a.shiftType === breakdownShift).map((alert, idx) => (
+            <div key={idx} className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md">
+              <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="font-medium">Staffing Alert: {alert.ruleName}</span>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                Need {alert.required} workers{alert.positionType ? ` (${alert.positionType})` : ""}, have {alert.actual} — short by {alert.shortage}
+              </p>
+            </div>
+          ))}
+
+          {/* Training coverage summary */}
+          {breakdownWorkers.length > 0 && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="font-medium text-sm mb-2">Training Coverage:</h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Requirement: At least 1 counted worker on shift must have each training type
+              </p>
+              {(() => {
+                // Only count workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isControlRoomTrained)
+                        ? "bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      CR: {countedWorkers.filter(w => w.isControlRoomTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isControlRoomTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isOilOperatorTrained)
+                        ? "bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Oil: {countedWorkers.filter(w => w.isOilOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isOilOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isGasOperatorTrained)
+                        ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Gas: {countedWorkers.filter(w => w.isGasOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isGasOperatorTrained).length})
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${
+                      countedWorkers.some(w => w.isUtilityOperatorTrained)
+                        ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"
+                        : "bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300"
+                    }`}>
+                      Utility: {countedWorkers.filter(w => w.isUtilityOperatorTrained).length > 0 ? "✓" : "✗"} ({countedWorkers.filter(w => w.isUtilityOperatorTrained).length})
+                    </span>
+                  </div>
+                )
+              })()}
+              <p className="text-xs text-muted-foreground mt-2">
+                Control Room: backup for onshore operations if needed
+              </p>
+              {/* Single point of failure warning */}
+              {(() => {
+                // Only consider workers that are included in staffing counts
+                const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false)
+
+                // Find training types with exactly 1 person covering them
+                const trainingTypes = [
+                  { key: 'oil', label: 'Oil', field: 'isOilOperatorTrained' as const },
+                  { key: 'gas', label: 'Gas', field: 'isGasOperatorTrained' as const },
+                  { key: 'utility', label: 'Utility', field: 'isUtilityOperatorTrained' as const },
+                ];
+
+                // For each training type with exactly 1 person, track who that person is
+                const singleCoverageMap: Record<string, { types: string[], worker: typeof countedWorkers[0] }> = {};
+
+                for (const training of trainingTypes) {
+                  const trainedWorkers = countedWorkers.filter(w => w[training.field]);
+                  if (trainedWorkers.length === 1) {
+                    const worker = trainedWorkers[0];
+                    if (!singleCoverageMap[worker.id]) {
+                      singleCoverageMap[worker.id] = { types: [], worker };
+                    }
+                    singleCoverageMap[worker.id].types.push(training.label);
+                  }
+                }
+
+                // Find workers who are single points of failure for multiple training types
+                // But if one worker covers ALL three training types, that's acceptable - no warning needed
+                const singlePointsOfFailure = Object.values(singleCoverageMap).filter(
+                  entry => entry.types.length > 1 && entry.types.length < trainingTypes.length
+                );
+
+                if (singlePointsOfFailure.length === 0) return null;
+
+                return (
+                  <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      Single Point of Failure Warning
+                    </p>
+                    {singlePointsOfFailure.map(entry => (
+                      <p key={entry.worker.id} className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {entry.worker.name} is the only person covering {entry.types.join(', ')} training.
+                        If unavailable, {entry.types.length} coverage requirements would fail.
+                      </p>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Worker list */}
+          <div className="space-y-2">
+            {(() => {
+              const countedWorkers = breakdownWorkers.filter(w => w.includeInStaffingCount !== false).length
+              const notCountedWorkers = breakdownWorkers.length - countedWorkers
+              return (
+                <h4 className="font-medium text-sm text-muted-foreground">
+                  {countedWorkers} worker{countedWorkers !== 1 ? "s" : ""} counted on {breakdownShift.toLowerCase()} shift
+                  {notCountedWorkers > 0 && (
+                    <span className="text-orange-600 dark:text-orange-400"> (+{notCountedWorkers} not counted)</span>
+                  )}
+                </h4>
+              )
+            })()}
+            {breakdownWorkers.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No workers scheduled</p>
+            ) : (
+              <div className="grid gap-2">
+                {breakdownWorkers.map((worker) => {
+                  const isNotCounted = worker.includeInStaffingCount === false
+                  return (
+                    <div
+                      key={worker.id}
+                      className={cn(
+                        "flex items-center gap-3 p-2 rounded-md",
+                        isNotCounted ? "bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800" : "bg-muted/50"
+                      )}
+                    >
+                      <div
+                        className="w-3 h-8 rounded"
+                        style={{ backgroundColor: worker.crew?.color || "#ccc" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {worker.name || "Unnamed"}
+                          {isNotCounted && (
+                            <span className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded" title="Not included in staffing counts">Not Counted</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex gap-2">
+                          <span>{worker.crew?.name || "No crew"}</span>
+                          {worker.positionType && (
+                            <>
+                              <span>•</span>
+                              <span>{worker.positionType.replace("_", " ")}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* Training badges */}
+                      <div className="flex gap-1 flex-shrink-0">
+                        {worker.isControlRoomTrained && (
+                          <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded" title="Control Room Trained">CR</span>
+                        )}
+                        {worker.isOilOperatorTrained && (
+                          <span className="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded" title="Oil Operator Trained">Oil</span>
+                        )}
+                        {worker.isGasOperatorTrained && (
+                          <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded" title="Gas Operator Trained">Gas</span>
+                        )}
+                        {worker.isUtilityOperatorTrained && (
+                          <span className="text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded" title="Utility Operator Trained">Util</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button variant="outline" onClick={closeBreakdownModal}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Continue Schedule Modal */}
+      <Modal
+        isOpen={continueModalOpen}
+        onClose={closeContinueModal}
+        title={`Continue Schedule to ${currentYear + 1}`}
+        description="Extend rotation schedules from the current year into the next year"
+      >
+        <div className="space-y-4">
+          {continueError && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400 rounded-md">
+              {continueError}
+            </div>
+          )}
+
+          {continueSuccess && (
+            <div className="p-3 text-sm text-green-600 bg-green-50 dark:bg-green-950 dark:text-green-400 rounded-md">
+              {continueSuccess}
+            </div>
+          )}
+
+          <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-md space-y-2">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              <strong>This will:</strong>
+            </p>
+            <ul className="text-sm text-blue-800 dark:text-blue-200 list-disc list-inside space-y-1">
+              <li>Continue each worker&apos;s rotation pattern into {currentYear + 1}</li>
+              <li>Calculate the correct phase so shifts flow seamlessly from Dec 31, {currentYear} to Jan 1, {currentYear + 1}</li>
+              <li>Generate schedules for Jan 1 - Dec 31, {currentYear + 1}</li>
+              {selectedCrew ? (
+                <li>Only process workers in the currently filtered crew</li>
+              ) : (
+                <li>Process all active workers with crew rotation patterns</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950 rounded-md">
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              <strong>Note:</strong> Workers must be assigned to a crew that has a rotation pattern configured. Workers without a crew pattern will be skipped.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="continueClearOverrides"
+              checked={continueClearOverrides}
+              onChange={(e) => setContinueClearOverrides(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="continueClearOverrides" className="text-sm font-normal">
+              Clear existing manual edits in {currentYear + 1}
+            </Label>
+          </div>
+          {continueClearOverrides && (
+            <p className="text-xs text-orange-600 dark:text-orange-400">
+              Warning: This will delete any manually edited shifts already in {currentYear + 1}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeContinueModal} disabled={continuing}>
+              Cancel
+            </Button>
+            <Button
+              onClick={continueScheduleForNextYear}
+              disabled={continuing}
+            >
+              {continuing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Continuing...
+                </>
+              ) : (
+                <>
+                  <FastForward className="h-4 w-4 mr-2" />
+                  Continue to {currentYear + 1}
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Staffing Alerts Section - shown below the schedule */}
+      {!focusMode && visibleAlerts.length > 0 && (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-300">
+              <AlertTriangle className="h-5 w-5" />
+              Staffing Alerts ({visibleAlerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {visibleAlerts.slice(0, 20).map((alert, idx) => {
+                const alertDate = new Date(alert.date + "T12:00:00")
+                const isToday = alert.date === formatDate(today.getFullYear(), today.getMonth(), today.getDate())
+                const isTomorrow = (() => {
+                  const tomorrow = new Date(today)
+                  tomorrow.setDate(tomorrow.getDate() + 1)
+                  return alert.date === formatDate(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
+                })()
+
+                return (
+                  <Alert
+                    key={`${alert.date}-${alert.shiftType}-${alert.ruleName}-${idx}`}
+                    variant="destructive"
+                    className="py-2"
+                    showIcon={false}
+                  >
+                    <AlertTriangle className="h-4 w-4 absolute left-4 top-4" />
+                    <AlertDescription className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">
+                          {isToday ? "Today" : isTomorrow ? "Tomorrow" : alertDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span className={cn(
+                          "font-medium",
+                          alert.shiftType === "DAY" ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"
+                        )}>
+                          {alert.shiftType}
+                        </span>
+                        <span className="mx-2">•</span>
+                        <span>{alert.ruleName}</span>
+                        {alert.positionType && (
+                          <span className="text-muted-foreground ml-1">({alert.positionType})</span>
+                        )}
+                        <span className="ml-2 text-sm">
+                          — Need {alert.required}, have {alert.actual} (short {alert.shortage})
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 ml-2"
+                        onClick={() => openBreakdownModal(alert.date, alert.shiftType)}
+                      >
+                        View
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
+                )
+              })}
+              {visibleAlerts.length > 20 && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  And {visibleAlerts.length - 20} more alerts...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

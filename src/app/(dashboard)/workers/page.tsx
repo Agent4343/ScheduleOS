@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import { Avatar } from "@/components/ui/avatar"
+import { useToast } from "@/components/ui/toast"
+import { useConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
   Table,
   TableBody,
@@ -26,7 +28,11 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  AlertTriangle,
+  Zap,
+  Copy,
 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { UserRole, UserStatus } from "@/types"
 
 interface User {
@@ -43,12 +49,92 @@ interface User {
     name: string
     color: string
   } | null
+  customRoleId: string | null
+  customRole: {
+    id: string
+    name: string
+    color: string
+  } | null
+  // Training certifications
+  isControlRoomTrained?: boolean
+  isOilOperatorTrained?: boolean
+  isUtilityOperatorTrained?: boolean
+  isGasOperatorTrained?: boolean
+  // Staffing settings
+  includeInStaffingCount?: boolean
+  singleTrainingCoverageOnly?: boolean
 }
 
 interface Crew {
   id: string
   name: string
   color: string
+}
+
+interface CustomRole {
+  id: string
+  name: string
+  color: string
+  baseRole: "ADMIN" | "SUPERVISOR" | "WORKER"
+}
+
+interface CertificationType {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  isRequired: boolean
+}
+
+interface SubscriptionInfo {
+  tier: string
+  tierName: string
+  workerLimit: number
+  workerCount: number
+  workersRemaining: number
+  canAddWorkers: boolean
+  isAtLimit: boolean
+  isTrialExpired: boolean
+}
+
+interface PendingInvitation {
+  id: string
+  email: string
+  name: string
+  role: UserRole
+  expiresAt: string
+  createdAt: string
+  createdBy: {
+    id: string
+    name: string
+  }
+}
+
+interface PendingTransferRequest {
+  id: string
+  status: string
+  role: UserRole
+  message: string | null
+  expiresAt: string
+  createdAt: string
+  targetUser: {
+    id: string
+    email: string
+    name: string | null
+    organization: {
+      name: string
+    } | null
+  }
+  createdBy: {
+    id: string
+    name: string | null
+  }
+}
+
+interface ExistingUserInfo {
+  email: string
+  name: string | null
+  role: UserRole
 }
 
 const STATUS_BADGES: Record<UserStatus, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
@@ -65,8 +151,18 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export default function WorkersPage() {
+  const { addToast } = useToast()
+  const { confirm, ConfirmDialog } = useConfirmDialog()
   const [users, setUsers] = useState<User[]>([])
   const [crews, setCrews] = useState<Crew[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([])
+  const [certificationTypes, setCertificationTypes] = useState<CertificationType[]>([])
+  const [selectedCertifications, setSelectedCertifications] = useState<Map<string, { expiresAt: string | null; earnedAt: string }>>(new Map())
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([])
+  const [pendingTransfers, setPendingTransfers] = useState<PendingTransferRequest[]>([])
+  const [existingUserInfo, setExistingUserInfo] = useState<ExistingUserInfo | null>(null)
+  const [showTransferDialog, setShowTransferDialog] = useState(false)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("")
@@ -83,9 +179,10 @@ export default function WorkersPage() {
     position: "",
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
-    password: "",
   })
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
   const [editFormData, setEditFormData] = useState({
     name: "",
     email: "",
@@ -93,24 +190,42 @@ export default function WorkersPage() {
     position: "",
     phone: "",
     crewId: "",
+    customRoleId: "",
     hireDate: "",
     status: "ACTIVE" as UserStatus,
+    includeInStaffingCount: true,
+    singleTrainingCoverageOnly: false,
   })
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usersRes, crewsRes] = await Promise.all([
+        const [usersRes, crewsRes, rolesRes, certsRes, subRes, invitesRes, transfersRes] = await Promise.all([
           fetch("/api/users"),
           fetch("/api/crews"),
+          fetch("/api/roles"),
+          fetch("/api/certifications"),
+          fetch("/api/subscription"),
+          fetch("/api/invitations?status=pending"),
+          fetch("/api/transfer-requests?type=outgoing"),
         ])
 
         const usersData = await usersRes.json()
         const crewsData = await crewsRes.json()
+        const rolesData = await rolesRes.json()
+        const certsData = await certsRes.json()
+        const subData = await subRes.json()
+        const invitesData = await invitesRes.json()
+        const transfersData = await transfersRes.json()
 
         if (usersData.success) setUsers(usersData.data)
         if (crewsData.success) setCrews(crewsData.data)
+        if (rolesData.success) setCustomRoles(rolesData.data)
+        if (certsData.success) setCertificationTypes(certsData.data)
+        if (subData.success) setSubscription(subData.data)
+        if (invitesData.success) setPendingInvitations(invitesData.data)
+        if (transfersData.success) setPendingTransfers(transfersData.data.filter((t: PendingTransferRequest) => t.status === "PENDING"))
       } catch (error) {
         console.error("Failed to fetch data:", error)
       } finally {
@@ -143,7 +258,7 @@ export default function WorkersPage() {
     return matchesSearch && matchesStatus && matchesCrew
   })
 
-  function openEditModal(user: User) {
+  async function openEditModal(user: User) {
     setEditingUser(user)
     setEditFormData({
       name: user.name || "",
@@ -152,9 +267,31 @@ export default function WorkersPage() {
       position: user.position || "",
       phone: user.phone || "",
       crewId: user.crew?.id || "",
+      customRoleId: user.customRoleId || "",
       hireDate: user.hireDate ? user.hireDate.split("T")[0] : "",
       status: user.status,
+      includeInStaffingCount: user.includeInStaffingCount !== false,
+      singleTrainingCoverageOnly: user.singleTrainingCoverageOnly === true,
     })
+    // Fetch user's certifications with expiry dates
+    try {
+      const res = await fetch(`/api/users/${user.id}/certifications`)
+      const data = await res.json()
+      if (data.success) {
+        const certMap = new Map<string, { expiresAt: string | null; earnedAt: string }>()
+        for (const cert of data.data) {
+          certMap.set(cert.certificationTypeId, {
+            expiresAt: cert.expiresAt ? cert.expiresAt.split("T")[0] : null,
+            earnedAt: cert.earnedAt ? cert.earnedAt.split("T")[0] : new Date().toISOString().split("T")[0],
+          })
+        }
+        setSelectedCertifications(certMap)
+      } else {
+        setSelectedCertifications(new Map())
+      }
+    } catch {
+      setSelectedCertifications(new Map())
+    }
     setIsEditModalOpen(true)
     setOpenMenuId(null)
   }
@@ -162,24 +299,184 @@ export default function WorkersPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setInviteLink(null)
 
     try {
-      const response = await fetch("/api/users", {
+      const response = await fetch("/api/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...formData,
-          hireDate: formData.hireDate || undefined,
-          crewId: formData.crewId || undefined,
-          password: formData.password || undefined,
+          email: formData.email,
+          name: formData.name,
+          role: formData.role,
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setUsers((prev) => [...prev, data.data])
+        // Update subscription count (invitation counts toward limit)
+        if (subscription) {
+          setSubscription({
+            ...subscription,
+            workerCount: subscription.workerCount + 1,
+            workersRemaining: subscription.workersRemaining - 1,
+            canAddWorkers: subscription.workersRemaining - 1 > 0,
+            isAtLimit: subscription.workersRemaining - 1 <= 0,
+          })
+        }
+
+        // Add to pending invitations list
+        const newInvitation: PendingInvitation = {
+          id: data.data.id,
+          email: data.data.email,
+          name: data.data.name,
+          role: data.data.role,
+          expiresAt: data.data.expiresAt,
+          createdAt: new Date().toISOString(),
+          createdBy: { id: "", name: "You" },
+        }
+        setPendingInvitations((prev) => [newInvitation, ...prev])
+
+        if (data.emailSent) {
+          setIsModalOpen(false)
+          setFormData({
+            name: "",
+            email: "",
+            role: "WORKER",
+            position: "",
+            phone: "",
+            crewId: "",
+            customRoleId: "",
+            hireDate: "",
+          })
+          addToast({ type: "success", message: `Invitation sent to ${formData.email}` })
+        } else {
+          // Email wasn't sent, show the invite link
+          setInviteLink(data.inviteLink)
+          addToast({ type: "warning", message: "Invitation created. Please share the link manually." })
+        }
+      } else if (data.code === "USER_EXISTS_ELSEWHERE") {
+        // User exists in another organization - offer to send transfer request
+        setExistingUserInfo({
+          email: data.userEmail,
+          name: data.userName,
+          role: formData.role,
+        })
+        setShowTransferDialog(true)
+      } else if (data.code === "WORKER_LIMIT_REACHED") {
         setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: data.message || "Worker limit reached. Please upgrade your plan.",
+        })
+      } else if (data.code === "TRIAL_EXPIRED") {
+        setIsModalOpen(false)
+        addToast({
+          type: "error",
+          message: "Your trial has expired. Please upgrade to continue.",
+        })
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to send invitation" })
+      }
+    } catch (error) {
+      console.error("Failed to send invitation:", error)
+      addToast({ type: "error", message: "Failed to send invitation" })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleResendInvitation(invitation: PendingInvitation) {
+    try {
+      const response = await fetch(`/api/invitations?id=${invitation.id}`, {
+        method: "PUT",
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        // Update the invitation in the list with new expiration
+        setPendingInvitations((prev) =>
+          prev.map((inv) =>
+            inv.id === invitation.id ? { ...inv, expiresAt: data.data.expiresAt } : inv
+          )
+        )
+        if (data.emailSent) {
+          addToast({ type: "success", message: `Invitation resent to ${invitation.email}` })
+        } else {
+          // Show invite link if email wasn't sent
+          addToast({
+            type: "warning",
+            message: `Email could not be sent. Invite link: ${data.inviteLink}`,
+          })
+        }
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to resend invitation" })
+      }
+    } catch (error) {
+      console.error("Failed to resend invitation:", error)
+      addToast({ type: "error", message: "Failed to resend invitation" })
+    }
+  }
+
+  function handleDeleteInvitation(invitation: PendingInvitation) {
+    confirm({
+      title: "Cancel Invitation",
+      description: `Are you sure you want to cancel the invitation for ${invitation.email}?`,
+      confirmText: "Cancel Invitation",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/invitations?id=${invitation.id}`, {
+            method: "DELETE",
+          })
+          const data = await response.json()
+
+          if (data.success) {
+            setPendingInvitations((prev) => prev.filter((inv) => inv.id !== invitation.id))
+            // Update subscription count
+            if (subscription) {
+              setSubscription({
+                ...subscription,
+                workerCount: subscription.workerCount,
+                workersRemaining: subscription.workersRemaining + 1,
+                canAddWorkers: true,
+                isAtLimit: false,
+              })
+            }
+            addToast({ type: "success", message: `Invitation for ${invitation.email} cancelled` })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to cancel invitation" })
+          }
+        } catch (error) {
+          console.error("Failed to delete invitation:", error)
+          addToast({ type: "error", message: "Failed to cancel invitation" })
+        }
+      },
+    })
+  }
+
+  async function handleSendTransferRequest() {
+    if (!existingUserInfo) return
+    setSubmitting(true)
+
+    try {
+      const response = await fetch("/api/transfer-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: existingUserInfo.email,
+          role: existingUserInfo.role,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setPendingTransfers((prev) => [data.data, ...prev])
+        setShowTransferDialog(false)
+        setIsModalOpen(false)
+        setExistingUserInfo(null)
         setFormData({
           name: "",
           email: "",
@@ -187,17 +484,40 @@ export default function WorkersPage() {
           position: "",
           phone: "",
           crewId: "",
+          customRoleId: "",
           hireDate: "",
-          password: "",
+        })
+        addToast({
+          type: "success",
+          message: `Transfer request sent to ${existingUserInfo.email}`,
         })
       } else {
-        alert(data.error || "Failed to create worker")
+        addToast({ type: "error", message: data.error || "Failed to send transfer request" })
       }
     } catch (error) {
-      console.error("Failed to create worker:", error)
-      alert("Failed to create worker")
+      console.error("Failed to send transfer request:", error)
+      addToast({ type: "error", message: "Failed to send transfer request" })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleCancelTransferRequest(transferId: string) {
+    try {
+      const response = await fetch(`/api/transfer-requests/${transferId}`, {
+        method: "DELETE",
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        setPendingTransfers((prev) => prev.filter((t) => t.id !== transferId))
+        addToast({ type: "success", message: "Transfer request cancelled" })
+      } else {
+        addToast({ type: "error", message: data.error || "Failed to cancel transfer request" })
+      }
+    } catch (error) {
+      console.error("Failed to cancel transfer request:", error)
+      addToast({ type: "error", message: "Failed to cancel transfer request" })
     }
   }
 
@@ -207,6 +527,7 @@ export default function WorkersPage() {
     setSubmitting(true)
 
     try {
+      // Update user info
       const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -217,67 +538,133 @@ export default function WorkersPage() {
           position: editFormData.position || null,
           phone: editFormData.phone || null,
           crewId: editFormData.crewId || null,
+          customRoleId: editFormData.customRoleId || null,
           hireDate: editFormData.hireDate || null,
           status: editFormData.status,
+          includeInStaffingCount: editFormData.includeInStaffingCount,
+          singleTrainingCoverageOnly: editFormData.singleTrainingCoverageOnly,
         }),
       })
 
       const data = await response.json()
 
       if (data.success) {
+        // Update certifications if any certification types exist
+        if (certificationTypes.length > 0) {
+          const certifications = Array.from(selectedCertifications.entries()).map(([certId, certData]) => ({
+            certificationId: certId,
+            expiresAt: certData.expiresAt,
+            earnedAt: certData.earnedAt,
+          }))
+          await fetch(`/api/users/${editingUser.id}/certifications`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ certifications }),
+          })
+        }
+
         setUsers((prev) =>
           prev.map((u) => (u.id === editingUser.id ? data.data : u))
         )
         setIsEditModalOpen(false)
         setEditingUser(null)
+        setSelectedCertifications(new Map())
+        addToast({ type: "success", message: "Worker updated successfully" })
       } else {
-        alert(data.error || "Failed to update worker")
+        // Show detailed validation errors if available
+        let errorMessage = data.error || "Failed to update worker"
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const fieldErrors = data.details.map((d: { field: string; message: string }) => `${d.field}: ${d.message}`).join(", ")
+          errorMessage = `${errorMessage} (${fieldErrors})`
+        }
+        addToast({ type: "error", message: errorMessage })
       }
     } catch (error) {
       console.error("Failed to update worker:", error)
-      alert("Failed to update worker")
+      addToast({ type: "error", message: "Failed to update worker" })
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleDelete(userId: string) {
-    if (!confirm("Are you sure you want to delete this worker? This action cannot be undone.")) {
-      return
-    }
+  function handleDelete(userId: string) {
     setOpenMenuId(null)
+    confirm({
+      title: "Delete Worker",
+      description: "Are you sure you want to delete this worker? This action cannot be undone.",
+      confirmText: "Delete",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/users/${userId}`, {
+            method: "DELETE",
+          })
 
-    try {
-      const response = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-      })
+          const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setUsers((prev) => prev.filter((u) => u.id !== userId))
-      } else {
-        alert(data.error || "Failed to delete worker")
-      }
-    } catch (error) {
-      console.error("Failed to delete worker:", error)
-      alert("Failed to delete worker")
-    }
+          if (data.success) {
+            setUsers((prev) => prev.filter((u) => u.id !== userId))
+            addToast({ type: "success", message: "Worker deleted successfully" })
+          } else {
+            addToast({ type: "error", message: data.error || "Failed to delete worker" })
+          }
+        } catch (error) {
+          console.error("Failed to delete worker:", error)
+          addToast({ type: "error", message: "Failed to delete worker" })
+        }
+      },
+    })
   }
 
   return (
     <div className="space-y-6">
+      {/* Subscription Warning Banner */}
+      {subscription && (subscription.isAtLimit || subscription.isTrialExpired) && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              {subscription.isTrialExpired
+                ? "Your free trial has expired. Upgrade to continue adding workers."
+                : `You've reached your ${subscription.tierName} plan limit of ${subscription.workerLimit} workers.`}
+            </span>
+            <Button size="sm" variant="outline" onClick={() => window.open("/pricing", "_blank")}>
+              <Zap className="h-4 w-4 mr-1" />
+              Upgrade Now
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Approaching Limit Warning */}
+      {subscription && !subscription.isAtLimit && subscription.workersRemaining <= 3 && subscription.workersRemaining > 0 && (
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            You have {subscription.workersRemaining} worker slot{subscription.workersRemaining !== 1 ? "s" : ""} remaining on your {subscription.tierName} plan.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Workers</h1>
           <p className="text-muted-foreground">
             Manage your workforce ({users.length} total)
+            {subscription && subscription.workerLimit !== 999999 && (
+              <span className="ml-1">
+                · {subscription.workersRemaining} slot{subscription.workersRemaining !== 1 ? "s" : ""} available
+              </span>
+            )}
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
+        <Button
+          onClick={() => setIsModalOpen(true)}
+          disabled={subscription?.isAtLimit || subscription?.isTrialExpired}
+        >
           <Plus className="h-4 w-4 mr-2" />
-          Add Worker
+          Invite Worker
         </Button>
       </div>
 
@@ -316,6 +703,155 @@ export default function WorkersPage() {
           />
         </div>
       </div>
+
+      {/* Pending Invitations */}
+      {pendingInvitations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Pending Invitations ({pendingInvitations.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invitee</TableHead>
+                  <TableHead className="hidden sm:table-cell">Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="hidden md:table-cell">Invited By</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingInvitations.map((invitation) => (
+                  <TableRow key={invitation.id}>
+                    <TableCell>
+                      <div>
+                        <div className="flex items-center gap-1 group">
+                          <p className="font-medium select-text">{invitation.name}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(invitation.name)
+                              addToast({ type: "success", message: "Name copied to clipboard" })
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                            title="Copy name"
+                          >
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1 group">
+                          <p className="text-sm text-muted-foreground break-all select-text">{invitation.email}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(invitation.email)
+                              addToast({ type: "success", message: "Email copied to clipboard" })
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity"
+                            title="Copy email"
+                          >
+                            <Copy className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-muted-foreground sm:hidden mt-1">
+                          {ROLE_LABELS[invitation.role]}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{ROLE_LABELS[invitation.role]}</TableCell>
+                    <TableCell>
+                      {new Date(invitation.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">{invitation.createdBy.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleResendInvitation(invitation)}
+                          title="Resend invitation"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteInvitation(invitation)}
+                          title="Cancel invitation"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Transfer Requests */}
+      {pendingTransfers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Pending Transfer Requests ({pendingTransfers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead className="hidden sm:table-cell">Role</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingTransfers.map((transfer) => (
+                  <TableRow key={transfer.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{transfer.targetUser.name || "Unknown"}</p>
+                        <p className="text-sm text-muted-foreground">{transfer.targetUser.email}</p>
+                        {transfer.targetUser.organization && (
+                          <p className="text-xs text-muted-foreground">
+                            Currently in: {transfer.targetUser.organization.name}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{ROLE_LABELS[transfer.role]}</TableCell>
+                    <TableCell>
+                      {new Date(transfer.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancelTransferRequest(transfer.id)}
+                        title="Cancel transfer request"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="text-xs text-muted-foreground mt-2">
+              These users have been invited to join your organization. They need to accept the request from their account.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Workers table */}
       <Card>
@@ -356,10 +892,38 @@ export default function WorkersPage() {
                       <div className="flex items-center gap-3">
                         <Avatar alt={user.name || user.email} size="sm" />
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{user.name || "Unnamed"}</p>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Mail className="h-3 w-3 flex-shrink-0" />
-                            <span className="truncate">{user.email}</span>
+                          <div className="flex items-center gap-1 group">
+                            <p className="font-medium truncate select-text">{user.name || "Unnamed"}</p>
+                            {user.name && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(user.name!)
+                                  addToast({ type: "success", message: "Name copied to clipboard" })
+                                }}
+                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity flex-shrink-0"
+                                title="Copy name"
+                              >
+                                <Copy className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 group">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground select-text">
+                              <Mail className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{user.email}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(user.email)
+                                addToast({ type: "success", message: "Email copied to clipboard" })
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-muted rounded transition-opacity flex-shrink-0"
+                              title="Copy email"
+                            >
+                              <Copy className="h-3 w-3 text-muted-foreground" />
+                            </button>
                           </div>
                           {/* Show crew inline on mobile */}
                           <div className="sm:hidden mt-1">
@@ -392,7 +956,19 @@ export default function WorkersPage() {
                       )}
                     </TableCell>
                     <TableCell className="hidden md:table-cell">{user.position || "-"}</TableCell>
-                    <TableCell className="hidden md:table-cell">{ROLE_LABELS[user.role]}</TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm">{ROLE_LABELS[user.role]}</span>
+                        {user.customRole && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full inline-block w-fit"
+                            style={{ backgroundColor: user.customRole.color, color: "#fff" }}
+                          >
+                            {user.customRole.name}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_BADGES[user.status].variant}>
                         {STATUS_BADGES[user.status].label}
@@ -438,111 +1014,122 @@ export default function WorkersPage() {
       {/* Add Worker Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Add Worker"
-        description="Add a new worker to your organization"
+        onClose={() => {
+          setIsModalOpen(false)
+          setInviteLink(null)
+        }}
+        title="Invite Worker"
+        description="Send an invitation to add a new worker to your organization"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                required
-              />
+        {inviteLink ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200 mb-2">
+                Email could not be sent. Please share this link with the worker:
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={inviteLink}
+                  readOnly
+                  className="text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteLink)
+                    addToast({ type: "success", message: "Link copied to clipboard" })
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                required
-              />
+            <div className="flex justify-end">
+              <Button onClick={() => {
+                setIsModalOpen(false)
+                setInviteLink(null)
+                setFormData({
+                  name: "",
+                  email: "",
+                  role: "WORKER",
+                  position: "",
+                  phone: "",
+                  crewId: "",
+                  customRoleId: "",
+                  hireDate: "",
+                })
+              }}>
+                Done
+              </Button>
             </div>
           </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  required
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                  autoComplete="off"
+                />
+              </div>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select
-                value={formData.role}
-                onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
-                options={[
-                  { value: "WORKER", label: "Worker" },
-                  { value: "SUPERVISOR", label: "Supervisor" },
-                  { value: "ADMIN", label: "Administrator" },
-                ]}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="crewId">Crew</Label>
-              <Select
-                value={formData.crewId}
-                onChange={(e) => setFormData((prev) => ({ ...prev, crewId: e.target.value }))}
-                options={[
-                  { value: "", label: "No Crew" },
-                  ...crews.map((crew) => ({ value: crew.id, label: crew.name })),
-                ]}
-              />
-            </div>
-          </div>
+            <p className="text-xs text-muted-foreground">
+              An invitation email will be sent to this address with a link to set up their account.
+            </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="position">Position</Label>
-              <Input
-                id="position"
-                value={formData.position}
-                onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
-                placeholder="e.g., Operator, Supervisor"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="role">System Role</Label>
+                <Select
+                  value={formData.role}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
+                  options={[
+                    { value: "WORKER", label: "Worker" },
+                    { value: "SUPERVISOR", label: "Supervisor" },
+                    { value: "ADMIN", label: "Administrator" },
+                  ]}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="customRoleId">Custom Role</Label>
+                <Select
+                  value={formData.customRoleId}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                  options={[
+                    { value: "", label: "None" },
+                    ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                  ]}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="hireDate">Hire Date</Label>
-              <Input
-                id="hireDate"
-                type="date"
-                value={formData.hireDate}
-                onChange={(e) => setFormData((prev) => ({ ...prev, hireDate: e.target.value }))}
-              />
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Sending..." : "Send Invitation"}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password (Optional)</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                placeholder="Leave blank for invite"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Adding..." : "Add Worker"}
-            </Button>
-          </div>
-        </form>
+          </form>
+        )}
       </Modal>
 
       {/* Edit Worker Modal */}
@@ -551,11 +1138,12 @@ export default function WorkersPage() {
         onClose={() => {
           setIsEditModalOpen(false)
           setEditingUser(null)
+          setSelectedCertifications(new Map())
         }}
         title="Edit Worker"
         description="Update worker information"
       >
-        <form onSubmit={handleUpdate} className="space-y-4">
+        <form onSubmit={handleUpdate} className="space-y-4" autoComplete="off">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
@@ -564,6 +1152,7 @@ export default function WorkersPage() {
                 value={editFormData.name}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, name: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -574,13 +1163,14 @@ export default function WorkersPage() {
                 value={editFormData.email}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="off"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-role">Role</Label>
+              <Label htmlFor="edit-role">System Role</Label>
               <Select
                 value={editFormData.role}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, role: e.target.value as UserRole }))}
@@ -591,6 +1181,20 @@ export default function WorkersPage() {
                 ]}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-customRoleId">Custom Role</Label>
+              <Select
+                value={editFormData.customRoleId}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, customRoleId: e.target.value }))}
+                options={[
+                  { value: "", label: "None" },
+                  ...customRoles.map((role) => ({ value: role.id, label: role.name })),
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-status">Status</Label>
               <Select
@@ -625,6 +1229,7 @@ export default function WorkersPage() {
                 value={editFormData.position}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, position: e.target.value }))}
                 placeholder="e.g., Operator, Supervisor"
+                autoComplete="off"
               />
             </div>
           </div>
@@ -637,6 +1242,7 @@ export default function WorkersPage() {
                 type="tel"
                 value={editFormData.phone}
                 onChange={(e) => setEditFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -650,10 +1256,124 @@ export default function WorkersPage() {
             </div>
           </div>
 
+          {/* Staffing Count Settings */}
+          <div className="p-3 border rounded-lg space-y-3 bg-muted/30">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.includeInStaffingCount}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, includeInStaffingCount: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <div>
+                <span className="font-medium text-sm">Include in staffing counts</span>
+                <p className="text-xs text-muted-foreground">
+                  When disabled, this worker won&apos;t be counted in shift totals, staffing alerts, or coverage calculations.
+                  Useful for supervisors, leads, or administrative staff.
+                </p>
+              </div>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editFormData.singleTrainingCoverageOnly}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, singleTrainingCoverageOnly: e.target.checked }))}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <div>
+                <span className="font-medium text-sm">Single training coverage only</span>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, this worker can only cover ONE training type per shift, even if trained in multiple areas.
+                  Use for workers who shouldn&apos;t be relied on to cover multiple roles simultaneously.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Training Certifications */}
+          {certificationTypes.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <Label className="text-sm font-medium">Training & Certifications</Label>
+              <p className="text-xs text-muted-foreground">Select certifications and set expiry dates (optional)</p>
+              <div className="space-y-3">
+                {certificationTypes.map((cert) => {
+                  const isSelected = selectedCertifications.has(cert.id)
+                  const certData = selectedCertifications.get(cert.id)
+                  return (
+                    <div key={cert.id} className="p-3 border rounded-lg space-y-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const newMap = new Map(selectedCertifications)
+                            if (e.target.checked) {
+                              newMap.set(cert.id, {
+                                expiresAt: null,
+                                earnedAt: new Date().toISOString().split("T")[0],
+                              })
+                            } else {
+                              newMap.delete(cert.id)
+                            }
+                            setSelectedCertifications(newMap)
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: cert.color }}
+                        />
+                        <span className="font-medium">{cert.name}</span>
+                        {cert.isRequired && <span className="text-xs text-muted-foreground">(Required)</span>}
+                      </label>
+                      {isSelected && (
+                        <div className="ml-6 flex gap-4 text-xs">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Earned</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.earnedAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  earnedAt: e.target.value,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground">Expires</label>
+                            <Input
+                              type="date"
+                              className="h-8 w-36 text-xs"
+                              value={certData?.expiresAt || ""}
+                              onChange={(e) => {
+                                const newMap = new Map(selectedCertifications)
+                                newMap.set(cert.id, {
+                                  ...certData!,
+                                  expiresAt: e.target.value || null,
+                                })
+                                setSelectedCertifications(newMap)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => {
               setIsEditModalOpen(false)
               setEditingUser(null)
+              setSelectedCertifications(new Map())
             }}>
               Cancel
             </Button>
@@ -663,6 +1383,49 @@ export default function WorkersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Transfer Request Dialog */}
+      <Modal
+        isOpen={showTransferDialog}
+        onClose={() => {
+          setShowTransferDialog(false)
+          setExistingUserInfo(null)
+        }}
+        title="User Already Has an Account"
+        description="This person already has an account with another organization"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
+              <strong>{existingUserInfo?.name || existingUserInfo?.email}</strong> already has an account in the ShiftSync system.
+            </p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              You can send them a <strong>transfer request</strong> to invite them to join your organization.
+              They&apos;ll receive a notification and can choose to accept, which will move them to your team.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowTransferDialog(false)
+                setExistingUserInfo(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendTransferRequest}
+              disabled={submitting}
+            >
+              {submitting ? "Sending..." : "Send Transfer Request"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog />
     </div>
   )
 }

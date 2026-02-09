@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import crypto from "crypto"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -82,7 +83,6 @@ export function generateSlug(name: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
-export async function generateToken(length: number = 32): Promise<string> {
-  const crypto = await import('crypto')
+export function generateToken(length: number = 32): string {
   return crypto.randomBytes(length).toString('hex').slice(0, length)
 }

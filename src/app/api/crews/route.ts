@@ -24,6 +24,13 @@ export async function GET(_request: NextRequest) {
             includesNights: true,
           },
         },
+        department: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+          },
+        },
         _count: {
           select: { workers: true },
         },
@@ -89,6 +96,7 @@ export async function POST(request: NextRequest) {
         color: validatedData.color,
         organizationId: session.user.organizationId,
         rotationPatternId: validatedData.rotationPatternId,
+        departmentId: validatedData.departmentId,
       },
       include: {
         rotationPattern: {
@@ -97,6 +105,13 @@ export async function POST(request: NextRequest) {
             name: true,
             daysOn: true,
             daysOff: true,
+          },
+        },
+        department: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
           },
         },
         _count: {

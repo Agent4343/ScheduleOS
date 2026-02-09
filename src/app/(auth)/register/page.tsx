@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Calendar, Loader2 } from "lucide-react"
+import { Calendar, Loader2, Mail } from "lucide-react"
+
+interface PendingInvitation {
+  organizationName: string
+  message: string
+}
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -21,6 +26,7 @@ export default function RegisterPage() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [pendingInvitation, setPendingInvitation] = useState<PendingInvitation | null>(null)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setFormData(prev => ({
@@ -48,14 +54,32 @@ export default function RegisterPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          organizationName: formData.organizationName || undefined,
+          organizationName: formData.organizationName,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || "Registration failed")
+        // Check if user has a pending invitation
+        if (data.code === "PENDING_INVITATION") {
+          setPendingInvitation({
+            organizationName: data.organizationName,
+            message: data.message,
+          })
+          setError("")
+          return
+        }
+
+        // Show detailed validation errors if available
+        if (data.details && Array.isArray(data.details) && data.details.length > 0) {
+          const errorMessages = data.details.map((d: { field: string; message: string }) => d.message).join(". ")
+          setError(errorMessages || data.error || "Registration failed")
+        } else if (data.hint) {
+          setError(`${data.error}. ${data.hint}`)
+        } else {
+          setError(data.error || "Registration failed")
+        }
         return
       }
 
@@ -81,6 +105,28 @@ export default function RegisterPage() {
         <CardDescription>Get started with ShiftSync today</CardDescription>
       </CardHeader>
       <CardContent>
+        {pendingInvitation ? (
+          <div className="space-y-4">
+            <div className="flex flex-col items-center text-center p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+              <Mail className="h-12 w-12 text-blue-500 mb-3" />
+              <h3 className="font-semibold text-lg mb-2">You&apos;ve Been Invited!</h3>
+              <p className="text-muted-foreground mb-4">
+                You have a pending invitation to join <strong>{pendingInvitation.organizationName}</strong>.
+              </p>
+              <p className="text-sm text-muted-foreground mb-4">
+                Please check your email for the invitation link. If you can&apos;t find it, contact your administrator to resend the invitation.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setPendingInvitation(null)}>
+                  Use Different Email
+                </Button>
+                <Link href="/login">
+                  <Button>Go to Login</Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <Alert variant="destructive">
@@ -122,13 +168,16 @@ export default function RegisterPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               value={formData.password}
               onChange={handleChange}
               required
-              minLength={8}
+              minLength={12}
               disabled={isLoading}
             />
+            <p className="text-xs text-muted-foreground">
+              Must include uppercase, lowercase, number, and special character
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -146,7 +195,7 @@ export default function RegisterPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizationName">Organization Name (Optional)</Label>
+            <Label htmlFor="organizationName">Organization Name</Label>
             <Input
               id="organizationName"
               name="organizationName"
@@ -154,10 +203,11 @@ export default function RegisterPage() {
               placeholder="Your Company Name"
               value={formData.organizationName}
               onChange={handleChange}
+              required
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Create a new organization or leave blank to join an existing one later
+              You will be the admin of this organization
             </p>
           </div>
 
@@ -166,6 +216,7 @@ export default function RegisterPage() {
             Create Account
           </Button>
         </form>
+        )}
 
         <div className="mt-6 text-center text-sm">
           <span className="text-muted-foreground">Already have an account? </span>
