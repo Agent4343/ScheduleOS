@@ -701,17 +701,17 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 pt-4 border-t">
               <div className="text-center">
-                <p className="text-2xl font-bold">{organization?._count.users || 0}</p>
+                <p className="text-xl sm:text-2xl font-bold">{organization?._count.users || 0}</p>
                 <p className="text-xs text-muted-foreground">Workers</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold">{organization?._count.crews || 0}</p>
+                <p className="text-xl sm:text-2xl font-bold">{organization?._count.crews || 0}</p>
                 <p className="text-xs text-muted-foreground">Crews</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold">{organization?._count.rotationPatterns || 0}</p>
+                <p className="text-xl sm:text-2xl font-bold">{organization?._count.rotationPatterns || 0}</p>
                 <p className="text-xs text-muted-foreground">Patterns</p>
               </div>
             </div>
@@ -856,13 +856,13 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => toggleSetting("emailNotificationsEnabled", !organization?.settings?.emailNotificationsEnabled)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors touch-action-manipulation ${
                   organization?.settings?.emailNotificationsEnabled ? "bg-primary" : "bg-muted"
                 } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.emailNotificationsEnabled ? "translate-x-6" : "translate-x-1"
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.emailNotificationsEnabled ? "translate-x-7" : "translate-x-1"
                   }`}
                 />
               </button>
@@ -877,13 +877,13 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => toggleSetting("smsNotificationsEnabled", !organization?.settings?.smsNotificationsEnabled)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors touch-action-manipulation ${
                   organization?.settings?.smsNotificationsEnabled ? "bg-primary" : "bg-muted"
                 } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.smsNotificationsEnabled ? "translate-x-6" : "translate-x-1"
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.smsNotificationsEnabled ? "translate-x-7" : "translate-x-1"
                   }`}
                 />
               </button>
@@ -898,13 +898,13 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => toggleSetting("minStaffingAlertEnabled", !organization?.settings?.minStaffingAlertEnabled)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors touch-action-manipulation ${
                   organization?.settings?.minStaffingAlertEnabled ? "bg-primary" : "bg-muted"
                 } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.minStaffingAlertEnabled ? "translate-x-6" : "translate-x-1"
+                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.minStaffingAlertEnabled ? "translate-x-7" : "translate-x-1"
                   }`}
                 />
               </button>
@@ -1223,16 +1223,16 @@ export default function SettingsPage() {
 
             <div className="space-y-2">
               {patterns.map((pattern) => (
-                <div key={pattern.id} className="flex items-center justify-between p-3 rounded border">
-                  <div>
-                    <p className="font-medium">{pattern.name}</p>
+                <div key={pattern.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded border gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{pattern.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {pattern.daysOn} on / {pattern.daysOff} off
                       {pattern.includesNights && pattern.alternatesShifts && " • alternates"}
                       {pattern.includesNights && !pattern.alternatesShifts && ` • ${pattern.nightDays} nights`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0 flex-wrap">
                     {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
                     <Badge variant="outline">{pattern._count.crews} crews</Badge>
                     {isAdmin && (
@@ -1294,7 +1294,7 @@ export default function SettingsPage() {
             {showColorEditor && (
               <div className="mb-4 p-4 border rounded-lg bg-muted/50">
                 <h4 className="font-medium mb-3">Built-in Shift Colors</h4>
-                <div className="grid gap-3 md:grid-cols-4">
+                <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
                   {Object.entries(shiftColors).map(([type, colors]) => (
                     <div key={type} className="flex items-center gap-2">
                       <div
@@ -1310,7 +1310,7 @@ export default function SettingsPage() {
                         type="color"
                         value={colors.bg}
                         onChange={(e) => setShiftColors({ ...shiftColors, [type]: { ...colors, bg: e.target.value } })}
-                        className="w-6 h-6 rounded cursor-pointer"
+                        className="w-8 h-8 rounded cursor-pointer min-h-[44px] min-w-[44px] p-0"
                         disabled={!isAdmin}
                       />
                     </div>
@@ -1459,14 +1459,14 @@ export default function SettingsPage() {
             <CardDescription>Manage your personal account settings</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <Label className="text-muted-foreground text-xs">Name</Label>
-                <p className="font-medium">{session?.user?.name || "Not set"}</p>
+                <p className="font-medium text-sm sm:text-base truncate">{session?.user?.name || "Not set"}</p>
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Email</Label>
-                <p className="font-medium">{session?.user?.email}</p>
+                <p className="font-medium text-sm sm:text-base truncate">{session?.user?.email}</p>
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Role</Label>
@@ -1474,11 +1474,11 @@ export default function SettingsPage() {
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Organization</Label>
-                <p className="font-medium">{organization?.name}</p>
+                <p className="font-medium text-sm sm:text-base truncate">{organization?.name}</p>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-4 border-t">
+            <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowPasswordModal(true)}>
                 <Key className="h-4 w-4 mr-2" />
                 Change Password

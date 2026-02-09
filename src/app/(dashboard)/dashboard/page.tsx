@@ -191,7 +191,7 @@ export default function DashboardPage() {
                 {data.upcomingTimeOff.map((request) => (
                   <div
                     key={request.id}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
+                    className="flex items-center justify-between py-2 border-b last:border-0 min-h-[44px]"
                   >
                     <div>
                       <p className="font-medium">{request.user.name}</p>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                 {data.staffingGapDetails.map((gap, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between py-2 border-b last:border-0"
+                    className="flex items-center justify-between py-2 border-b last:border-0 min-h-[44px]"
                   >
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-destructive" />

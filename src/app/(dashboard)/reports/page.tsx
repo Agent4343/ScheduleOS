@@ -181,7 +181,7 @@ export default function ReportsPage() {
           <CardDescription>Select the period for schedule statistics</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 items-end">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
             <div className="space-y-2">
               <Label htmlFor="startDate">Start Date</Label>
               <Input
@@ -437,7 +437,7 @@ export default function ReportsPage() {
                   </a>
                 </p>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {Object.entries(workerStats.byPosition).map(([position, count]) => (
                     <div
                       key={position}

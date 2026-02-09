@@ -43,12 +43,12 @@ export default async function HomePage() {
               Pricing
             </Link>
           </nav>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/login">
-              <Button variant="ghost">Sign In</Button>
+              <Button variant="ghost" size="sm" className="sm:text-sm">Sign In</Button>
             </Link>
             <Link href="/register">
-              <Button>Start Free Trial</Button>
+              <Button size="sm" className="sm:text-sm">Start Free Trial</Button>
             </Link>
           </div>
         </div>
@@ -124,35 +124,37 @@ export default async function HomePage() {
                     </div>
                   </div>
                   {/* Mock Schedule Grid */}
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-8 bg-muted/50">
-                      <div className="p-3 border-r font-medium text-sm">Crew</div>
-                      {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                        <div key={day} className="p-3 text-center text-sm font-medium border-r last:border-r-0">
-                          {day}
-                        </div>
-                      ))}
-                    </div>
-                    {["Alpha", "Bravo", "Charlie"].map((crew, i) => (
-                      <div key={crew} className="grid grid-cols-8 border-t">
-                        <div className="p-3 border-r text-sm font-medium">{crew}</div>
-                        {[0, 1, 2, 3, 4, 5, 6].map((j) => (
-                          <div key={j} className="p-2 border-r last:border-r-0">
-                            <div
-                              className={`h-8 rounded text-xs flex items-center justify-center text-white font-medium ${
-                                (i + j) % 3 === 0
-                                  ? "bg-green-500"
-                                  : (i + j) % 3 === 1
-                                  ? "bg-blue-500"
-                                  : "bg-muted"
-                              }`}
-                            >
-                              {(i + j) % 3 === 0 ? "Day" : (i + j) % 3 === 1 ? "Night" : ""}
-                            </div>
+                  <div className="border rounded-lg overflow-x-auto">
+                    <div className="min-w-[500px]">
+                      <div className="grid grid-cols-8 bg-muted/50">
+                        <div className="p-2 sm:p-3 border-r font-medium text-xs sm:text-sm">Crew</div>
+                        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                          <div key={day} className="p-2 sm:p-3 text-center text-xs sm:text-sm font-medium border-r last:border-r-0">
+                            {day}
                           </div>
                         ))}
                       </div>
-                    ))}
+                      {["Alpha", "Bravo", "Charlie"].map((crew, i) => (
+                        <div key={crew} className="grid grid-cols-8 border-t">
+                          <div className="p-2 sm:p-3 border-r text-xs sm:text-sm font-medium">{crew}</div>
+                          {[0, 1, 2, 3, 4, 5, 6].map((j) => (
+                            <div key={j} className="p-1.5 sm:p-2 border-r last:border-r-0">
+                              <div
+                                className={`h-7 sm:h-8 rounded text-xs flex items-center justify-center text-white font-medium ${
+                                  (i + j) % 3 === 0
+                                    ? "bg-green-500"
+                                    : (i + j) % 3 === 1
+                                    ? "bg-blue-500"
+                                    : "bg-muted"
+                                }`}
+                              >
+                                {(i + j) % 3 === 0 ? "Day" : (i + j) % 3 === 1 ? "Night" : ""}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

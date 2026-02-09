@@ -324,7 +324,7 @@ export default function SetupPage() {
         </Alert>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Step 1: Select Crew or Workers */}
         <Card>
           <CardHeader>
@@ -374,7 +374,7 @@ export default function SetupPage() {
                 {workers.map((worker) => (
                   <div
                     key={worker.id}
-                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                    className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors min-h-[44px] ${
                       selectedWorkers.has(worker.id)
                         ? "bg-primary/10 border border-primary"
                         : "hover:bg-muted border border-transparent"
@@ -474,7 +474,7 @@ export default function SetupPage() {
                     <select
                       id="worker-crew"
                       name="worker-crew"
-                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                      className="w-full h-11 px-3 rounded-md border border-input bg-background text-base sm:text-sm"
                       value={newWorker.crewId}
                       onChange={(e) =>
                         setNewWorker({ ...newWorker, crewId: e.target.value })
@@ -616,11 +616,12 @@ export default function SetupPage() {
               )}
               <div>
                 <Label>Schedule End</Label>
-                <div className="grid grid-cols-3 gap-2 mt-1 mb-3">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mt-1 mb-3">
                   <Button
                     type="button"
                     variant={scheduleType === "duration" ? "default" : "outline"}
                     size="sm"
+                    className="text-xs sm:text-sm px-2 sm:px-3"
                     onClick={() => setScheduleType("duration")}
                   >
                     Duration
@@ -629,6 +630,7 @@ export default function SetupPage() {
                     type="button"
                     variant={scheduleType === "endDate" ? "default" : "outline"}
                     size="sm"
+                    className="text-xs sm:text-sm px-2 sm:px-3"
                     onClick={() => setScheduleType("endDate")}
                   >
                     End Date
@@ -637,6 +639,7 @@ export default function SetupPage() {
                     type="button"
                     variant={scheduleType === "ongoing" ? "default" : "outline"}
                     size="sm"
+                    className="text-xs sm:text-sm px-2 sm:px-3"
                     onClick={() => setScheduleType("ongoing")}
                   >
                     Ongoing
@@ -644,7 +647,7 @@ export default function SetupPage() {
                 </div>
 
                 {scheduleType === "duration" && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {[
                       { value: "3", label: "3 mo" },
                       { value: "6", label: "6 mo" },

@@ -337,14 +337,14 @@ export default function CrewsPage() {
                     {openMenuId === crew.id && (
                       <div className="absolute right-0 top-full mt-1 w-40 bg-background border rounded-md shadow-lg z-10">
                         <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                          className="w-full px-3 py-3 text-left text-sm hover:bg-muted flex items-center gap-2 min-h-[44px]"
                           onClick={() => openEditModal(crew)}
                         >
                           <Pencil className="h-4 w-4" />
                           Edit
                         </button>
                         <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                          className="w-full px-3 py-3 text-left text-sm hover:bg-muted flex items-center gap-2 min-h-[44px]"
                           onClick={() => {
                             openEditModal(crew)
                           }}
@@ -353,7 +353,7 @@ export default function CrewsPage() {
                           Configure
                         </button>
                         <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-red-600"
+                          className="w-full px-3 py-3 text-left text-sm hover:bg-muted flex items-center gap-2 text-red-600 min-h-[44px]"
                           onClick={() => handleDeleteCrew(crew.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -459,7 +459,7 @@ export default function CrewsPage() {
                   key={color.value}
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                  className={`w-10 h-10 rounded-full border-2 transition-all ${
                     formData.color === color.value
                       ? "border-foreground scale-110"
                       : "border-transparent hover:scale-105"
@@ -537,7 +537,7 @@ export default function CrewsPage() {
                   key={color.value}
                   type="button"
                   onClick={() => setEditFormData((prev) => ({ ...prev, color: color.value }))}
-                  className={`w-8 h-8 rounded-full border-2 transition-all ${
+                  className={`w-10 h-10 rounded-full border-2 transition-all ${
                     editFormData.color === color.value
                       ? "border-foreground scale-110"
                       : "border-transparent hover:scale-105"
