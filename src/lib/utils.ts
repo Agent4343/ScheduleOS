@@ -82,7 +82,7 @@ export function generateSlug(name: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
-export function generateToken(length: number = 32): string {
-  const crypto = require('crypto')
+export async function generateToken(length: number = 32): Promise<string> {
+  const crypto = await import('crypto')
   return crypto.randomBytes(length).toString('hex').slice(0, length)
 }
