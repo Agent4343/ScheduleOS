@@ -39,7 +39,7 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="flex-1 space-y-1 p-4" aria-label="Main navigation">
           {navigation.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
@@ -52,6 +52,7 @@ export function Sidebar() {
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
+                aria-current={isActive ? "page" : undefined}
               >
                 <item.icon className="h-5 w-5" />
                 {item.name}

@@ -54,6 +54,12 @@ export const metadata: Metadata = {
       "AI-powered workforce scheduling built for offshore oil & gas operations. Free 14-day trial.",
     images: ["/og-image.png"],
   },
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    viewportFit: "cover",
+  },
   robots: {
     index: true,
     follow: true,
@@ -64,6 +70,11 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "ShiftSync",
   },
 }
 

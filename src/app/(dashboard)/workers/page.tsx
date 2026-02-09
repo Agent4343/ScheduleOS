@@ -342,9 +342,9 @@ export default function WorkersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Worker</TableHead>
-                  <TableHead>Crew</TableHead>
-                  <TableHead>Position</TableHead>
-                  <TableHead>Role</TableHead>
+                  <TableHead className="hidden sm:table-cell">Crew</TableHead>
+                  <TableHead className="hidden md:table-cell">Position</TableHead>
+                  <TableHead className="hidden md:table-cell">Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-12"></TableHead>
                 </TableRow>
@@ -355,16 +355,30 @@ export default function WorkersPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar alt={user.name || user.email} size="sm" />
-                        <div>
-                          <p className="font-medium">{user.name || "Unnamed"}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{user.name || "Unnamed"}</p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            {user.email}
+                            <Mail className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{user.email}</span>
+                          </div>
+                          {/* Show crew inline on mobile */}
+                          <div className="sm:hidden mt-1">
+                            {user.crew ? (
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <div
+                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: user.crew.color }}
+                                />
+                                {user.crew.name}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Unassigned</span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       {user.crew ? (
                         <div className="flex items-center gap-2">
                           <div
@@ -377,8 +391,8 @@ export default function WorkersPage() {
                         <span className="text-muted-foreground">Unassigned</span>
                       )}
                     </TableCell>
-                    <TableCell>{user.position || "-"}</TableCell>
-                    <TableCell>{ROLE_LABELS[user.role]}</TableCell>
+                    <TableCell className="hidden md:table-cell">{user.position || "-"}</TableCell>
+                    <TableCell className="hidden md:table-cell">{ROLE_LABELS[user.role]}</TableCell>
                     <TableCell>
                       <Badge variant={STATUS_BADGES[user.status].variant}>
                         {STATUS_BADGES[user.status].label}
@@ -396,14 +410,14 @@ export default function WorkersPage() {
                         {openMenuId === user.id && (
                           <div className="absolute right-0 top-full mt-1 w-36 bg-background border rounded-md shadow-lg z-10">
                             <button
-                              className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+                              className="w-full px-3 py-3 text-left text-sm hover:bg-muted flex items-center gap-2 min-h-[44px]"
                               onClick={() => openEditModal(user)}
                             >
                               <Pencil className="h-4 w-4" />
                               Edit
                             </button>
                             <button
-                              className="w-full px-3 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive"
+                              className="w-full px-3 py-3 text-left text-sm hover:bg-muted flex items-center gap-2 text-destructive min-h-[44px]"
                               onClick={() => handleDelete(user.id)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -429,7 +443,7 @@ export default function WorkersPage() {
         description="Add a new worker to your organization"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
               <Input
@@ -451,7 +465,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
               <Select
@@ -477,7 +491,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="position">Position</Label>
               <Input
@@ -498,7 +512,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="hireDate">Hire Date</Label>
               <Input
@@ -542,7 +556,7 @@ export default function WorkersPage() {
         description="Update worker information"
       >
         <form onSubmit={handleUpdate} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-name">Full Name *</Label>
               <Input
@@ -564,7 +578,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-role">Role</Label>
               <Select
@@ -592,7 +606,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-crewId">Crew</Label>
               <Select
@@ -615,7 +629,7 @@ export default function WorkersPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-phone">Phone</Label>
               <Input

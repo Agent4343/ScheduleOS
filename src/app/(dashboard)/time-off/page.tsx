@@ -219,10 +219,10 @@ export default function TimeOffPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
-                  <TableHead>Type</TableHead>
+                  <TableHead className="hidden sm:table-cell">Type</TableHead>
                   <TableHead>Dates</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Submitted</TableHead>
+                  <TableHead className="hidden md:table-cell">Submitted</TableHead>
                   {isAdmin && <TableHead className="text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -237,7 +237,7 @@ export default function TimeOffPage() {
                         </p>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden sm:table-cell">
                       <Badge variant="outline">{TYPE_LABELS[request.type]}</Badge>
                     </TableCell>
                     <TableCell>
@@ -254,7 +254,7 @@ export default function TimeOffPage() {
                         <span className="ml-1">{request.status}</span>
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                       {new Date(request.createdAt).toLocaleDateString()}
                     </TableCell>
                     {isAdmin && (
@@ -264,20 +264,22 @@ export default function TimeOffPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-green-600 hover:text-green-700"
+                              className="text-green-600 hover:text-green-700 min-h-[44px] sm:min-h-0"
                               onClick={() => handleUpdateStatus(request.id, "APPROVED")}
+                              aria-label={`Approve request from ${request.user.name || request.user.email}`}
                             >
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Approve
+                              <CheckCircle className="h-3 w-3 sm:mr-1" />
+                              <span className="hidden sm:inline">Approve</span>
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-red-600 hover:text-red-700"
+                              className="text-red-600 hover:text-red-700 min-h-[44px] sm:min-h-0"
                               onClick={() => handleUpdateStatus(request.id, "DENIED")}
+                              aria-label={`Deny request from ${request.user.name || request.user.email}`}
                             >
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Deny
+                              <XCircle className="h-3 w-3 sm:mr-1" />
+                              <span className="hidden sm:inline">Deny</span>
                             </Button>
                           </div>
                         )}
@@ -311,7 +313,7 @@ export default function TimeOffPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="startDate">Start Date *</Label>
               <Input

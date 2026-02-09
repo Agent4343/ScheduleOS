@@ -19,6 +19,7 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  MoveHorizontal,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -628,14 +629,14 @@ function SchedulePageContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())}>
+          <Button variant="outline" size="sm" onClick={() => setCurrentYear(new Date().getFullYear())} className="min-h-[44px] sm:min-h-0">
             This Year
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)}>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear - 1)} aria-label="Previous year" className="min-h-[44px] min-w-[44px]">
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="font-semibold px-4 text-lg">{currentYear}</span>
-          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)}>
+          <span className="font-semibold px-2 sm:px-4 text-lg">{currentYear}</span>
+          <Button variant="outline" size="icon" onClick={() => setCurrentYear(currentYear + 1)} aria-label="Next year" className="min-h-[44px] min-w-[44px]">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -684,14 +685,19 @@ function SchedulePageContent() {
       {/* Schedule Table */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <Calendar className="h-5 w-5" />
-            {currentYear} Schedule
-            <Badge variant="secondary" className="ml-2">
+            <span>{currentYear} Schedule</span>
+            <Badge variant="secondary">
               <Users className="h-3 w-3 mr-1" />
               {sortedWorkers.length} workers
             </Badge>
           </CardTitle>
+          {/* Mobile scroll hint */}
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1 lg:hidden">
+            <MoveHorizontal className="h-3 w-3" />
+            Swipe horizontally to view schedule. Tap a cell to edit.
+          </p>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -709,7 +715,7 @@ function SchedulePageContent() {
                 <thead className="sticky top-0 z-30 bg-background shadow-[0_2px_5px_-2px_rgba(0,0,0,0.15)] dark:shadow-[0_2px_5px_-2px_rgba(255,255,255,0.1)]">
                   {/* Month headers */}
                   <tr>
-                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[200px]">
+                    <th className="border p-2 text-left font-semibold sticky left-0 bg-muted z-40 min-w-[140px] sm:min-w-[200px]">
                       Worker
                     </th>
                     {yearMonths.map(({ month, days }) => (
@@ -759,9 +765,9 @@ function SchedulePageContent() {
                             className="w-2 h-8 rounded"
                             style={{ backgroundColor: worker.crew?.color || "#ccc" }}
                           />
-                          <div className="truncate max-w-[160px]">
-                            <div className="font-medium truncate text-sm">{worker.name || "Unnamed"}</div>
-                            <div className="text-xs text-muted-foreground truncate">
+                          <div className="truncate max-w-[100px] sm:max-w-[160px]">
+                            <div className="font-medium truncate text-xs sm:text-sm">{worker.name || "Unnamed"}</div>
+                            <div className="text-[10px] sm:text-xs text-muted-foreground truncate">
                               {worker.crew?.name || "No crew"}
                             </div>
                           </div>
@@ -1029,7 +1035,7 @@ function SchedulePageContent() {
             <p className="text-blue-700">Select a date range and shift type below</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="scheduleStartDate">Start Date</Label>
               <Input
