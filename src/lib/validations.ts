@@ -174,13 +174,13 @@ export const updateTimeOffRequestSchema = z.object({
 // Staffing rule validations
 export const createStaffingRuleSchema = z.object({
   name: z.string().min(1).max(100),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).nullish(),
   shiftType: z.nativeEnum(ShiftType),
   minWorkers: z.number().int().min(0),
   maxVacation: z.number().int().min(0).default(1),
-  role: z.nativeEnum(UserRole).optional().nullable(),
-  positionType: z.nativeEnum(PositionType).optional().nullable(),
-  crewId: z.string().optional().nullable(),
+  role: z.nativeEnum(UserRole).nullish(),
+  positionType: z.nativeEnum(PositionType).nullish(),
+  crewId: z.string().nullish(),
   priority: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
 })

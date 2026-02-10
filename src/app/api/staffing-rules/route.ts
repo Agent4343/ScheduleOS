@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth"
 import { createStaffingRuleSchema } from "@/lib/validations"
 import { ShiftType } from "@prisma/client"
 import { PositionType } from "@/types"
+import { ZodError } from "zod"
 
 export async function GET(request: NextRequest) {
   try {
@@ -124,9 +125,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating staffing rule:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
+      const fieldErrors = error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join(", ")
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: `Validation failed: ${fieldErrors}`, details: error.issues },
         { status: 400 }
       )
     }

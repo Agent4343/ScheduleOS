@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
 import { updateStaffingRuleSchema } from "@/lib/validations"
+import { ZodError } from "zod"
 
 export async function GET(
   _request: NextRequest,
@@ -126,9 +127,10 @@ export async function PUT(
   } catch (error) {
     console.error("Error updating staffing rule:", error)
 
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
+      const fieldErrors = error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join(", ")
       return NextResponse.json(
-        { error: "Invalid input data", details: error },
+        { error: `Validation failed: ${fieldErrors}`, details: error.issues },
         { status: 400 }
       )
     }
