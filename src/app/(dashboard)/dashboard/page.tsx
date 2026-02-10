@@ -219,7 +219,6 @@ function StaffingCoveragePanel({ coverageData, onRefresh }: { coverageData: Staf
     const icon = shiftType === "DAY" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
     const label = shiftType === "DAY" ? "Day Shift" : "Night Shift"
     const criticalRules = shiftData.rules.filter(r => r.status === "critical")
-    const metRules = shiftData.rules.filter(r => r.status === "met")
 
     return (
       <div className="border rounded-lg overflow-hidden">
