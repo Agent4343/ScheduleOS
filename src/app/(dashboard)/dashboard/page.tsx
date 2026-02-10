@@ -1,9 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Users,
   Users2,
@@ -20,6 +19,10 @@ import {
   Award,
   UserPlus,
   Building,
+  ChevronDown,
+  ChevronUp,
+  Minus,
+  RefreshCw,
 } from "lucide-react"
 import { GettingStartedChecklist } from "@/components/onboarding/getting-started-checklist"
 import { Button } from "@/components/ui/button"
@@ -38,7 +41,67 @@ interface DashboardStats {
 // Labels for position types
 const POSITION_TYPE_LABELS: Record<string, string> = {
   OPERATOR: "Operator",
+  ONSHORE_CONTROL_ROOM: "Control Room",
   OTHER: "Staff",
+}
+
+// Staffing coverage types
+interface CoveragePosition {
+  positionType: string
+  label: string
+  actual: number
+  required: number
+  status: "met" | "warning" | "critical"
+  workers: Array<{ id: string; name: string; crew: string | null; crewColor: string | null }>
+}
+
+interface CoverageRule {
+  id: string
+  name: string
+  minWorkers: number
+  maxVacation: number
+  actual: number
+  shortage: number
+  status: "met" | "critical"
+  positionType: string | null
+  positionLabel: string
+  crew: { id: string; name: string; color: string } | null
+}
+
+interface ShiftCoverage {
+  totalOnDuty: number
+  totalCountable: number
+  positions: CoveragePosition[]
+  rules: CoverageRule[]
+}
+
+interface WorkforceTotal {
+  positionType: string
+  label: string
+  total: number
+  countable: number
+}
+
+interface StaffingCoverageData {
+  date: string
+  coverage: {
+    DAY: ShiftCoverage
+    NIGHT: ShiftCoverage
+  }
+  summary: {
+    totalRules: number
+    rulesMet: number
+    rulesNotMet: number
+    overallStatus: "all_met" | "some_gaps" | "critical"
+  }
+  workforce: WorkforceTotal[]
+  timeOffToday: Array<{
+    id: string
+    name: string
+    positionType: string
+    positionLabel: string
+    crew: string | null
+  }>
 }
 
 interface StaffingGapDetail {
@@ -91,13 +154,359 @@ interface DashboardData {
   }
 }
 
+// Staffing Coverage Panel Component
+function StaffingCoveragePanel({ coverageData, onRefresh }: { coverageData: StaffingCoverageData | null; onRefresh: () => void }) {
+  const [expandedShift, setExpandedShift] = useState<"DAY" | "NIGHT" | null>("DAY")
+  const [showWorkers, setShowWorkers] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await onRefresh()
+    setRefreshing(false)
+  }
+
+  if (!coverageData) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground text-sm">
+          No staffing rules configured. Add rules in Settings to track coverage.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const { coverage, summary, workforce, timeOffToday } = coverageData
+  const hasRules = summary.totalRules > 0
+
+  const statusColors = {
+    all_met: "border-green-500/50 bg-green-50 dark:bg-green-950/20",
+    some_gaps: "border-amber-500/50 bg-amber-50 dark:bg-amber-950/20",
+    critical: "border-red-500/50 bg-red-50 dark:bg-red-950/20",
+  }
+
+  const statusIcons = {
+    all_met: <CheckCircle className="h-5 w-5 text-green-600" />,
+    some_gaps: <AlertTriangle className="h-5 w-5 text-amber-600" />,
+    critical: <ShieldAlert className="h-5 w-5 text-red-600" />,
+  }
+
+  const statusLabels = {
+    all_met: "All Requirements Met",
+    some_gaps: "Some Gaps Detected",
+    critical: "Critical Shortages",
+  }
+
+  const renderProgressBar = (actual: number, required: number, status: string) => {
+    if (required === 0) return null
+    const pct = Math.min(100, (actual / required) * 100)
+    const barColor =
+      status === "met" ? "bg-green-500" :
+      status === "warning" ? "bg-amber-500" : "bg-red-500"
+
+    return (
+      <div className="w-full bg-muted rounded-full h-2.5 mt-1">
+        <div
+          className={`h-2.5 rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    )
+  }
+
+  const renderShiftSection = (shiftType: "DAY" | "NIGHT", shiftData: ShiftCoverage) => {
+    const isExpanded = expandedShift === shiftType
+    const icon = shiftType === "DAY" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
+    const label = shiftType === "DAY" ? "Day Shift" : "Night Shift"
+    const criticalRules = shiftData.rules.filter(r => r.status === "critical")
+    const metRules = shiftData.rules.filter(r => r.status === "met")
+
+    return (
+      <div className="border rounded-lg overflow-hidden">
+        {/* Shift header - clickable to expand */}
+        <button
+          onClick={() => setExpandedShift(isExpanded ? null : shiftType)}
+          className="w-full flex items-center justify-between p-3 sm:p-4 hover:bg-accent/50 transition-colors touch-action-manipulation min-h-[44px]"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Badge variant={shiftType === "DAY" ? "day" : "night"} className="text-xs">
+              {icon}
+              <span className="ml-1">{label}</span>
+            </Badge>
+            <span className="text-sm font-medium">{shiftData.totalOnDuty} on duty</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {criticalRules.length > 0 && (
+              <Badge variant="destructive" className="text-xs">
+                {criticalRules.length} below min
+              </Badge>
+            )}
+            {criticalRules.length === 0 && shiftData.rules.length > 0 && (
+              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                All met
+              </Badge>
+            )}
+            {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </div>
+        </button>
+
+        {/* Expanded content */}
+        {isExpanded && (
+          <div className="border-t p-3 sm:p-4 space-y-4">
+            {/* Position type breakdown */}
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                Coverage by Position
+              </h4>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                {shiftData.positions.map(pos => {
+                  const hasRequirement = pos.required > 0
+                  const bgColor =
+                    !hasRequirement ? "bg-muted/30" :
+                    pos.status === "met" ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800" :
+                    pos.status === "warning" ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800" :
+                    "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800"
+
+                  return (
+                    <div key={pos.positionType} className={`rounded-lg border p-3 ${bgColor}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{pos.label}</span>
+                        <div className="flex items-center gap-1">
+                          <span className={`text-lg font-bold ${
+                            !hasRequirement ? "text-foreground" :
+                            pos.status === "met" ? "text-green-700 dark:text-green-400" :
+                            pos.status === "warning" ? "text-amber-700 dark:text-amber-400" :
+                            "text-red-700 dark:text-red-400"
+                          }`}>
+                            {pos.actual}
+                          </span>
+                          {hasRequirement && (
+                            <>
+                              <span className="text-muted-foreground text-sm">/</span>
+                              <span className="text-sm text-muted-foreground">{pos.required}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {hasRequirement && renderProgressBar(pos.actual, pos.required, pos.status)}
+                      {!hasRequirement && pos.actual > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">No minimum set</p>
+                      )}
+                      {hasRequirement && pos.status === "critical" && (
+                        <p className="text-xs text-red-600 dark:text-red-400 font-medium mt-1">
+                          Need {pos.required - pos.actual} more
+                        </p>
+                      )}
+                      {/* Expandable worker list */}
+                      {pos.workers.length > 0 && (
+                        <button
+                          onClick={() => setShowWorkers(showWorkers === `${shiftType}-${pos.positionType}` ? null : `${shiftType}-${pos.positionType}`)}
+                          className="text-xs text-primary hover:underline mt-2 touch-action-manipulation"
+                        >
+                          {showWorkers === `${shiftType}-${pos.positionType}` ? "Hide" : "Show"} workers ({pos.workers.length})
+                        </button>
+                      )}
+                      {showWorkers === `${shiftType}-${pos.positionType}` && (
+                        <div className="mt-2 space-y-1">
+                          {pos.workers.map(w => (
+                            <div key={w.id} className="flex items-center gap-2 text-xs py-0.5">
+                              {w.crewColor && (
+                                <span
+                                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: w.crewColor }}
+                                />
+                              )}
+                              <span>{w.name}</span>
+                              {w.crew && <span className="text-muted-foreground">({w.crew})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Staffing rules compliance */}
+            {shiftData.rules.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Staffing Rules
+                </h4>
+                <div className="space-y-2">
+                  {shiftData.rules.map(rule => (
+                    <div
+                      key={rule.id}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-lg border text-sm gap-2 ${
+                        rule.status === "met"
+                          ? "bg-green-50/50 dark:bg-green-950/10 border-green-200/50 dark:border-green-800/50"
+                          : "bg-red-50/50 dark:bg-red-950/10 border-red-200/50 dark:border-red-800/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {rule.status === "met" ? (
+                          <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                        )}
+                        <span className="font-medium truncate">{rule.name}</span>
+                        {rule.crew && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            <span
+                              className="inline-block w-2 h-2 rounded-full mr-1"
+                              style={{ backgroundColor: rule.crew.color }}
+                            />
+                            {rule.crew.name}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 sm:shrink-0 ml-6 sm:ml-0">
+                        <span className="text-xs text-muted-foreground">{rule.positionLabel}</span>
+                        <Minus className="h-3 w-3 text-muted-foreground" />
+                        <span className={`font-bold ${
+                          rule.status === "met" ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                        }`}>
+                          {rule.actual}/{rule.minWorkers}
+                        </span>
+                        {rule.status === "critical" && (
+                          <Badge variant="destructive" className="text-xs">-{rule.shortage}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <Card className={hasRules ? statusColors[summary.overallStatus] : ""}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {hasRules ? statusIcons[summary.overallStatus] : <TrendingUp className="h-5 w-5" />}
+            <div>
+              <CardTitle className="text-base sm:text-lg">Staffing Coverage</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                {coverageData.date && new Date(coverageData.date + "T00:00:00").toLocaleDateString(undefined, {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {hasRules && (
+              <Badge variant={summary.overallStatus === "all_met" ? "secondary" : "destructive"} className="text-xs">
+                {summary.overallStatus === "all_met"
+                  ? statusLabels.all_met
+                  : `${summary.rulesNotMet} of ${summary.totalRules} rules not met`}
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-8 w-8 p-0"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Workforce totals */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          {workforce.map(wf => (
+            <div key={wf.positionType} className="text-center p-2 sm:p-3 rounded-lg bg-background border">
+              <p className="text-xs text-muted-foreground">{wf.label}</p>
+              <p className="text-xl sm:text-2xl font-bold">{wf.total}</p>
+              <p className="text-xs text-muted-foreground">total workforce</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Time off impact */}
+        {timeOffToday.length > 0 && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarOff className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                {timeOffToday.length} worker{timeOffToday.length !== 1 ? "s" : ""} off today
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {timeOffToday.map(w => (
+                <Badge key={w.id} variant="outline" className="text-xs bg-background">
+                  {w.name}
+                  <span className="text-muted-foreground ml-1">({w.positionLabel})</span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Shift sections */}
+        {hasRules ? (
+          <div className="space-y-3">
+            {renderShiftSection("DAY", coverage.DAY)}
+            {renderShiftSection("NIGHT", coverage.NIGHT)}
+          </div>
+        ) : (
+          <div className="text-center py-4 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              No staffing rules configured yet. Set up minimum staffing requirements to track coverage.
+            </p>
+            <a href="/settings" className="text-sm font-medium text-primary hover:underline">
+              Configure Staffing Rules in Settings →
+            </a>
+          </div>
+        )}
+
+        {/* Link to settings */}
+        {hasRules && (
+          <div className="pt-2 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <a href="/settings" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+              Manage staffing rules in Settings
+            </a>
+            <a href="/schedule" className="text-sm font-medium text-primary hover:underline">
+              View full schedule →
+            </a>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [transferRequests, setTransferRequests] = useState<TransferRequest[]>([])
   const [processingTransfer, setProcessingTransfer] = useState<string | null>(null)
+  const [coverageData, setCoverageData] = useState<StaffingCoverageData | null>(null)
   const { addToast } = useToast()
   const router = useRouter()
+
+  const fetchCoverage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/staffing-coverage")
+      const result = await res.json()
+      if (result.success) {
+        setCoverageData(result.data)
+      }
+    } catch (error) {
+      console.error("Failed to fetch staffing coverage:", error)
+    }
+  }, [])
 
   useEffect(() => {
     async function fetchDashboard() {
@@ -124,7 +533,8 @@ export default function DashboardPage() {
     }
 
     fetchDashboard()
-  }, [])
+    fetchCoverage()
+  }, [fetchCoverage])
 
   async function handleTransferAction(transferId: string, action: "accept" | "decline") {
     setProcessingTransfer(transferId)
@@ -430,19 +840,11 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* All Clear Banner - Show when no staffing issues */}
-      {stats.staffingGaps === 0 && (
-        <Alert className="border-green-500/50 bg-green-50 dark:bg-green-950/20">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertTitle className="text-green-700 dark:text-green-400">All Staffing Requirements Met</AlertTitle>
-          <AlertDescription className="text-green-600 dark:text-green-500">
-            All shifts are fully staffed this week with proper coverage and certifications.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Staffing Coverage Panel - Main coverage dashboard */}
+      <StaffingCoveragePanel coverageData={coverageData} onRefresh={fetchCoverage} />
 
-      {/* Info Cards - 3 column layout */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* Info Cards - 2 column layout */}
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Upcoming time off */}
         <Card>
           <CardHeader>
@@ -478,43 +880,6 @@ export default function DashboardPage() {
             ) : (
               <p className="text-muted-foreground text-sm">No upcoming time off scheduled</p>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Coverage Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              This Week&apos;s Coverage
-            </CardTitle>
-            <CardDescription>Staffing levels overview</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Total Gaps</span>
-                <Badge variant={stats.staffingGaps > 0 ? "destructive" : "secondary"}>
-                  {stats.staffingGaps}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Position Issues</span>
-                <Badge variant={positionGaps.length > 0 ? "destructive" : "secondary"}>
-                  {positionGaps.length}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Certification Issues</span>
-                <Badge variant={certificationGaps.length > 0 ? "destructive" : "secondary"}>
-                  {certificationGaps.length}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Upcoming Shutdowns</span>
-                <Badge variant="outline">{stats.upcomingShutdowns}</Badge>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
