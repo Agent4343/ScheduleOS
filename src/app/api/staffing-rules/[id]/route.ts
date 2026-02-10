@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
 import { authOptions } from "@/lib/auth"
-import { createStaffingRuleSchema } from "@/lib/validations"
+import { updateStaffingRuleSchema } from "@/lib/validations"
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
+    const { id } = await params
 
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -17,7 +18,7 @@ export async function GET(
 
     const rule = await prisma.staffingRule.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
       include: {
@@ -40,10 +41,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
+    const { id } = await params
 
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -55,7 +57,7 @@ export async function PUT(
 
     const existing = await prisma.staffingRule.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
     })
@@ -65,7 +67,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const validatedData = createStaffingRuleSchema.partial().parse(body)
+    const validatedData = updateStaffingRuleSchema.parse(body)
 
     // Check for duplicate name if name is being changed
     if (validatedData.name && validatedData.name !== existing.name) {
@@ -73,7 +75,7 @@ export async function PUT(
         where: {
           organizationId: session.user.organizationId,
           name: validatedData.name,
-          id: { not: params.id },
+          id: { not: id },
         },
       })
 
@@ -100,7 +102,7 @@ export async function PUT(
     }
 
     const rule = await prisma.staffingRule.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...(validatedData.name !== undefined && { name: validatedData.name }),
         ...(validatedData.description !== undefined && { description: validatedData.description }),
@@ -136,11 +138,12 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
+    const { id } = await params
 
     if (!session?.user?.organizationId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -152,7 +155,7 @@ export async function DELETE(
 
     const existing = await prisma.staffingRule.findFirst({
       where: {
-        id: params.id,
+        id,
         organizationId: session.user.organizationId,
       },
     })
@@ -161,7 +164,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Staffing rule not found" }, { status: 404 })
     }
 
-    await prisma.staffingRule.delete({ where: { id: params.id } })
+    await prisma.staffingRule.delete({ where: { id } })
 
     return NextResponse.json({ success: true, message: "Staffing rule deleted" })
   } catch (error) {
