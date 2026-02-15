@@ -226,13 +226,13 @@ struct DashboardStats: Codable {
 // MARK: - App Configuration
 struct AppConfig {
     // Change this to your deployed ShiftSync URL
-    static let defaultServerURL = "https://shiftsync.up.railway.app"
+    static let defaultServerURL = "https://scheduleos-production.up.railway.app"
     static let appVersion = "1.0.0"
     static let buildNumber = "1"
     static let appStoreID = "" // Fill in after App Store submission
     static let supportEmail = "support@shiftsync.app"
-    static let privacyPolicyURL = "https://shiftsync.up.railway.app/privacy"
-    static let termsOfServiceURL = "https://shiftsync.up.railway.app/terms"
+    static let privacyPolicyURL = "https://scheduleos-production.up.railway.app/privacy"
+    static let termsOfServiceURL = "https://scheduleos-production.up.railway.app/terms"
 
     // Feature flags
     static let biometricAuthEnabled = true
