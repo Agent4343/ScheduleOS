@@ -1,6 +1,7 @@
 import SwiftUI
 import LocalAuthentication
 import Combine
+import WebKit
 
 // MARK: - Authentication Manager
 class AuthenticationManager: ObservableObject {
@@ -231,40 +232,72 @@ class AuthenticationManager: ObservableObject {
             return
         }
 
-        URLSession.shared.dataTask(with: url) { data, _, error in
-            DispatchQueue.main.async {
-                if error != nil {
-                    completion(.failure(.networkError))
-                    return
-                }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+            if error != nil {
+                DispatchQueue.main.async { completion(.failure(.networkError)) }
+                return
+            }
 
-                guard let data = data else {
-                    completion(.failure(.networkError))
-                    return
-                }
+            guard let data = data else {
+                DispatchQueue.main.async { completion(.failure(.networkError)) }
+                return
+            }
 
-                do {
-                    if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let user = json["user"] as? [String: Any] {
-                        let shiftSyncUser = ShiftSyncUser(
-                            id: user["id"] as? String ?? "",
-                            email: user["email"] as? String ?? "",
-                            name: user["name"] as? String ?? "",
-                            role: UserRole(rawValue: user["role"] as? String ?? "WORKER") ?? .WORKER,
-                            crewId: user["crewId"] as? String,
-                            crewName: user["crewName"] as? String,
-                            organizationId: user["organizationId"] as? String ?? "",
-                            organizationName: user["organizationName"] as? String
-                        )
-                        completion(.success(shiftSyncUser))
-                    } else {
-                        completion(.failure(.invalidCredentials))
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let user = json["user"] as? [String: Any] {
+                    let shiftSyncUser = ShiftSyncUser(
+                        id: user["id"] as? String ?? "",
+                        email: user["email"] as? String ?? "",
+                        name: user["name"] as? String ?? "",
+                        role: UserRole(rawValue: user["role"] as? String ?? "WORKER") ?? .WORKER,
+                        crewId: user["crewId"] as? String,
+                        crewName: user["crewName"] as? String,
+                        organizationId: user["organizationId"] as? String ?? "",
+                        organizationName: user["organizationName"] as? String
+                    )
+                    // Sync cookies to WKWebView before completing login
+                    self?.syncCookiesToWebView(serverURL: serverURL) {
+                        DispatchQueue.main.async {
+                            completion(.success(shiftSyncUser))
+                        }
                     }
-                } catch {
-                    completion(.failure(.serverError("Failed to parse session")))
+                } else {
+                    DispatchQueue.main.async { completion(.failure(.invalidCredentials)) }
                 }
+            } catch {
+                DispatchQueue.main.async { completion(.failure(.serverError("Failed to parse session"))) }
             }
         }.resume()
+    }
+
+    /// Sync all cookies for the server domain from URLSession's HTTPCookieStorage
+    /// to WKWebView's WKHTTPCookieStore so the web views are authenticated.
+    private func syncCookiesToWebView(serverURL: String, completion: @escaping () -> Void) {
+        guard let serverURLObj = URL(string: serverURL),
+              let host = serverURLObj.host else {
+            completion()
+            return
+        }
+
+        let cookieStore = WKWebsiteDataStore.default().httpCookieStore
+        let cookies = HTTPCookieStorage.shared.cookies?.filter { $0.domain.contains(host) || host.contains($0.domain) } ?? []
+
+        guard !cookies.isEmpty else {
+            completion()
+            return
+        }
+
+        let group = DispatchGroup()
+        for cookie in cookies {
+            group.enter()
+            cookieStore.setCookie(cookie) {
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) {
+            completion()
+        }
     }
 }
 

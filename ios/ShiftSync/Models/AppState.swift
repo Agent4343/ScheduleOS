@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import WebKit
 
 // MARK: - App State
 class AppState: ObservableObject {
@@ -30,6 +31,16 @@ class AppState: ObservableObject {
         isAuthenticated = false
         currentUser = nil
         KeychainService.shared.deleteToken()
+        // Clear cookies from both URLSession and WKWebView
+        if let host = URL(string: serverURL)?.host {
+            HTTPCookieStorage.shared.cookies?
+                .filter { $0.domain.contains(host) || host.contains($0.domain) }
+                .forEach { HTTPCookieStorage.shared.deleteCookie($0) }
+        }
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: [WKWebsiteDataTypeCookies],
+            modifiedSince: .distantPast
+        ) {}
         HapticManager.shared.notification(type: .success)
     }
 }

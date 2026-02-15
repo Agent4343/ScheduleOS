@@ -216,11 +216,29 @@ struct ShiftSyncWebViewRepresentable: UIViewRepresentable {
         // Observe loading progress
         context.coordinator.observeProgress(webView)
 
-        // Load the page
+        // Sync cookies from HTTPCookieStorage to WKWebView before loading
         let urlString = "\(serverURL)\(path)"
-        if let url = URL(string: urlString) {
-            let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
-            webView.load(request)
+        if let pageURL = URL(string: urlString),
+           let host = URL(string: serverURL)?.host {
+            let cookies = HTTPCookieStorage.shared.cookies?.filter {
+                $0.domain.contains(host) || host.contains($0.domain)
+            } ?? []
+
+            if cookies.isEmpty {
+                let request = URLRequest(url: pageURL, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+                webView.load(request)
+            } else {
+                let cookieStore = config.websiteDataStore.httpCookieStore
+                let group = DispatchGroup()
+                for cookie in cookies {
+                    group.enter()
+                    cookieStore.setCookie(cookie) { group.leave() }
+                }
+                group.notify(queue: .main) {
+                    let request = URLRequest(url: pageURL, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+                    webView.load(request)
+                }
+            }
         }
 
         return webView
