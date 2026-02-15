@@ -136,6 +136,12 @@ class AuthenticationManager: ObservableObject {
         }.resume()
     }
 
+    private static let formURLEncodingAllowed: CharacterSet = {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return allowed
+    }()
+
     private func performLogin(
         url: URL,
         email: String,
@@ -148,7 +154,10 @@ class AuthenticationManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
 
-        let body = "email=\(email.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&password=\(password.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&csrfToken=\(csrfToken)"
+        let encode = { (value: String) -> String in
+            value.addingPercentEncoding(withAllowedCharacters: Self.formURLEncodingAllowed) ?? ""
+        }
+        let body = "email=\(encode(email))&password=\(encode(password))&csrfToken=\(encode(csrfToken))"
         request.httpBody = body.data(using: .utf8)
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in

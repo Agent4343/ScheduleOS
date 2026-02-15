@@ -179,6 +179,22 @@ struct LoginView: View {
                             .frame(height: 1)
                     }
 
+                    // Create account link
+                    Button(action: {
+                        if let url = URL(string: "\(appState.serverURL)/register") {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("Don't have an account?")
+                                .foregroundColor(.secondary)
+                            Text("Create one")
+                                .foregroundColor(ThemeManager.Colors.brandPrimary)
+                                .fontWeight(.semibold)
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                    }
+
                     // Open in browser link
                     Button(action: {
                         if let url = URL(string: appState.serverURL) {
