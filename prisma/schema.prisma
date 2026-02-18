@@ -106,6 +106,8 @@ model User {
   holidayTracking HolidayTracking[]
   notifications   Notification[]
   createdInvitations Invitation[] @relation("InvitationCreator")
+  checkIns        ShiftCheckIn[]
+  scannedCheckIns ShiftCheckIn[] @relation("ScannedBy")
 
   @@index([organizationId])
   @@index([crewId])
@@ -179,6 +181,33 @@ model RotationPattern {
   crews Crew[]
 
   @@unique([organizationId, name])
+}
+
+// =====================
+// Attendance / Check-In
+// =====================
+
+model ShiftCheckIn {
+  id             String    @id @default(cuid())
+  date           DateTime  @db.Date
+  checkInTime    DateTime
+  checkOutTime   DateTime?
+  autoCheckedOut Boolean   @default(false)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // User who checked in
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Who performed the scan (supervisor/admin or self)
+  scannedById String?
+  scannedBy   User?   @relation("ScannedBy", fields: [scannedById], references: [id])
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
 }
 
 // =====================

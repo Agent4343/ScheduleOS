@@ -19,6 +19,12 @@ struct MainTabView: View {
                 }
                 .tag(TabItem.schedule)
 
+            AttendanceTabView()
+                .tabItem {
+                    Label(TabItem.attendance.title, systemImage: TabItem.attendance.icon)
+                }
+                .tag(TabItem.attendance)
+
             CrewsTabView()
                 .tabItem {
                     Label(TabItem.crews.title, systemImage: TabItem.crews.icon)
@@ -83,6 +89,52 @@ struct ScheduleTabView: View {
                         }) {
                             Image(systemName: "square.and.arrow.up")
                         }
+                    }
+                }
+        }
+    }
+}
+
+// MARK: - Attendance Tab
+struct AttendanceTabView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var showScanner = false
+
+    var body: some View {
+        NavigationStack {
+            WebViewContainer(path: "/attendance")
+                .navigationTitle("Attendance")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        NavigationLink {
+                            WebViewContainer(path: "/attendance/qr")
+                                .navigationTitle("My QR Code")
+                                .navigationBarTitleDisplayMode(.inline)
+                        } label: {
+                            Image(systemName: "qrcode")
+                                .foregroundColor(ThemeManager.Colors.brandPrimary)
+                        }
+                    }
+                    if appState.currentUser?.role == .ADMIN || appState.currentUser?.role == .SUPERVISOR {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button(action: { showScanner = true }) {
+                                Image(systemName: "qrcode.viewfinder")
+                                    .foregroundColor(ThemeManager.Colors.brandPrimary)
+                            }
+                        }
+                    }
+                }
+                .sheet(isPresented: $showScanner) {
+                    NavigationStack {
+                        QRScannerView()
+                            .navigationTitle("Scan Code")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button("Done") { showScanner = false }
+                                }
+                            }
                     }
                 }
         }

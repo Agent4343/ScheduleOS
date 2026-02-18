@@ -50,6 +50,8 @@ interface Organization {
     minStaffOperators?: number
     minStaffOnshoreControlRoom?: number
     shiftColors?: Record<string, { bg: string; text: string }>
+    autoCheckoutEnabled?: boolean
+    autoCheckoutHours?: number
   }
   _count: {
     users: number
@@ -944,6 +946,80 @@ export default function SettingsPage() {
                   />
                   <p className="text-xs text-muted-foreground">Minimum number of onshore control room staff required per shift</p>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Auto-Checkout */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Auto-Checkout
+            </CardTitle>
+            <CardDescription>Automatically check out workers after their shift ends</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm">Enable Auto-Checkout</p>
+                <p className="text-xs text-muted-foreground">Workers will be checked out after the configured shift duration</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleSetting("autoCheckoutEnabled", !organization?.settings?.autoCheckoutEnabled)}
+                disabled={!isAdmin}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  organization?.settings?.autoCheckoutEnabled ? "bg-primary" : "bg-muted"
+                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    organization?.settings?.autoCheckoutEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {organization?.settings?.autoCheckoutEnabled && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label>Shift Duration</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={organization?.settings?.autoCheckoutHours === 8 ? "default" : "outline"}
+                    onClick={() => {
+                      if (isAdmin) {
+                        setOrganization((prev) =>
+                          prev ? { ...prev, settings: { ...prev.settings, autoCheckoutHours: 8 } } : null
+                        )
+                      }
+                    }}
+                    disabled={!isAdmin}
+                  >
+                    8 Hours
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={organization?.settings?.autoCheckoutHours === 12 ? "default" : "outline"}
+                    onClick={() => {
+                      if (isAdmin) {
+                        setOrganization((prev) =>
+                          prev ? { ...prev, settings: { ...prev.settings, autoCheckoutHours: 12 } } : null
+                        )
+                      }
+                    }}
+                    disabled={!isAdmin}
+                  >
+                    12 Hours
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Workers will be automatically checked out {organization?.settings?.autoCheckoutHours || 8} hours after check-in
+                </p>
               </div>
             )}
           </CardContent>

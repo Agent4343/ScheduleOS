@@ -13,6 +13,7 @@ import {
   CalendarOff,
   BarChart3,
   Wand2,
+  ClipboardCheck,
   X,
 } from "lucide-react"
 
@@ -20,6 +21,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Setup", href: "/setup", icon: Wand2 },
   { name: "Schedule", href: "/schedule", icon: Calendar },
+  { name: "Attendance", href: "/attendance", icon: ClipboardCheck },
   { name: "Workers", href: "/workers", icon: Users },
   { name: "Crews", href: "/crews", icon: Users2 },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
