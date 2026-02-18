@@ -25,12 +25,6 @@ struct MainTabView: View {
                 }
                 .tag(TabItem.attendance)
 
-            CrewsTabView()
-                .tabItem {
-                    Label(TabItem.crews.title, systemImage: TabItem.crews.icon)
-                }
-                .tag(TabItem.crews)
-
             TimeOffTabView()
                 .tabItem {
                     Label(TabItem.timeOff.title, systemImage: TabItem.timeOff.icon)
@@ -242,6 +236,14 @@ struct SettingsTabView: View {
                             .navigationBarTitleDisplayMode(.inline)
                     } label: {
                         Label("Manage Workers", systemImage: "person.3")
+                    }
+
+                    NavigationLink {
+                        WebViewContainer(path: "/crews")
+                            .navigationTitle("Crews")
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        Label("Manage Crews", systemImage: "person.3.sequence")
                     }
 
                     NavigationLink {

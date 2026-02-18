@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Users,
-  Users2,
   Calendar,
   Clock,
   AlertTriangle,
@@ -14,6 +13,11 @@ import {
   Sun,
   Moon,
   TrendingUp,
+  ClipboardCheck,
+  LogIn,
+  UserCheck,
+  QrCode,
+  ScanLine,
 } from "lucide-react"
 
 interface DashboardStats {
@@ -40,17 +44,34 @@ interface DashboardData {
   }
 }
 
+interface AttendanceData {
+  checkedIn: number
+  checkedOut: number
+  onSite: number
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchDashboard() {
+    async function fetchData() {
       try {
-        const response = await fetch("/api/dashboard")
-        const result = await response.json()
-        if (result.success) {
-          setData(result.data)
+        const [dashRes, attendanceRes] = await Promise.all([
+          fetch("/api/dashboard"),
+          fetch("/api/attendance"),
+        ])
+
+        const dashData = await dashRes.json()
+        if (dashData.success) setData(dashData.data)
+
+        const attendanceData = await attendanceRes.json()
+        if (attendanceData.success) {
+          const records = attendanceData.data || []
+          const checkedIn = records.length
+          const checkedOut = records.filter((r: { checkOutTime: string | null }) => r.checkOutTime).length
+          setAttendance({ checkedIn, checkedOut, onSite: checkedIn - checkedOut })
         }
       } catch (error) {
         console.error("Failed to fetch dashboard:", error)
@@ -59,7 +80,7 @@ export default function DashboardPage() {
       }
     }
 
-    fetchDashboard()
+    fetchData()
   }, [])
 
   if (loading) {
@@ -115,32 +136,6 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Workers
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalWorkers}</div>
-            <p className="text-xs text-muted-foreground">Active employees</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Crews
-            </CardTitle>
-            <Users2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeCrews}</div>
-            <p className="text-xs text-muted-foreground">Configured crews</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
               On Duty Today
             </CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -163,6 +158,37 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
+              On Site Now
+            </CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{attendance?.onSite ?? 0}</div>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="text-xs">
+                <LogIn className="h-3 w-3 mr-1" />
+                {attendance?.checkedIn ?? 0} in
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Workers
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalWorkers}</div>
+            <p className="text-xs text-muted-foreground">Active employees</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Pending Requests
             </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -174,7 +200,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Quick actions & info */}
+      {/* Main content */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Upcoming time off */}
         <Card>
@@ -251,33 +277,33 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Quick links */}
+      {/* Quick actions */}
       <div className="grid gap-4 md:grid-cols-3">
         <a
-          href="/schedule"
+          href="/attendance/qr"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
         >
-          <Calendar className="h-8 w-8 text-primary mb-2" />
-          <h3 className="font-semibold group-hover:text-primary">View Schedule</h3>
-          <p className="text-sm text-muted-foreground">See the full schedule calendar</p>
+          <QrCode className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">My QR Code</h3>
+          <p className="text-sm text-muted-foreground">Show your check-in code</p>
         </a>
 
         <a
-          href="/workers"
+          href="/attendance/scan"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
         >
-          <Users className="h-8 w-8 text-primary mb-2" />
-          <h3 className="font-semibold group-hover:text-primary">Manage Workers</h3>
-          <p className="text-sm text-muted-foreground">Add or edit worker information</p>
+          <ScanLine className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Scan Check-In</h3>
+          <p className="text-sm text-muted-foreground">Scan a worker&apos;s code</p>
         </a>
 
         <a
-          href="/time-off"
+          href="/attendance"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
         >
-          <Clock className="h-8 w-8 text-primary mb-2" />
-          <h3 className="font-semibold group-hover:text-primary">Time Off Requests</h3>
-          <p className="text-sm text-muted-foreground">Review pending requests</p>
+          <ClipboardCheck className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Attendance</h3>
+          <p className="text-sm text-muted-foreground">View today&apos;s attendance records</p>
         </a>
       </div>
     </div>

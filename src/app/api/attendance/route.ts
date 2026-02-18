@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { getTodayUTC } from "@/lib/timezone"
 
 // GET - List attendance records
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get("date")
@@ -26,9 +23,7 @@ export async function GET(request: NextRequest) {
 
     const checkIns = await prisma.shiftCheckIn.findMany({
       where: {
-        user: {
-          organizationId: session.user.organizationId,
-        },
+        user: { organizationId: session.user.organizationId },
         ...(userFilter && { userId: userFilter }),
         date: targetDate,
       },
@@ -38,14 +33,10 @@ export async function GET(request: NextRequest) {
             id: true,
             name: true,
             email: true,
-            crew: {
-              select: { id: true, name: true, color: true },
-            },
+            crew: { select: { id: true, name: true, color: true } },
           },
         },
-        scannedBy: {
-          select: { id: true, name: true },
-        },
+        scannedBy: { select: { id: true, name: true } },
       },
       orderBy: { checkInTime: "desc" },
     })
@@ -60,11 +51,9 @@ export async function GET(request: NextRequest) {
 // POST - Check in a worker (via QR scan)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
     const { userId, notes } = body
@@ -115,9 +104,7 @@ export async function POST(request: NextRequest) {
         scannedById: session.user.id !== userId ? session.user.id : null,
       },
       include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
+        user: { select: { id: true, name: true, email: true } },
       },
     })
 

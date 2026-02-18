@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { getTodayUTC } from "@/lib/timezone"
 
 // POST - Check out a worker
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
     const { userId, notes } = body
@@ -61,9 +58,7 @@ export async function POST(request: NextRequest) {
         notes: notes ? `${checkIn.notes || ""}\nCheckout: ${notes}`.trim() : checkIn.notes,
       },
       include: {
-        user: {
-          select: { id: true, name: true, email: true },
-        },
+        user: { select: { id: true, name: true, email: true } },
       },
     })
 

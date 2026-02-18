@@ -90,7 +90,6 @@ enum TabItem: String, CaseIterable {
     case dashboard
     case schedule
     case attendance
-    case crews
     case timeOff
     case settings
 
@@ -99,7 +98,6 @@ enum TabItem: String, CaseIterable {
         case .dashboard: return "Dashboard"
         case .schedule: return "Schedule"
         case .attendance: return "Attendance"
-        case .crews: return "Crews"
         case .timeOff: return "Time Off"
         case .settings: return "Settings"
         }
@@ -110,7 +108,6 @@ enum TabItem: String, CaseIterable {
         case .dashboard: return "chart.bar.fill"
         case .schedule: return "calendar"
         case .attendance: return "checklist.checked"
-        case .crews: return "person.3.fill"
         case .timeOff: return "airplane.departure"
         case .settings: return "gearshape.fill"
         }
@@ -121,7 +118,6 @@ enum TabItem: String, CaseIterable {
         case .dashboard: return "/dashboard"
         case .schedule: return "/schedule"
         case .attendance: return "/attendance"
-        case .crews: return "/crews"
         case .timeOff: return "/time-off"
         case .settings: return "/settings"
         }

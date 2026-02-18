@@ -1,35 +1,20 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import {
-  Calendar,
-  LayoutDashboard,
-  Users,
-  Users2,
-  Clock,
-  Settings,
-  CalendarOff,
-  BarChart3,
-  Wand2,
-  ClipboardCheck,
-} from "lucide-react"
-
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Setup", href: "/setup", icon: Wand2 },
-  { name: "Schedule", href: "/schedule", icon: Calendar },
-  { name: "Attendance", href: "/attendance", icon: ClipboardCheck },
-  { name: "Workers", href: "/workers", icon: Users },
-  { name: "Crews", href: "/crews", icon: Users2 },
-  { name: "Time Off", href: "/time-off", icon: CalendarOff },
-  { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "Settings", href: "/settings", icon: Settings },
-]
+import { navigation } from "@/lib/navigation"
+import { Clock } from "lucide-react"
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { data: session } = useSession()
+  const role = session?.user?.role
+
+  const visibleItems = navigation.filter(
+    (item) => !item.adminOnly || role === "ADMIN" || role === "SUPERVISOR"
+  )
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-card hidden lg:block">
@@ -42,7 +27,7 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 p-4">
-          {navigation.map((item) => {
+          {visibleItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <Link
