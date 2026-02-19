@@ -790,7 +790,8 @@ function SchedulePageContent() {
                               ? `CUSTOM:${schedule.customShiftCode}`
                               : schedule.shiftType
                             : null
-                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+                          const isOff = schedule?.shiftType === "OFF"
+                          const style = shiftKey && !isOff ? SHIFT_STYLES[shiftKey] : null
 
                           return (
                             <td
@@ -805,7 +806,7 @@ function SchedulePageContent() {
                                   ? { backgroundColor: style.bg, color: style.text }
                                   : undefined
                               }
-                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                              title={schedule ? (isOff ? "Off - Click to edit" : `${shiftKey} - Click to edit`) : "Click to add schedule"}
                               onClick={() => openScheduleEditModal(worker, month, day)}
                             >
                               <span className="text-xs font-bold">
