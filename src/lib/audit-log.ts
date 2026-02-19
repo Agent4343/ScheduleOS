@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
 export enum AuditAction {
@@ -43,7 +44,7 @@ export async function logAudit(data: AuditLogData): Promise<void> {
         organizationId: data.organizationId,
         targetId: data.targetId || null,
         targetType: data.targetType || null,
-        metadata: data.metadata ?? undefined,
+        metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
         ipAddress: data.ipAddress || null,
       },
     })
