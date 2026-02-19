@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const now = formatICalDate(new Date())
     const workerName = user.name || user.email
 
-    let ical = [
+    const ical = [
       "BEGIN:VCALENDAR",
       "VERSION:2.0",
       "PRODID:-//ShiftSync//Workforce Scheduling//EN",
