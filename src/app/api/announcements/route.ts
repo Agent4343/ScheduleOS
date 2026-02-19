@@ -46,10 +46,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Title and content are required" }, { status: 400 })
     }
 
+    // Sanitize inputs — strip HTML tags to prevent stored XSS
+    const sanitize = (str: string) => str.replace(/<[^>]*>/g, "").trim()
+    const cleanTitle = sanitize(title).slice(0, 200)
+    const cleanContent = sanitize(content).slice(0, 5000)
+
+    if (!cleanTitle || !cleanContent) {
+      return NextResponse.json({ error: "Title and content must contain text" }, { status: 400 })
+    }
+
     const announcement = await prisma.announcement.create({
       data: {
-        title: title.trim(),
-        content: content.trim(),
+        title: cleanTitle,
+        content: cleanContent,
         priority: priority || "NORMAL",
         pinned: pinned || false,
         expiresAt: expiresAt ? new Date(expiresAt) : null,

@@ -57,7 +57,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Apply rate limiting based on email
-        const rateLimitResult = rateLimit(`login:${credentials.email.toLowerCase()}`, rateLimitPresets.auth)
+        const rateLimitResult = await rateLimit(`login:${credentials.email.toLowerCase()}`, rateLimitPresets.auth)
         
         if (!rateLimitResult.success) {
           throw new Error("Too many login attempts. Please try again later.")

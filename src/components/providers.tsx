@@ -3,6 +3,7 @@
 import { ThemeProvider } from "next-themes"
 import { SessionProvider } from "next-auth/react"
 import { ReactNode, useEffect } from "react"
+import { CookieConsent } from "@/components/cookie-consent"
 
 interface ProvidersProps {
   children: ReactNode
@@ -26,6 +27,7 @@ export function Providers({ children }: ProvidersProps) {
         disableTransitionOnChange
       >
         {children}
+        <CookieConsent />
       </ThemeProvider>
     </SessionProvider>
   )

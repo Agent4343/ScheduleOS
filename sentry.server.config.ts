@@ -14,4 +14,17 @@ Sentry.init({
     "NEXT_NOT_FOUND",
     "NEXT_REDIRECT",
   ],
+
+  // Don't send PII to Sentry
+  beforeSend(event) {
+    if (event.request?.headers) {
+      delete event.request.headers["authorization"]
+      delete event.request.headers["cookie"]
+      delete event.request.headers["x-forwarded-for"]
+    }
+    if (event.request?.cookies) {
+      event.request.cookies = {}
+    }
+    return event
+  },
 })

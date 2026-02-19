@@ -17,12 +17,20 @@ const nextConfig = {
     "/": ["./node_modules/.prisma/**/*"],
   },
 
-  // Optimize images
+  // Optimize images — restrict to known domains
   images: {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**",
+        hostname: "*.railway.app",
+      },
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
       },
     ],
   },
