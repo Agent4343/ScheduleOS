@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { updateUserSchema } from "@/lib/validations"
 import { logAudit, AuditAction } from "@/lib/audit-log"
 import { getClientIP } from "@/lib/rate-limit"
@@ -11,11 +10,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const user = await prisma.user.findFirst({
       where: {
@@ -59,16 +56,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Only admins and supervisors can update users
-    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN", "SUPERVISOR"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     // Verify user belongs to organization
     const existingUser = await prisma.user.findFirst({
@@ -170,16 +160,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Only admins can delete users
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can delete users" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     // Prevent self-deletion
     if (params.id === session.user.id) {

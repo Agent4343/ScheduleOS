@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { createStaffingRuleSchema } from "@/lib/validations"
 import { ShiftType } from "@prisma/client"
 import { PositionType } from "@/types"
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { searchParams } = new URL(request.url)
     const crewId = searchParams.get("crewId")
@@ -49,16 +46,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Only admins can create staffing rules
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can create staffing rules" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
     const validatedData = createStaffingRuleSchema.parse(body)

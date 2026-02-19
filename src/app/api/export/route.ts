@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { getYearStartUTC, getYearEndUTC } from "@/lib/timezone"
 
 // Sanitize CSV values to prevent injection attacks
@@ -21,11 +20,9 @@ function sanitizeCSVValue(value: string | null | undefined): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type") || "all"

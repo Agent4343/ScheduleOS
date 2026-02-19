@@ -19,10 +19,7 @@ import {
   Clock,
   Save,
   Plus,
-  Pencil,
   Trash2,
-  X,
-  Palette,
   Download,
   Moon,
   Sun,
@@ -34,6 +31,8 @@ import {
   FileText,
   Loader2,
 } from "lucide-react"
+import { RotationPatternsCard } from "./components/rotation-patterns-card"
+import { CustomShiftTypesCard, DEFAULT_SHIFT_COLORS } from "./components/custom-shift-types-card"
 
 interface Organization {
   id: string
@@ -76,17 +75,6 @@ interface RotationPattern {
   }
 }
 
-interface NewPattern {
-  name: string
-  description: string
-  daysOn: number
-  daysOff: number
-  includesNights: boolean
-  nightDays: number
-  nightsAtStart: boolean
-  alternatesShifts: boolean
-}
-
 interface CustomShiftType {
   id: string
   code: string
@@ -97,30 +85,11 @@ interface CustomShiftType {
   isActive: boolean
 }
 
-interface NewShiftType {
-  code: string
-  name: string
-  color: string
-  textColor: string
-  description: string
-}
-
 interface Holiday {
   id: string
   name: string
   date: string
   isRecurring: boolean
-}
-
-const DEFAULT_SHIFT_COLORS = {
-  DAY: { bg: "#22c55e", text: "#ffffff" },
-  NIGHT: { bg: "#3b82f6", text: "#ffffff" },
-  OFF: { bg: "#6b7280", text: "#ffffff" },
-  LEAVE: { bg: "#f59e0b", text: "#ffffff" },
-  VACATION: { bg: "#8b5cf6", text: "#ffffff" },
-  SICK: { bg: "#ef4444", text: "#ffffff" },
-  TRAINING: { bg: "#06b6d4", text: "#ffffff" },
-  SHUTDOWN: { bg: "#78716c", text: "#ffffff" },
 }
 
 const DATE_FORMATS = [
@@ -153,33 +122,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
 
-  // Pattern form state
-  const [showPatternForm, setShowPatternForm] = useState(false)
-  const [editingPattern, setEditingPattern] = useState<RotationPattern | null>(null)
-  const [savingPattern, setSavingPattern] = useState(false)
-  const [newPattern, setNewPattern] = useState<NewPattern>({
-    name: "",
-    description: "",
-    daysOn: 14,
-    daysOff: 14,
-    includesNights: false,
-    nightDays: 0,
-    nightsAtStart: true,
-    alternatesShifts: false,
-  })
-
   // Custom shift type state
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
-  const [showShiftTypeForm, setShowShiftTypeForm] = useState(false)
-  const [editingShiftType, setEditingShiftType] = useState<CustomShiftType | null>(null)
-  const [savingShiftType, setSavingShiftType] = useState(false)
-  const [newShiftType, setNewShiftType] = useState<NewShiftType>({
-    code: "",
-    name: "",
-    color: "#6b7280",
-    textColor: "#ffffff",
-    description: "",
-  })
 
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -206,7 +150,6 @@ export default function SettingsPage() {
 
   // Shift colors state
   const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
-  const [showColorEditor, setShowColorEditor] = useState(false)
 
   const isAdmin = session?.user?.role === "ADMIN"
 
@@ -272,168 +215,6 @@ export default function SettingsPage() {
     } catch {
       setOrganization({ ...organization, settings: { ...organization.settings, [key]: !value } })
       showMessage("Failed to update setting")
-    }
-  }
-
-  // Pattern handlers
-  const resetPatternForm = () => {
-    setNewPattern({
-      name: "",
-      description: "",
-      daysOn: 14,
-      daysOff: 14,
-      includesNights: false,
-      nightDays: 0,
-      nightsAtStart: true,
-      alternatesShifts: false,
-    })
-    setEditingPattern(null)
-    setShowPatternForm(false)
-  }
-
-  const startEditPattern = (pattern: RotationPattern) => {
-    setEditingPattern(pattern)
-    setNewPattern({
-      name: pattern.name,
-      description: pattern.description || "",
-      daysOn: pattern.daysOn,
-      daysOff: pattern.daysOff,
-      includesNights: pattern.includesNights,
-      nightDays: pattern.nightDays,
-      nightsAtStart: pattern.nightsAtStart,
-      alternatesShifts: pattern.alternatesShifts,
-    })
-    setShowPatternForm(true)
-  }
-
-  const handleSavePattern = async () => {
-    if (!newPattern.name.trim()) {
-      showMessage("Pattern name is required")
-      return
-    }
-
-    setSavingPattern(true)
-
-    try {
-      const url = editingPattern
-        ? `/api/rotation-patterns?id=${editingPattern.id}`
-        : "/api/rotation-patterns"
-
-      const response = await fetch(url, {
-        method: editingPattern ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPattern),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        const patternsRes = await fetch("/api/rotation-patterns")
-        const patternsData = await patternsRes.json()
-        if (patternsData.success) setPatterns(patternsData.data)
-
-        showMessage(editingPattern ? "Pattern updated successfully" : "Pattern created successfully")
-        resetPatternForm()
-      } else {
-        showMessage(data.error || "Failed to save pattern")
-      }
-    } catch {
-      showMessage("Failed to save pattern")
-    } finally {
-      setSavingPattern(false)
-    }
-  }
-
-  const handleDeletePattern = async (patternId: string) => {
-    if (!confirm("Are you sure you want to delete this pattern?")) return
-
-    try {
-      const response = await fetch(`/api/rotation-patterns?id=${patternId}`, { method: "DELETE" })
-      const data = await response.json()
-
-      if (data.success) {
-        setPatterns(patterns.filter(p => p.id !== patternId))
-        showMessage("Pattern deleted successfully")
-      } else {
-        showMessage(data.error || "Failed to delete pattern")
-      }
-    } catch {
-      showMessage("Failed to delete pattern")
-    }
-  }
-
-  // Custom shift type handlers
-  const resetShiftTypeForm = () => {
-    setNewShiftType({ code: "", name: "", color: "#6b7280", textColor: "#ffffff", description: "" })
-    setEditingShiftType(null)
-    setShowShiftTypeForm(false)
-  }
-
-  const startEditShiftType = (shiftType: CustomShiftType) => {
-    setEditingShiftType(shiftType)
-    setNewShiftType({
-      code: shiftType.code,
-      name: shiftType.name,
-      color: shiftType.color,
-      textColor: shiftType.textColor,
-      description: shiftType.description || "",
-    })
-    setShowShiftTypeForm(true)
-  }
-
-  const handleSaveShiftType = async () => {
-    if (!newShiftType.code.trim() || !newShiftType.name.trim()) {
-      showMessage("Code and name are required")
-      return
-    }
-
-    setSavingShiftType(true)
-
-    try {
-      const url = editingShiftType
-        ? `/api/custom-shift-types/${editingShiftType.id}`
-        : "/api/custom-shift-types"
-
-      const response = await fetch(url, {
-        method: editingShiftType ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newShiftType),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        const shiftTypesRes = await fetch("/api/custom-shift-types")
-        const shiftTypesData = await shiftTypesRes.json()
-        if (shiftTypesData.success) setCustomShiftTypes(shiftTypesData.data)
-
-        showMessage(editingShiftType ? "Shift type updated" : "Shift type created")
-        resetShiftTypeForm()
-      } else {
-        showMessage(data.error || "Failed to save shift type")
-      }
-    } catch {
-      showMessage("Failed to save shift type")
-    } finally {
-      setSavingShiftType(false)
-    }
-  }
-
-  const handleDeleteShiftType = async (shiftTypeId: string) => {
-    if (!confirm("Delete this shift type?")) return
-
-    try {
-      const response = await fetch(`/api/custom-shift-types/${shiftTypeId}`, { method: "DELETE" })
-      const data = await response.json()
-
-      if (data.success) {
-        setCustomShiftTypes(customShiftTypes.filter(st => st.id !== shiftTypeId))
-        showMessage("Shift type deleted")
-      } else {
-        showMessage(data.error || "Failed to delete")
-      }
-    } catch {
-      showMessage("Failed to delete")
     }
   }
 
@@ -1153,377 +934,22 @@ export default function SettingsPage() {
         </Card>
 
         {/* Rotation Patterns */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Rotation Patterns
-                </CardTitle>
-                <CardDescription>Configure shift rotation patterns</CardDescription>
-              </div>
-              {isAdmin && !showPatternForm && (
-                <Button size="sm" onClick={() => setShowPatternForm(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Pattern
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {showPatternForm && (
-              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">{editingPattern ? "Edit Pattern" : "New Pattern"}</h4>
-                  <Button variant="ghost" size="sm" onClick={resetPatternForm}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="patternName">Pattern Name</Label>
-                    <Input
-                      id="patternName"
-                      placeholder="e.g., 14/14 with Nights"
-                      value={newPattern.name}
-                      onChange={(e) => setNewPattern({ ...newPattern, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="patternDesc">Description</Label>
-                    <Input
-                      id="patternDesc"
-                      placeholder="e.g., Standard offshore rotation"
-                      value={newPattern.description}
-                      onChange={(e) => setNewPattern({ ...newPattern, description: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="daysOn">Days On</Label>
-                    <Input
-                      id="daysOn"
-                      type="number"
-                      min={1}
-                      max={60}
-                      value={newPattern.daysOn}
-                      onChange={(e) => setNewPattern({ ...newPattern, daysOn: parseInt(e.target.value) || 1 })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="daysOff">Days Off</Label>
-                    <Input
-                      id="daysOff"
-                      type="number"
-                      min={1}
-                      max={60}
-                      value={newPattern.daysOff}
-                      onChange={(e) => setNewPattern({ ...newPattern, daysOff: parseInt(e.target.value) || 1 })}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="includesNights"
-                        checked={newPattern.includesNights}
-                        onChange={(e) => setNewPattern({
-                          ...newPattern,
-                          includesNights: e.target.checked,
-                          nightDays: e.target.checked ? Math.floor(newPattern.daysOn / 2) : 0,
-                        })}
-                        className="h-4 w-4"
-                      />
-                      <Label htmlFor="includesNights">Includes Night Shifts</Label>
-                    </div>
-                    {newPattern.includesNights && (
-                      <div className="ml-6 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id="alternatesShifts"
-                            checked={newPattern.alternatesShifts}
-                            onChange={(e) => setNewPattern({ ...newPattern, alternatesShifts: e.target.checked })}
-                            className="h-4 w-4"
-                          />
-                          <Label htmlFor="alternatesShifts">Alternates Between Day/Night Rotations</Label>
-                        </div>
-                        {!newPattern.alternatesShifts && (
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label htmlFor="nightDays">Number of Night Days</Label>
-                              <Input
-                                id="nightDays"
-                                type="number"
-                                min={1}
-                                max={newPattern.daysOn}
-                                value={newPattern.nightDays}
-                                onChange={(e) => setNewPattern({ ...newPattern, nightDays: parseInt(e.target.value) || 1 })}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Night Shift Position</Label>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={newPattern.nightsAtStart ? "default" : "outline"}
-                                  onClick={() => setNewPattern({ ...newPattern, nightsAtStart: true })}
-                                >
-                                  Start
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant={!newPattern.nightsAtStart ? "default" : "outline"}
-                                  onClick={() => setNewPattern({ ...newPattern, nightsAtStart: false })}
-                                >
-                                  End
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={resetPatternForm}>Cancel</Button>
-                  <Button onClick={handleSavePattern} disabled={savingPattern}>
-                    {savingPattern ? "Saving..." : editingPattern ? "Update" : "Create"}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {patterns.map((pattern) => (
-                <div key={pattern.id} className="flex items-center justify-between p-3 rounded border">
-                  <div>
-                    <p className="font-medium">{pattern.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {pattern.daysOn} on / {pattern.daysOff} off
-                      {pattern.includesNights && pattern.alternatesShifts && " • alternates"}
-                      {pattern.includesNights && !pattern.alternatesShifts && ` • ${pattern.nightDays} nights`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
-                    <Badge variant="outline">{pattern._count.crews} crews</Badge>
-                    {isAdmin && (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => startEditPattern(pattern)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeletePattern(pattern.id)}
-                          disabled={pattern._count.crews > 0}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {patterns.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">No rotation patterns configured</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <RotationPatternsCard
+          patterns={patterns}
+          isAdmin={isAdmin}
+          onRefresh={fetchData}
+          onMessage={showMessage}
+        />
 
         {/* Custom Shift Types */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Palette className="h-5 w-5" />
-                  Custom Shift Types
-                </CardTitle>
-                <CardDescription>Create custom shift types for your organization</CardDescription>
-              </div>
-              <div className="flex gap-2">
-                {isAdmin && (
-                  <>
-                    <Button size="sm" variant="outline" onClick={() => setShowColorEditor(!showColorEditor)}>
-                      <Palette className="h-4 w-4 mr-1" />
-                      Colors
-                    </Button>
-                    {!showShiftTypeForm && (
-                      <Button size="sm" onClick={() => setShowShiftTypeForm(true)}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Built-in colors editor */}
-            {showColorEditor && (
-              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
-                <h4 className="font-medium mb-3">Built-in Shift Colors</h4>
-                <div className="grid gap-3 md:grid-cols-4">
-                  {Object.entries(shiftColors).map(([type, colors]) => (
-                    <div key={type} className="flex items-center gap-2">
-                      <div
-                        className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold"
-                        style={{ backgroundColor: colors.bg, color: colors.text }}
-                      >
-                        {type.charAt(0)}
-                      </div>
-                      <span className="text-sm">{type}</span>
-                      <input
-                        id={`shift-color-${type.toLowerCase()}`}
-                        name={`shift-color-${type.toLowerCase()}`}
-                        type="color"
-                        value={colors.bg}
-                        onChange={(e) => setShiftColors({ ...shiftColors, [type]: { ...colors, bg: e.target.value } })}
-                        className="w-6 h-6 rounded cursor-pointer"
-                        disabled={!isAdmin}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <Button size="sm" className="mt-3" onClick={() => setShowColorEditor(false)}>Done</Button>
-              </div>
-            )}
-
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                <strong>Built-in:</strong> Day, Night, Off, Leave, Vacation, Sick, Training, Shutdown
-              </p>
-            </div>
-
-            {showShiftTypeForm && (
-              <div className="mb-4 p-4 border rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium">{editingShiftType ? "Edit" : "New"} Shift Type</h4>
-                  <Button variant="ghost" size="sm" onClick={resetShiftTypeForm}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="shift-type-code">Code</Label>
-                    <Input
-                      id="shift-type-code"
-                      name="shift-type-code"
-                      placeholder="e.g., BRV"
-                      value={newShiftType.code}
-                      onChange={(e) => setNewShiftType({ ...newShiftType, code: e.target.value.toUpperCase() })}
-                      maxLength={10}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="shift-type-name">Name</Label>
-                    <Input
-                      id="shift-type-name"
-                      name="shift-type-name"
-                      placeholder="e.g., Bereavement"
-                      value={newShiftType.name}
-                      onChange={(e) => setNewShiftType({ ...newShiftType, name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="shift-type-bg-color">Background Color</Label>
-                    <div className="flex gap-2">
-                      <input
-                        id="shift-type-bg-color"
-                        name="shift-type-bg-color"
-                        type="color"
-                        value={newShiftType.color}
-                        onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
-                        className="w-10 h-10 rounded cursor-pointer"
-                      />
-                      <Input
-                        id="shift-type-bg-color-hex"
-                        name="shift-type-bg-color-hex"
-                        value={newShiftType.color}
-                        onChange={(e) => setNewShiftType({ ...newShiftType, color: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="shift-type-text-color">Text Color</Label>
-                    <div className="flex gap-2">
-                      <input
-                        id="shift-type-text-color"
-                        name="shift-type-text-color"
-                        type="color"
-                        value={newShiftType.textColor}
-                        onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
-                        className="w-10 h-10 rounded cursor-pointer"
-                      />
-                      <Input
-                        id="shift-type-text-color-hex"
-                        name="shift-type-text-color-hex"
-                        value={newShiftType.textColor}
-                        onChange={(e) => setNewShiftType({ ...newShiftType, textColor: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Preview</Label>
-                    <div className="mt-2">
-                      <span
-                        className="px-3 py-1 rounded text-sm font-bold"
-                        style={{ backgroundColor: newShiftType.color, color: newShiftType.textColor }}
-                      >
-                        {newShiftType.code || "CODE"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={resetShiftTypeForm}>Cancel</Button>
-                  <Button onClick={handleSaveShiftType} disabled={savingShiftType}>
-                    {savingShiftType ? "Saving..." : editingShiftType ? "Update" : "Create"}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {customShiftTypes.map((st) => (
-                <div key={st.id} className="flex items-center justify-between p-3 rounded border">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="px-2 py-1 rounded text-xs font-bold"
-                      style={{ backgroundColor: st.color, color: st.textColor }}
-                    >
-                      {st.code}
-                    </span>
-                    <div>
-                      <p className="font-medium">{st.name}</p>
-                      {st.description && <p className="text-sm text-muted-foreground">{st.description}</p>}
-                    </div>
-                  </div>
-                  {isAdmin && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => startEditShiftType(st)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteShiftType(st.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {customShiftTypes.length === 0 && (
-                <p className="text-center text-muted-foreground py-4">No custom shift types</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <CustomShiftTypesCard
+          customShiftTypes={customShiftTypes}
+          shiftColors={shiftColors}
+          isAdmin={isAdmin}
+          onRefresh={fetchData}
+          onMessage={showMessage}
+          onShiftColorsChange={setShiftColors}
+        />
 
         {/* Your Account */}
         <Card className="md:col-span-2">

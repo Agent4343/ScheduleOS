@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions, hashPassword, verifyPassword } from "@/lib/auth"
+import { hashPassword, verifyPassword } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
     const { currentPassword, newPassword } = body
