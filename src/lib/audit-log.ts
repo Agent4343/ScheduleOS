@@ -43,7 +43,7 @@ export async function logAudit(data: AuditLogData): Promise<void> {
         organizationId: data.organizationId,
         targetId: data.targetId || null,
         targetType: data.targetType || null,
-        metadata: data.metadata || null,
+        metadata: data.metadata ?? undefined,
         ipAddress: data.ipAddress || null,
       },
     })
