@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Calendar,
   CheckCircle2,
-  Circle,
   Loader2,
   AlertCircle,
   Plus,
@@ -23,8 +22,6 @@ import {
   ArrowLeft,
   Wand2,
   Rocket,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
