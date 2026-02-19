@@ -72,23 +72,24 @@ model Organization {
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
   aiChatSessions   AIChatSession[]
+  shiftSwaps       ShiftSwap[]
 }
 
 model User {
-  id             String       @id @default(cuid())
-  email          String       @unique
-  emailVerified  DateTime?
-  name           String?
-  passwordHash   String?
-  image          String?
-  role           UserRole     @default(WORKER)
-  position       String?
-  positionType   PositionType @default(OTHER)
-  phone          String?
-  hireDate       DateTime?
-  status         UserStatus   @default(ACTIVE)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  email         String       @unique
+  emailVerified DateTime?
+  name          String?
+  passwordHash  String?
+  image         String?
+  role          UserRole     @default(WORKER)
+  position      String?
+  positionType  PositionType @default(OTHER)
+  phone         String?
+  hireDate      DateTime?
+  status        UserStatus   @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   // Organization
   organizationId String?
@@ -99,17 +100,19 @@ model User {
   crew   Crew?   @relation(fields: [crewId], references: [id])
 
   // Relations
-  accounts        Account[]
-  sessions        Session[]
-  schedules       Schedule[]
-  timeOffRequests TimeOffRequest[]
-  approvedRequests TimeOffRequest[] @relation("ApprovedBy")
-  holidayTracking HolidayTracking[]
-  notifications   Notification[]
-  createdInvitations Invitation[] @relation("InvitationCreator")
-  checkIns        ShiftCheckIn[]
-  scannedCheckIns ShiftCheckIn[] @relation("ScannedBy")
-  aiChatSessions  AIChatSession[]
+  accounts           Account[]
+  sessions           Session[]
+  schedules          Schedule[]
+  timeOffRequests    TimeOffRequest[]
+  approvedRequests   TimeOffRequest[]  @relation("ApprovedBy")
+  holidayTracking    HolidayTracking[]
+  notifications      Notification[]
+  createdInvitations Invitation[]      @relation("InvitationCreator")
+  checkIns           ShiftCheckIn[]
+  scannedCheckIns    ShiftCheckIn[]    @relation("ScannedBy")
+  aiChatSessions     AIChatSession[]
+  shiftSwapRequests  ShiftSwap[]       @relation("SwapRequester")
+  shiftSwapTargets   ShiftSwap[]       @relation("SwapTarget")
 
   @@index([organizationId])
   @@index([crewId])
@@ -169,7 +172,7 @@ model RotationPattern {
   includesNights    Boolean  @default(false)
   nightsAtStart     Boolean  @default(true)
   nightDays         Int      @default(0)
-  alternatesShifts  Boolean  @default(false)  // When true, work periods alternate between all-DAY and all-NIGHT
+  alternatesShifts  Boolean  @default(false) // When true, work periods alternate between all-DAY and all-NIGHT
   patternDefinition Json     @default("[]")
   isDefault         Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -217,15 +220,15 @@ model ShiftCheckIn {
 // =====================
 
 model Schedule {
-  id             String      @id @default(cuid())
-  date           DateTime    @db.Date
-  shiftType      ShiftType
-  customShiftCode String?    // Code of custom shift type when shiftType is CUSTOM
-  isOverride     Boolean     @default(false)
-  overrideReason String?
-  notes          String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id              String    @id @default(cuid())
+  date            DateTime  @db.Date
+  shiftType       ShiftType
+  customShiftCode String? // Code of custom shift type when shiftType is CUSTOM
+  isOverride      Boolean   @default(false)
+  overrideReason  String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   // User
   userId String
@@ -258,15 +261,15 @@ enum ShiftType {
 
 // Custom shift types that organizations can create
 model CustomShiftType {
-  id           String   @id @default(cuid())
-  code         String   // Short code like "BRV", "JD", "MED"
-  name         String   // Full name like "Bereavement", "Jury Duty"
-  color        String   @default("#6b7280") // Hex color for display
-  textColor    String   @default("#ffffff") // Text color for contrast
-  description  String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  code        String // Short code like "BRV", "JD", "MED"
+  name        String // Full name like "Bereavement", "Jury Duty"
+  color       String   @default("#6b7280") // Hex color for display
+  textColor   String   @default("#ffffff") // Text color for contrast
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Organization
   organizationId String
@@ -276,16 +279,16 @@ model CustomShiftType {
 }
 
 model TimeOffRequest {
-  id          String            @id @default(cuid())
-  startDate   DateTime          @db.Date
-  endDate     DateTime          @db.Date
-  type        TimeOffType
-  status      RequestStatus     @default(PENDING)
-  reason      String?
-  notes       String?
-  adminNotes  String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id         String        @id @default(cuid())
+  startDate  DateTime      @db.Date
+  endDate    DateTime      @db.Date
+  type       TimeOffType
+  status     RequestStatus @default(PENDING)
+  reason     String?
+  notes      String?
+  adminNotes String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   // Requester
   userId String
@@ -293,7 +296,7 @@ model TimeOffRequest {
 
   // Approver
   approvedById String?
-  approvedBy   User?    @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
   approvedAt   DateTime?
 }
 
@@ -324,7 +327,7 @@ model StaffingRule {
   shiftType    ShiftType
   minWorkers   Int
   maxVacation  Int           @default(1)
-  role         UserRole?     // If set, rule applies only to this role
+  role         UserRole? // If set, rule applies only to this role
   positionType PositionType? // If set, rule applies only to this position type
   priority     Int           @default(0) // Higher priority rules take precedence
   isActive     Boolean       @default(true)
@@ -431,12 +434,12 @@ enum NotificationType {
 // =====================
 
 model Invitation {
-  id        String           @id @default(cuid())
+  id        String   @id @default(cuid())
   email     String
-  role      UserRole         @default(WORKER)
-  token     String           @unique
+  role      UserRole @default(WORKER)
+  token     String   @unique
   expiresAt DateTime
-  createdAt DateTime         @default(now())
+  createdAt DateTime @default(now())
 
   // Organization
   organizationId String
@@ -486,4 +489,44 @@ model AIChatMessage {
   session   AIChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+}
+
+// =====================
+// Shift Swaps
+// =====================
+
+model ShiftSwap {
+  id        String     @id @default(cuid())
+  date      DateTime   @db.Date
+  shiftType ShiftType
+  reason    String?    @db.Text
+  status    SwapStatus @default(PENDING)
+  adminNote String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Requester (who wants to swap)
+  requesterId String
+  requester   User   @relation("SwapRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  // Target (who they want to swap with)
+  targetId String
+  target   User   @relation("SwapTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([requesterId])
+  @@index([targetId])
+  @@index([status])
+}
+
+enum SwapStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  APPROVED
+  CANCELLED
 }

@@ -21,6 +21,10 @@ import {
   ScanLine,
   Rocket,
   ArrowRight,
+  ArrowLeftRight,
+  CalendarDays,
+  Download,
+  Upload,
 } from "lucide-react"
 
 interface DashboardStats {
@@ -53,17 +57,33 @@ interface AttendanceData {
   onSite: number
 }
 
+interface MyScheduleDay {
+  id: string
+  date: string
+  shiftType: string
+  customShiftCode: string | null
+}
+
+interface MyScheduleData {
+  schedules: MyScheduleDay[]
+  nextShift: MyScheduleDay | null
+  pendingSwaps: Array<{ id: string; date: string; requester: { name: string | null }; target: { name: string | null } }>
+  pendingTimeOff: Array<{ id: string; startDate: string; endDate: string }>
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
+  const [mySchedule, setMySchedule] = useState<MyScheduleData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [dashRes, attendanceRes] = await Promise.all([
+        const [dashRes, attendanceRes, myScheduleRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/attendance"),
+          fetch("/api/my-schedule?days=14"),
         ])
 
         const dashData = await dashRes.json()
@@ -76,6 +96,9 @@ export default function DashboardPage() {
           const checkedOut = records.filter((r: { checkOutTime: string | null }) => r.checkOutTime).length
           setAttendance({ checkedIn, checkedOut, onSite: checkedIn - checkedOut })
         }
+
+        const myScheduleData = await myScheduleRes.json()
+        if (myScheduleData.success) setMySchedule(myScheduleData.data)
       } catch (error) {
         console.error("Failed to fetch dashboard:", error)
       } finally {
@@ -305,8 +328,102 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* My Schedule - Next 14 Days */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5" />
+                My Schedule
+              </CardTitle>
+              <CardDescription>Your shifts for the next 2 weeks</CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <a href="/api/export/ical" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Download className="h-3.5 w-3.5" />
+                  iCal
+                </Button>
+              </a>
+              <a href="/schedule">
+                <Button variant="outline" size="sm" className="gap-1">
+                  Full Schedule
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </a>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {mySchedule?.nextShift && (
+            <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <p className="text-xs text-muted-foreground">Next Shift</p>
+              <p className="font-semibold">
+                {new Date(mySchedule.nextShift.date).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                {" - "}
+                <Badge variant={mySchedule.nextShift.shiftType === "NIGHT" ? "night" : "day"} className="text-xs">
+                  {mySchedule.nextShift.shiftType === "DAY" ? "Day Shift" : mySchedule.nextShift.shiftType === "NIGHT" ? "Night Shift" : mySchedule.nextShift.shiftType}
+                </Badge>
+              </p>
+            </div>
+          )}
+
+          {mySchedule?.schedules && mySchedule.schedules.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {mySchedule.schedules.map(day => {
+                const date = new Date(day.date)
+                const dayName = date.toLocaleDateString("en-US", { weekday: "short" })
+                const dayNum = date.getDate()
+                const isOff = ["OFF", "LEAVE", "VACATION", "SICK"].includes(day.shiftType)
+                const isNight = day.shiftType === "NIGHT" || day.shiftType === "PL_NIGHT"
+                return (
+                  <div
+                    key={day.id}
+                    className={`flex flex-col items-center p-1.5 rounded-md text-xs w-12 border ${
+                      isOff ? "bg-muted/50 text-muted-foreground" : isNight ? "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800" : "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800"
+                    }`}
+                    title={`${dayName} ${dayNum} - ${day.shiftType}`}
+                  >
+                    <span className="text-[10px] text-muted-foreground">{dayName}</span>
+                    <span className="font-bold">{dayNum}</span>
+                    <span className="text-[10px]">{day.shiftType === "DAY" ? "D" : day.shiftType === "NIGHT" ? "N" : day.shiftType.slice(0, 3)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm">No schedule data for the next 2 weeks</p>
+          )}
+
+          {/* Pending swaps / time-off */}
+          {((mySchedule?.pendingSwaps?.length ?? 0) > 0 || (mySchedule?.pendingTimeOff?.length ?? 0) > 0) && (
+            <div className="mt-4 pt-4 border-t space-y-2">
+              {(mySchedule?.pendingSwaps?.length ?? 0) > 0 && (
+                <div className="flex items-center gap-2">
+                  <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {mySchedule?.pendingSwaps?.length} pending swap request{(mySchedule?.pendingSwaps?.length ?? 0) !== 1 ? "s" : ""}
+                  </span>
+                  <a href="/shift-swaps" className="text-xs text-primary hover:underline ml-auto">View</a>
+                </div>
+              )}
+              {(mySchedule?.pendingTimeOff?.length ?? 0) > 0 && (
+                <div className="flex items-center gap-2">
+                  <CalendarOff className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {mySchedule?.pendingTimeOff?.length} pending time-off request{(mySchedule?.pendingTimeOff?.length ?? 0) !== 1 ? "s" : ""}
+                  </span>
+                  <a href="/time-off" className="text-xs text-primary hover:underline ml-auto">View</a>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quick actions */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <a
           href="/attendance/qr"
           className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
@@ -331,7 +448,36 @@ export default function DashboardPage() {
         >
           <ClipboardCheck className="h-8 w-8 text-primary mb-2" />
           <h3 className="font-semibold group-hover:text-primary">Attendance</h3>
-          <p className="text-sm text-muted-foreground">View today&apos;s attendance records</p>
+          <p className="text-sm text-muted-foreground">Today&apos;s records</p>
+        </a>
+
+        <a
+          href="/shift-swaps"
+          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
+        >
+          <ArrowLeftRight className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Shift Swaps</h3>
+          <p className="text-sm text-muted-foreground">Swap shifts with coworkers</p>
+        </a>
+
+        <a
+          href="/api/export/ical"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
+        >
+          <Download className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">Export Calendar</h3>
+          <p className="text-sm text-muted-foreground">Sync to phone calendar</p>
+        </a>
+
+        <a
+          href="/assistant"
+          className="group rounded-lg border p-4 hover:border-primary hover:bg-accent transition-colors"
+        >
+          <Upload className="h-8 w-8 text-primary mb-2" />
+          <h3 className="font-semibold group-hover:text-primary">AI Assistant</h3>
+          <p className="text-sm text-muted-foreground">Ask questions about schedule</p>
         </a>
       </div>
     </div>
