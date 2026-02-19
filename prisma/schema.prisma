@@ -71,6 +71,7 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
+  aiChatSessions   AIChatSession[]
 }
 
 model User {
@@ -108,6 +109,7 @@ model User {
   createdInvitations Invitation[] @relation("InvitationCreator")
   checkIns        ShiftCheckIn[]
   scannedCheckIns ShiftCheckIn[] @relation("ScannedBy")
+  aiChatSessions  AIChatSession[]
 
   @@index([organizationId])
   @@index([crewId])
@@ -445,4 +447,43 @@ model Invitation {
   createdBy   User   @relation("InvitationCreator", fields: [createdById], references: [id])
 
   @@unique([organizationId, email])
+}
+
+// =====================
+// AI Assistant
+// =====================
+
+model AIChatSession {
+  id        String   @id @default(cuid())
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // User who created the session
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Messages
+  messages AIChatMessage[]
+
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model AIChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String   @db.Text
+  toolCalls Json?
+  createdAt DateTime @default(now())
+
+  // Session
+  sessionId String
+  session   AIChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
 }

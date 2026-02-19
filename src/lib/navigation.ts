@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   CalendarOff,
   BarChart3,
+  Bot,
   Settings,
   type LucideIcon,
 } from "lucide-react"
@@ -27,5 +28,6 @@ export const navigation: NavItem[] = [
   { name: "Crews", href: "/crews", icon: Users2, adminOnly: true },
   { name: "Time Off", href: "/time-off", icon: CalendarOff },
   { name: "Reports", href: "/reports", icon: BarChart3, adminOnly: true },
+  { name: "AI Assistant", href: "/assistant", icon: Bot },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
