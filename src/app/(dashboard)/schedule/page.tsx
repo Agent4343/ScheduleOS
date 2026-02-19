@@ -798,7 +798,7 @@ function SchedulePageContent() {
                               title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
                               onClick={() => openScheduleEditModal(worker, month, day)}
                             >
-                              <span className="text-xs font-bold">
+                              <span className="sr-only">
                                 {style ? style.label : ""}
                               </span>
                             </td>
