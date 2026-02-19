@@ -7,6 +7,7 @@ import {
   CalendarOff,
   BarChart3,
   Bot,
+  Rocket,
   Settings,
   type LucideIcon,
 } from "lucide-react"
@@ -21,6 +22,7 @@ export interface NavItem {
 // Primary navigation items shown in sidebar and mobile nav.
 // Setup is excluded — it's a one-time onboarding wizard, not an ongoing tool.
 export const navigation: NavItem[] = [
+  { name: "Getting Started", href: "/getting-started", icon: Rocket },
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Schedule", href: "/schedule", icon: Calendar },
   { name: "Attendance", href: "/attendance", icon: ClipboardCheck },

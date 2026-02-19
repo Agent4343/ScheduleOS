@@ -18,6 +18,8 @@ import {
   UserCheck,
   QrCode,
   ScanLine,
+  Rocket,
+  ArrowRight,
 } from "lucide-react"
 
 interface DashboardStats {
@@ -118,6 +120,31 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Overview of your workforce scheduling</p>
       </div>
+
+      {/* Getting started banner for new orgs */}
+      {stats.totalWorkers === 0 && stats.activeCrews === 0 && (
+        <Card className="border-primary bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-primary/10 rounded-lg">
+                <Rocket className="h-8 w-8 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold">Welcome to ShiftSync!</h3>
+                <p className="text-sm text-muted-foreground">
+                  Get started by setting up your crews, adding workers, and generating your first schedule.
+                </p>
+              </div>
+              <a href="/getting-started">
+                <Button className="gap-2">
+                  Get Started
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Staffing alert */}
       {stats.staffingGaps > 0 && (
