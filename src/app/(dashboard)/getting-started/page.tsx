@@ -22,6 +22,10 @@ import {
   ArrowLeft,
   Wand2,
   Rocket,
+  Bell,
+  Settings,
+  Shield,
+  HelpCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +40,14 @@ interface SetupStatus {
   completedSteps: number
   totalSteps: number
   isComplete: boolean
+}
+
+interface StaffingRuleData {
+  id: string
+  name: string
+  shiftType: string
+  minWorkers: number
+  isActive: boolean
 }
 
 interface Crew {
@@ -77,8 +89,10 @@ const CREW_COLORS = [
 const STEP_CONFIGS = [
   { key: "crews", title: "Create Crews", desc: "Organize your workers into rotation groups", icon: Users2 },
   { key: "workers", title: "Add Workers", desc: "Add your team and assign them to crews", icon: Users },
-  { key: "patterns", title: "Rotation Patterns", desc: "Define shift rotation schedules", icon: RefreshCw },
+  { key: "patterns", title: "Shift Patterns", desc: "Define shift rotation schedules", icon: RefreshCw },
   { key: "schedules", title: "Generate Schedules", desc: "Build schedules from your setup", icon: Calendar },
+  { key: "staffing", title: "Staffing Alerts", desc: "Set minimum staffing requirements", icon: Bell },
+  { key: "review", title: "Review & Go", desc: "Verify your setup and start using the app", icon: Settings },
 ] as const
 
 export default function GettingStartedPage() {
@@ -121,13 +135,20 @@ export default function GettingStartedPage() {
   const [startShift, setStartShift] = useState<"day" | "night">("day")
   const [generating, setGenerating] = useState(false)
 
+  // Staffing rules
+  const [staffingRules, setStaffingRules] = useState<StaffingRuleData[]>([])
+  const [showStaffingForm, setShowStaffingForm] = useState(false)
+  const [staffingForm, setStaffingForm] = useState({ name: "", shiftType: "DAY", minWorkers: "1", positionType: "" })
+  const [savingStaffingRule, setSavingStaffingRule] = useState(false)
+
   const fetchAll = useCallback(async () => {
     try {
-      const [statusRes, crewsRes, workersRes, patternsRes] = await Promise.all([
+      const [statusRes, crewsRes, workersRes, patternsRes, staffingRes] = await Promise.all([
         fetch("/api/setup-status"),
         fetch("/api/crews"),
         fetch("/api/users?status=ACTIVE"),
         fetch("/api/rotation-patterns"),
+        fetch("/api/staffing-rules"),
       ])
 
       const statusData = await statusRes.json()
@@ -147,6 +168,9 @@ export default function GettingStartedPage() {
 
       const patternsData = await patternsRes.json()
       if (patternsData.success) setPatterns(patternsData.data)
+
+      const staffingData = await staffingRes.json()
+      if (staffingData.success) setStaffingRules(staffingData.data || [])
     } catch {
       setError("Failed to load data")
     } finally {
@@ -299,6 +323,48 @@ export default function GettingStartedPage() {
     finally { setGenerating(false) }
   }
 
+  // ==================== STAFFING RULE HANDLERS ====================
+  const handleCreateStaffingRule = async () => {
+    if (!staffingForm.name.trim()) { setError("Rule name is required"); return }
+    clearMessages()
+    setSavingStaffingRule(true)
+    try {
+      const res = await fetch("/api/staffing-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: staffingForm.name.trim(),
+          shiftType: staffingForm.shiftType,
+          minWorkers: parseInt(staffingForm.minWorkers) || 1,
+          maxVacation: 1,
+          positionType: staffingForm.positionType || null,
+          priority: 0,
+          isActive: true,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setSuccess(`Staffing rule "${staffingForm.name}" created!`)
+        setStaffingForm({ name: "", shiftType: "DAY", minWorkers: "1", positionType: "" })
+        setShowStaffingForm(false)
+        await fetchAll()
+      } else {
+        setError(data.error || "Failed to create staffing rule")
+      }
+    } catch { setError("Failed to create staffing rule") }
+    finally { setSavingStaffingRule(false) }
+  }
+
+  const handleDeleteStaffingRule = async (id: string) => {
+    try {
+      const res = await fetch(`/api/staffing-rules/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setStaffingRules(prev => prev.filter(r => r.id !== id))
+        setSuccess("Staffing rule deleted")
+      }
+    } catch { setError("Failed to delete rule") }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -307,12 +373,18 @@ export default function GettingStartedPage() {
     )
   }
 
+  const hasStaffingRules = staffingRules.length > 0
+  const coreComplete = (status?.hasCrews && status?.hasWorkers && status?.hasPatterns && status?.hasSchedules) ?? false
   const stepComplete = [
     status?.hasCrews ?? false,
     status?.hasWorkers ?? false,
     status?.hasPatterns ?? false,
     status?.hasSchedules ?? false,
+    hasStaffingRules,
+    coreComplete,
   ]
+  const completedCount = stepComplete.filter(Boolean).length
+  const totalSteps = stepComplete.length
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -332,16 +404,16 @@ export default function GettingStartedPage() {
         <CardContent className="pt-6">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-medium">
-              Setup Progress: {status?.completedSteps ?? 0} of {status?.totalSteps ?? 4} steps
+              Setup Progress: {completedCount} of {totalSteps} steps
             </span>
-            {status?.isComplete && (
+            {completedCount === totalSteps && (
               <Badge className="bg-green-100 text-green-700">All Done!</Badge>
             )}
           </div>
           <div className="w-full bg-muted rounded-full h-3">
             <div
               className="bg-primary h-3 rounded-full transition-all duration-500"
-              style={{ width: `${((status?.completedSteps ?? 0) / (status?.totalSteps ?? 4)) * 100}%` }}
+              style={{ width: `${(completedCount / totalSteps) * 100}%` }}
             />
           </div>
         </CardContent>
@@ -361,7 +433,7 @@ export default function GettingStartedPage() {
       )}
 
       {/* Step Navigation */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         {STEP_CONFIGS.map((step, i) => (
           <button
             key={step.key}
@@ -617,32 +689,100 @@ export default function GettingStartedPage() {
 
                   {/* Quick presets */}
                   <div>
-                    <Label className="text-sm text-muted-foreground">Quick Presets</Label>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {[
-                        { label: "14/14", name: "14 on / 14 off", daysOn: "14", daysOff: "14", nights: false },
-                        { label: "7/7", name: "7 on / 7 off", daysOn: "7", daysOff: "7", nights: false },
-                        { label: "14/14 D+N", name: "14 on / 14 off (Day+Night)", daysOn: "14", daysOff: "14", nights: true },
-                        { label: "28/28", name: "28 on / 28 off", daysOn: "28", daysOff: "28", nights: false },
-                        { label: "5/2", name: "5 on / 2 off (M-F)", daysOn: "5", daysOff: "2", nights: false },
-                      ].map(preset => (
-                        <Button
-                          key={preset.label}
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setPatternForm({
-                            ...patternForm,
-                            name: preset.name,
-                            daysOn: preset.daysOn,
-                            daysOff: preset.daysOff,
-                            includesNights: preset.nights,
-                            nightDays: preset.nights ? String(Math.floor(parseInt(preset.daysOn) / 2)) : "0",
-                          })}
-                        >
-                          {preset.label}
-                        </Button>
-                      ))}
+                    <Label className="text-sm text-muted-foreground">Common Shift Patterns</Label>
+                    <div className="space-y-3 mt-2">
+                      {/* Offshore / Equal Time */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Offshore / Equal Time</p>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { label: "7/7", name: "7 on / 7 off", daysOn: "7", daysOff: "7", nights: false },
+                            { label: "7/7 D+N", name: "7 on / 7 off (Day+Night)", daysOn: "7", daysOff: "7", nights: true },
+                            { label: "14/14", name: "14 on / 14 off", daysOn: "14", daysOff: "14", nights: false },
+                            { label: "14/14 D+N", name: "14 on / 14 off (Day+Night)", daysOn: "14", daysOff: "14", nights: true },
+                            { label: "21/21", name: "21 on / 21 off", daysOn: "21", daysOff: "21", nights: false },
+                            { label: "28/28", name: "28 on / 28 off", daysOn: "28", daysOff: "28", nights: false },
+                          ].map(preset => (
+                            <Button
+                              key={preset.label}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPatternForm({
+                                ...patternForm,
+                                name: preset.name,
+                                daysOn: preset.daysOn,
+                                daysOff: preset.daysOff,
+                                includesNights: preset.nights,
+                                nightDays: preset.nights ? String(Math.floor(parseInt(preset.daysOn) / 2)) : "0",
+                              })}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Short Rotation */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Short Rotation</p>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { label: "2/2", name: "2 on / 2 off", daysOn: "2", daysOff: "2", nights: false },
+                            { label: "2/3", name: "2 on / 3 off", daysOn: "2", daysOff: "3", nights: false },
+                            { label: "3/3", name: "3 on / 3 off", daysOn: "3", daysOff: "3", nights: false },
+                            { label: "4/4", name: "4 on / 4 off", daysOn: "4", daysOff: "4", nights: false },
+                            { label: "4/3", name: "4 on / 3 off", daysOn: "4", daysOff: "3", nights: false },
+                            { label: "2/2 D+N", name: "2 on / 2 off (Day+Night)", daysOn: "2", daysOff: "2", nights: true },
+                            { label: "3/3 D+N", name: "3 on / 3 off (Day+Night)", daysOn: "3", daysOff: "3", nights: true },
+                            { label: "4/4 D+N", name: "4 on / 4 off (Day+Night)", daysOn: "4", daysOff: "4", nights: true },
+                          ].map(preset => (
+                            <Button
+                              key={preset.label}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPatternForm({
+                                ...patternForm,
+                                name: preset.name,
+                                daysOn: preset.daysOn,
+                                daysOff: preset.daysOff,
+                                includesNights: preset.nights,
+                                nightDays: preset.nights ? String(Math.floor(parseInt(preset.daysOn) / 2)) : "0",
+                              })}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Standard Work Week */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Standard / Weekly</p>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { label: "5/2 (M-F)", name: "5 on / 2 off (Mon-Fri)", daysOn: "5", daysOff: "2", nights: false },
+                            { label: "5/2 Nights", name: "5 on / 2 off (Night Shift)", daysOn: "5", daysOff: "2", nights: true },
+                            { label: "4/3 (4-Day)", name: "4 on / 3 off (4-Day Week)", daysOn: "4", daysOff: "3", nights: false },
+                            { label: "6/1", name: "6 on / 1 off", daysOn: "6", daysOff: "1", nights: false },
+                          ].map(preset => (
+                            <Button
+                              key={preset.label}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setPatternForm({
+                                ...patternForm,
+                                name: preset.name,
+                                daysOn: preset.daysOn,
+                                daysOff: preset.daysOff,
+                                includesNights: preset.nights,
+                                nightDays: preset.nights ? String(Math.floor(parseInt(preset.daysOn) / 2)) : "0",
+                              })}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-2">Select a preset or enter custom days on/off below</p>
                   </div>
 
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -696,7 +836,8 @@ export default function GettingStartedPage() {
 
               <p className="text-sm text-muted-foreground">
                 A rotation pattern defines how crews cycle between on-duty and off-duty periods.
-                Common offshore patterns: 14/14, 28/28, 7/7.
+                Use any combination of days on/off. Common patterns: 2/2, 2/3, 3/3, 4/4, 5/2, 7/7, 14/14, 28/28.
+                You can create multiple patterns for different crews.
               </p>
             </div>
           )}
@@ -822,6 +963,304 @@ export default function GettingStartedPage() {
               </p>
             </div>
           )}
+
+          {/* ==================== STEP 5: STAFFING ALERTS ==================== */}
+          {activeStep === 4 && (
+            <div className="space-y-4">
+              <Alert className="border-blue-200 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300">
+                <HelpCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Staffing rules alert you when a shift drops below the minimum number of workers.
+                  Set rules for each shift type and position so you never run understaffed.
+                  <strong> This step is optional but recommended.</strong>
+                </AlertDescription>
+              </Alert>
+
+              {staffingRules.length > 0 ? (
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Your Staffing Rules ({staffingRules.length})</Label>
+                  <div className="space-y-2">
+                    {staffingRules.map(rule => (
+                      <div key={rule.id} className="flex items-center justify-between p-3 rounded-lg border">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm">{rule.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {rule.shiftType === "DAY" ? "Day" : "Night"}
+                          </Badge>
+                          <Badge className="text-xs bg-primary/10 text-primary">
+                            Min: {rule.minWorkers}
+                          </Badge>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteStaffingRule(rule.id)}>
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Bell className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                  <p>No staffing rules yet.</p>
+                  <p className="text-xs mt-1">Add rules to get alerts when shifts are understaffed.</p>
+                </div>
+              )}
+
+              {/* Quick preset staffing rules */}
+              {staffingRules.length === 0 && (
+                <div>
+                  <Label className="text-sm text-muted-foreground">Quick Setup</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Click to create common staffing rules:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "Min 3 Day Operators", name: "Minimum Day Operators", shift: "DAY", min: "3", pos: "OPERATOR" },
+                      { label: "Min 3 Night Operators", name: "Minimum Night Operators", shift: "NIGHT", min: "3", pos: "OPERATOR" },
+                      { label: "Min 1 Day Control Room", name: "Minimum Day Control Room", shift: "DAY", min: "1", pos: "ONSHORE_CONTROL_ROOM" },
+                      { label: "Min 1 Night Control Room", name: "Minimum Night Control Room", shift: "NIGHT", min: "1", pos: "ONSHORE_CONTROL_ROOM" },
+                    ].map(preset => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          clearMessages()
+                          try {
+                            const res = await fetch("/api/staffing-rules", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                name: preset.name,
+                                shiftType: preset.shift,
+                                minWorkers: parseInt(preset.min),
+                                maxVacation: 1,
+                                positionType: preset.pos,
+                                priority: 0,
+                                isActive: true,
+                              }),
+                            })
+                            const data = await res.json()
+                            if (res.ok && data.success) {
+                              setSuccess(`Created: ${preset.name}`)
+                              await fetchAll()
+                            } else {
+                              setError(data.error || "Failed to create rule")
+                            }
+                          } catch { setError("Failed to create rule") }
+                        }}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!showStaffingForm ? (
+                <Button onClick={() => { setShowStaffingForm(true); clearMessages() }} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Custom Rule
+                </Button>
+              ) : (
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-medium">New Staffing Rule</Label>
+                    <Button variant="ghost" size="icon" onClick={() => setShowStaffingForm(false)}><X className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="sr-name">Rule Name *</Label>
+                      <Input id="sr-name" placeholder="e.g. Min Day Operators" value={staffingForm.name} onChange={e => setStaffingForm({ ...staffingForm, name: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label htmlFor="sr-shift">Shift Type</Label>
+                      <select
+                        id="sr-shift"
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                        value={staffingForm.shiftType}
+                        onChange={e => setStaffingForm({ ...staffingForm, shiftType: e.target.value })}
+                      >
+                        <option value="DAY">Day Shift</option>
+                        <option value="NIGHT">Night Shift</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="sr-min">Minimum Workers *</Label>
+                      <Input id="sr-min" type="number" min="1" value={staffingForm.minWorkers} onChange={e => setStaffingForm({ ...staffingForm, minWorkers: e.target.value })} />
+                      <p className="text-xs text-muted-foreground mt-1">Alert when below this number</p>
+                    </div>
+                    <div>
+                      <Label htmlFor="sr-position">Position Type</Label>
+                      <select
+                        id="sr-position"
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                        value={staffingForm.positionType}
+                        onChange={e => setStaffingForm({ ...staffingForm, positionType: e.target.value })}
+                      >
+                        <option value="">All Positions</option>
+                        <option value="OPERATOR">Operator</option>
+                        <option value="ONSHORE_CONTROL_ROOM">Onshore Control Room</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <Button onClick={handleCreateStaffingRule} disabled={savingStaffingRule || !staffingForm.name.trim()} className="gap-2">
+                    {savingStaffingRule ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Create Rule
+                  </Button>
+                </div>
+              )}
+
+              <p className="text-sm text-muted-foreground">
+                You can always add, edit, or remove staffing rules later in <a href="/settings" className="text-primary hover:underline">Settings</a>.
+                Rules are checked against your schedule to highlight understaffed shifts.
+              </p>
+            </div>
+          )}
+
+          {/* ==================== STEP 6: REVIEW & GO ==================== */}
+          {activeStep === 5 && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Here&apos;s a summary of your setup. Make sure everything looks good before you start using ShiftSync.
+              </p>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                {/* Crews Summary */}
+                <div className={cn(
+                  "p-4 rounded-lg border space-y-1",
+                  (status?.hasCrews) ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800"
+                )}>
+                  <div className="flex items-center gap-2">
+                    {(status?.hasCrews) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-yellow-600" />}
+                    <span className="font-medium text-sm">Crews</span>
+                  </div>
+                  <p className="text-sm">{crews.length} crew{crews.length !== 1 ? "s" : ""} created</p>
+                  {crews.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {crews.map(c => (
+                        <Badge key={c.id} variant="outline" className="text-xs" style={{ borderColor: c.color, color: c.color }}>
+                          {c.name} ({c._count?.workers ?? 0})
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {!status?.hasCrews && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setActiveStep(0)}>Go to Step 1</Button>
+                  )}
+                </div>
+
+                {/* Workers Summary */}
+                <div className={cn(
+                  "p-4 rounded-lg border space-y-1",
+                  (status?.hasWorkers) ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800"
+                )}>
+                  <div className="flex items-center gap-2">
+                    {(status?.hasWorkers) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-yellow-600" />}
+                    <span className="font-medium text-sm">Workers</span>
+                  </div>
+                  <p className="text-sm">{workers.length} worker{workers.length !== 1 ? "s" : ""} added</p>
+                  {workers.filter(w => !w.crewId).length > 0 && (
+                    <p className="text-xs text-yellow-600">{workers.filter(w => !w.crewId).length} worker(s) not assigned to a crew</p>
+                  )}
+                  {!status?.hasWorkers && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setActiveStep(1)}>Go to Step 2</Button>
+                  )}
+                </div>
+
+                {/* Patterns Summary */}
+                <div className={cn(
+                  "p-4 rounded-lg border space-y-1",
+                  (status?.hasPatterns) ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800"
+                )}>
+                  <div className="flex items-center gap-2">
+                    {(status?.hasPatterns) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-yellow-600" />}
+                    <span className="font-medium text-sm">Shift Patterns</span>
+                  </div>
+                  <p className="text-sm">{patterns.length} pattern{patterns.length !== 1 ? "s" : ""} defined</p>
+                  {patterns.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {patterns.map(p => (
+                        <Badge key={p.id} variant="outline" className="text-xs">{p.name}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  {!status?.hasPatterns && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setActiveStep(2)}>Go to Step 3</Button>
+                  )}
+                </div>
+
+                {/* Schedules Summary */}
+                <div className={cn(
+                  "p-4 rounded-lg border space-y-1",
+                  (status?.hasSchedules) ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800"
+                )}>
+                  <div className="flex items-center gap-2">
+                    {(status?.hasSchedules) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <AlertCircle className="h-4 w-4 text-yellow-600" />}
+                    <span className="font-medium text-sm">Schedules</span>
+                  </div>
+                  <p className="text-sm">{(status?.hasSchedules) ? "Schedules generated" : "No schedules generated yet"}</p>
+                  {!status?.hasSchedules && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setActiveStep(3)}>Go to Step 4</Button>
+                  )}
+                </div>
+
+                {/* Staffing Rules Summary */}
+                <div className={cn(
+                  "p-4 rounded-lg border space-y-1",
+                  hasStaffingRules ? "border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800" : "border-muted"
+                )}>
+                  <div className="flex items-center gap-2">
+                    {hasStaffingRules ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Shield className="h-4 w-4 text-muted-foreground" />}
+                    <span className="font-medium text-sm">Staffing Alerts</span>
+                    {!hasStaffingRules && <Badge variant="outline" className="text-xs">Optional</Badge>}
+                  </div>
+                  <p className="text-sm">{staffingRules.length} rule{staffingRules.length !== 1 ? "s" : ""} configured</p>
+                  {!hasStaffingRules && (
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => setActiveStep(4)}>Go to Step 5</Button>
+                  )}
+                </div>
+
+                {/* Quick Links */}
+                <div className="p-4 rounded-lg border space-y-1 border-muted">
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium text-sm">More Settings</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Customize shift types, notifications, and more in Settings.</p>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => router.push("/settings")}>
+                    Go to Settings
+                  </Button>
+                </div>
+              </div>
+
+              {coreComplete ? (
+                <div className="pt-4 space-y-3">
+                  <Alert className="border-green-500 bg-green-50 text-green-700 dark:bg-green-950 dark:border-green-800 dark:text-green-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>
+                      Your setup is complete! ShiftSync is ready to use. You can always come back to change settings or add more data.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="flex gap-3">
+                    <Button onClick={() => router.push("/dashboard")} size="lg" className="gap-2">
+                      <Rocket className="h-4 w-4" />
+                      Go to Dashboard
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push("/schedule")} size="lg">
+                      View Schedule
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Some core steps are not complete yet. Finish steps 1-4 above for the best experience.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -837,7 +1276,7 @@ export default function GettingStartedPage() {
           Previous
         </Button>
 
-        {activeStep < 3 ? (
+        {activeStep < 5 ? (
           <Button
             onClick={() => { setActiveStep(activeStep + 1); clearMessages() }}
             className="gap-2"
@@ -845,7 +1284,7 @@ export default function GettingStartedPage() {
             Next Step
             <ArrowRight className="h-4 w-4" />
           </Button>
-        ) : status?.isComplete ? (
+        ) : coreComplete ? (
           <Button onClick={() => router.push("/dashboard")} className="gap-2">
             Go to Dashboard
             <ArrowRight className="h-4 w-4" />
@@ -854,7 +1293,7 @@ export default function GettingStartedPage() {
       </div>
 
       {/* All Done Banner */}
-      {status?.isComplete && (
+      {coreComplete && (
         <Card className="border-green-500 bg-green-50 dark:bg-green-950 dark:border-green-800">
           <CardContent className="pt-6">
             <div className="text-center space-y-3">
