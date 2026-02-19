@@ -73,6 +73,8 @@ model Organization {
   customShiftTypes CustomShiftType[]
   aiChatSessions   AIChatSession[]
   shiftSwaps       ShiftSwap[]
+  announcements    Announcement[]
+  auditLogs        AuditLog[]
 }
 
 model User {
@@ -113,6 +115,8 @@ model User {
   aiChatSessions     AIChatSession[]
   shiftSwapRequests  ShiftSwap[]       @relation("SwapRequester")
   shiftSwapTargets   ShiftSwap[]       @relation("SwapTarget")
+  announcements      Announcement[]    @relation("AnnouncementAuthor")
+  auditLogs          AuditLog[]        @relation("AuditLogUser")
 
   @@index([organizationId])
   @@index([crewId])
@@ -529,4 +533,63 @@ enum SwapStatus {
   DECLINED
   APPROVED
   CANCELLED
+}
+
+// =====================
+// Team Announcements
+// =====================
+
+model Announcement {
+  id        String               @id @default(cuid())
+  title     String
+  content   String               @db.Text
+  priority  AnnouncementPriority @default(NORMAL)
+  pinned    Boolean              @default(false)
+  expiresAt DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  // Author
+  authorId String
+  author   User   @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, pinned])
+}
+
+enum AnnouncementPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// =====================
+// Audit Log
+// =====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  // User who performed the action
+  userId String
+  user   User   @relation("AuditLogUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, createdAt])
+  @@index([userId])
 }
