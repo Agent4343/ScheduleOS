@@ -13,9 +13,8 @@ import { Calendar, Loader2, Check, CreditCard } from "lucide-react"
 import { Suspense } from "react"
 
 const PLAN_INFO: Record<string, { name: string; price: number; trial: number }> = {
-  starter: { name: "Starter", price: 29, trial: 14 },
-  professional: { name: "Professional", price: 49, trial: 14 },
-  enterprise: { name: "Enterprise", price: 99, trial: 14 },
+  starter: { name: "Starter", price: 49, trial: 14 },
+  professional: { name: "Professional", price: 149, trial: 14 },
 }
 
 function RegisterForm() {
