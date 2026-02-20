@@ -56,12 +56,12 @@ export default async function HomePage() {
               Pricing
             </Link>
           </nav>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/login">
-              <Button variant="ghost">Sign In</Button>
+              <Button variant="ghost" size="sm" className="sm:size-default">Sign In</Button>
             </Link>
             <Link href="/pricing">
-              <Button>Start Free Trial</Button>
+              <Button size="sm" className="sm:size-default">Start Free Trial</Button>
             </Link>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default async function HomePage() {
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link href="#demo">
+                  <Link href="#features">
                     <Button size="lg" variant="outline" className="text-base px-8 h-12">
                       See It In Action
                     </Button>
@@ -104,7 +104,7 @@ export default async function HomePage() {
               </div>
 
               {/* Hero Dashboard Preview */}
-              <div className="relative lg:ml-8">
+              <div className="relative lg:ml-8 mt-8 lg:mt-0">
                 <div className="bg-background rounded-xl shadow-2xl border overflow-hidden">
                   {/* Browser chrome */}
                   <div className="bg-muted/60 px-4 py-2.5 border-b flex items-center gap-2">
@@ -176,7 +176,7 @@ export default async function HomePage() {
                   </div>
                 </div>
                 {/* Floating notification card */}
-                <div className="absolute -bottom-4 -left-4 bg-background rounded-lg shadow-lg border p-3 max-w-[220px]">
+                <div className="hidden sm:block absolute -bottom-4 -left-4 bg-background rounded-lg shadow-lg border p-3 max-w-[220px]">
                   <div className="flex items-start gap-2">
                     <div className="w-7 h-7 rounded-full bg-green-100 dark:bg-green-500/20 flex items-center justify-center shrink-0">
                       <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
@@ -188,7 +188,7 @@ export default async function HomePage() {
                   </div>
                 </div>
                 {/* Floating AI card */}
-                <div className="absolute -top-3 -right-3 bg-background rounded-lg shadow-lg border p-3 max-w-[200px]">
+                <div className="hidden sm:block absolute -top-3 -right-3 bg-background rounded-lg shadow-lg border p-3 max-w-[200px]">
                   <div className="flex items-start gap-2">
                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                       <Bot className="h-3.5 w-3.5 text-primary" />
@@ -521,7 +521,7 @@ export default async function HomePage() {
         </section>
 
         {/* Feature Grid — Everything Else */}
-        <section id="demo" className="py-20 md:py-24 bg-muted/30">
+        <section className="py-20 md:py-24 bg-muted/30">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4">Everything you need. Nothing you don&apos;t.</h2>
