@@ -191,8 +191,10 @@ export async function POST(request: NextRequest) {
     console.error("Registration error:", error)
 
     if (error instanceof Error && error.name === "ZodError") {
+      const zodError = error as Error & { issues?: Array<{ message: string }> }
+      const firstMessage = zodError.issues?.[0]?.message || "Invalid input data"
       return NextResponse.json(
-        { error: "Invalid input data" },
+        { error: firstMessage },
         { status: 400 }
       )
     }

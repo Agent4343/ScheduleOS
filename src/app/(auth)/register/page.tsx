@@ -122,11 +122,11 @@ export default function RegisterPage() {
               id="password"
               name="password"
               type="password"
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               value={formData.password}
               onChange={handleChange}
               required
-              minLength={8}
+              minLength={12}
               disabled={isLoading}
             />
           </div>
