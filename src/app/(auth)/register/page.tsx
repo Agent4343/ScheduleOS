@@ -24,7 +24,7 @@ function RegisterForm() {
   const selectedPlan = searchParams.get("plan") || ""
   const planInfo = PLAN_INFO[selectedPlan]
 
-  const [step, setStep] = useState<"account" | "payment">("account")
+  const [step] = useState<"account" | "payment">("account")
   const [formData, setFormData] = useState({
     name: "",
     email: "",
