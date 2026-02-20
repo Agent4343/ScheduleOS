@@ -13,7 +13,7 @@ export function Footer() {
               <span className="text-xl font-bold">ShiftSync</span>
             </Link>
             <p className="text-sm text-muted-foreground">
-              AI-powered workforce scheduling built for offshore oil &amp; gas operations.
+              AI-powered scheduling for teams that work around the clock.
             </p>
           </div>
 
@@ -85,7 +85,7 @@ export function Footer() {
               &copy; {new Date().getFullYear()} ShiftSync. All rights reserved.
             </p>
             <p className="text-sm text-muted-foreground">
-              Built for offshore operations professionals.
+              Built for 24/7 operations teams.
             </p>
           </div>
         </div>
