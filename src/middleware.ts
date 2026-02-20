@@ -4,8 +4,11 @@ import { NextResponse } from "next/server"
 export default withAuth(
   function middleware(req) {
     // ── CSRF origin check for state-changing requests ──────────────
+    // Skip for Stripe webhooks (origin is Stripe servers, not browser)
+    const { pathname } = req.nextUrl
     const method = req.method
-    if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const isWebhook = pathname.startsWith("/api/stripe/webhook")
+    if (!isWebhook && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       const origin = req.headers.get("origin")
       const host = req.headers.get("host")
       if (origin && host) {
@@ -61,10 +64,12 @@ export default withAuth(
         const publicPaths = [
           "/login",
           "/register",
+          "/pricing",
           "/api/auth",
           "/api/health",
           "/api/setup",
           "/api/register",
+          "/api/stripe",
         ]
 
         // Check if the path is public
