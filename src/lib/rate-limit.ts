@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { Redis } from "@upstash/redis"
 
 interface RateLimitEntry {
   count: number
@@ -6,7 +7,7 @@ interface RateLimitEntry {
 }
 
 // ── Storage abstraction ──────────────────────────────────────────────
-// Uses Upstash Redis REST API when configured, falls back to in-memory.
+// Uses @upstash/redis SDK when configured, falls back to in-memory.
 // Redis is required for multi-replica Railway deployments.
 
 interface RateLimitStore {
@@ -14,33 +15,17 @@ interface RateLimitStore {
   set(key: string, entry: RateLimitEntry, ttlMs: number): Promise<void>
 }
 
-// ── Redis store (Upstash REST API — no extra npm package needed) ─────
+// ── Redis store (official @upstash/redis SDK) ────────────────────────
 function createRedisStore(url: string, token: string): RateLimitStore {
-  async function redis(method: string, args: (string | number)[]) {
-    const res = await fetch(`${url}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([method, ...args]),
-    })
-    const data = await res.json()
-    return data.result
-  }
+  const redis = new Redis({ url, token })
 
   return {
     async get(key) {
-      const raw = await redis("GET", [key])
-      if (!raw) return null
-      try {
-        return JSON.parse(raw) as RateLimitEntry
-      } catch {
-        return null
-      }
+      const raw = await redis.get<RateLimitEntry>(key)
+      return raw ?? null
     },
     async set(key, entry, ttlMs) {
-      await redis("SET", [key, JSON.stringify(entry), "PX", ttlMs])
+      await redis.set(key, entry, { px: ttlMs })
     },
   }
 }
