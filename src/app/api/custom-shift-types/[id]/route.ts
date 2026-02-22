@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { z } from "zod"
 
 const updateCustomShiftTypeSchema = z.object({
@@ -18,11 +17,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { id } = await params
 
@@ -49,15 +46,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN", "SUPERVISOR"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { id } = await params
     const body = await request.json()
@@ -121,15 +112,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!["ADMIN"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Only admins can delete shift types" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const { id } = await params
 

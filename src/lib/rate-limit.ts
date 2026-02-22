@@ -1,72 +1,111 @@
 import { NextResponse } from "next/server"
+import { Redis } from "@upstash/redis"
 
 interface RateLimitEntry {
   count: number
   resetTime: number
 }
 
-// In-memory store (use Redis in production for multiple instances)
-const rateLimitStore = new Map<string, RateLimitEntry>()
+// ── Storage abstraction ──────────────────────────────────────────────
+// Uses @upstash/redis SDK when configured, falls back to in-memory.
+// Redis is required for multi-replica Railway deployments.
 
-// Clean up expired entries periodically
-setInterval(() => {
-  const now = Date.now()
-  Array.from(rateLimitStore.entries()).forEach(([key, entry]) => {
-    if (entry.resetTime < now) {
-      rateLimitStore.delete(key)
-    }
-  })
-}, 60000) // Clean every minute
+interface RateLimitStore {
+  get(key: string): Promise<RateLimitEntry | null>
+  set(key: string, entry: RateLimitEntry, ttlMs: number): Promise<void>
+}
+
+// ── Redis store (official @upstash/redis SDK) ────────────────────────
+function createRedisStore(url: string, token: string): RateLimitStore {
+  const redis = new Redis({ url, token })
+
+  return {
+    async get(key) {
+      const raw = await redis.get<RateLimitEntry>(key)
+      return raw ?? null
+    },
+    async set(key, entry, ttlMs) {
+      await redis.set(key, entry, { px: ttlMs })
+    },
+  }
+}
+
+// ── In-memory store (single instance fallback) ───────────────────────
+function createMemoryStore(): RateLimitStore {
+  const map = new Map<string, RateLimitEntry>()
+
+  // Clean up expired entries every minute
+  setInterval(() => {
+    const now = Date.now()
+    map.forEach((entry, key) => {
+      if (entry.resetTime < now) map.delete(key)
+    })
+  }, 60_000)
+
+  return {
+    async get(key) {
+      return map.get(key) ?? null
+    },
+    async set(key, entry, _ttlMs) {
+      map.set(key, entry)
+    },
+  }
+}
+
+// ── Pick the right store ─────────────────────────────────────────────
+const store: RateLimitStore =
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+    ? createRedisStore(
+        process.env.UPSTASH_REDIS_REST_URL,
+        process.env.UPSTASH_REDIS_REST_TOKEN
+      )
+    : createMemoryStore()
+
+// ── Public API ───────────────────────────────────────────────────────
 
 export interface RateLimitConfig {
-  windowMs: number // Time window in milliseconds
-  maxRequests: number // Max requests per window
+  windowMs: number
+  maxRequests: number
 }
 
 const defaultConfig: RateLimitConfig = {
-  windowMs: 60 * 1000, // 1 minute
-  maxRequests: 100, // 100 requests per minute
+  windowMs: 60 * 1000,
+  maxRequests: 100,
 }
 
-export function rateLimit(
+export async function rateLimit(
   identifier: string,
   config: RateLimitConfig = defaultConfig
-): { success: boolean; remaining: number; resetIn: number } {
+): Promise<{ success: boolean; remaining: number; resetIn: number }> {
   const now = Date.now()
-  const key = identifier
+  const key = `rl:${identifier}`
 
-  let entry = rateLimitStore.get(key)
+  try {
+    let entry = await store.get(key)
 
-  // If no entry or expired, create new one
-  if (!entry || entry.resetTime < now) {
-    entry = {
-      count: 1,
-      resetTime: now + config.windowMs,
+    // If no entry or expired, create new one
+    if (!entry || entry.resetTime < now) {
+      entry = { count: 1, resetTime: now + config.windowMs }
+      await store.set(key, entry, config.windowMs)
+      return { success: true, remaining: config.maxRequests - 1, resetIn: config.windowMs }
     }
-    rateLimitStore.set(key, entry)
+
+    // Increment
+    entry.count++
+    await store.set(key, entry, entry.resetTime - now)
+
+    if (entry.count > config.maxRequests) {
+      return { success: false, remaining: 0, resetIn: entry.resetTime - now }
+    }
+
     return {
       success: true,
-      remaining: config.maxRequests - 1,
-      resetIn: config.windowMs,
-    }
-  }
-
-  // Increment count
-  entry.count++
-
-  // Check if over limit
-  if (entry.count > config.maxRequests) {
-    return {
-      success: false,
-      remaining: 0,
+      remaining: config.maxRequests - entry.count,
       resetIn: entry.resetTime - now,
     }
-  }
-
-  return {
-    success: true,
-    remaining: config.maxRequests - entry.count,
-    resetIn: entry.resetTime - now,
+  } catch {
+    // If Redis is down, allow the request rather than blocking all traffic
+    return { success: true, remaining: config.maxRequests, resetIn: config.windowMs }
   }
 }
 
@@ -105,24 +144,8 @@ export function getClientIP(request: Request): string {
 
 // Presets for different endpoints
 export const rateLimitPresets = {
-  // Strict limit for auth endpoints (prevent brute force)
-  auth: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    maxRequests: 5, // 5 attempts
-  },
-  // Standard API limit
-  api: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 100, // 100 requests
-  },
-  // Relaxed limit for read operations
-  read: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 200, // 200 requests
-  },
-  // Very strict for expensive operations
-  expensive: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 10, // 10 requests
-  },
+  auth: { windowMs: 15 * 60 * 1000, maxRequests: 5 },
+  api: { windowMs: 60 * 1000, maxRequests: 100 },
+  read: { windowMs: 60 * 1000, maxRequests: 200 },
+  expensive: { windowMs: 60 * 1000, maxRequests: 10 },
 }

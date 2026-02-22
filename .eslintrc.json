@@ -8,6 +8,10 @@
         "varsIgnorePattern": "^_"
       }
     ],
-    "@next/next/no-img-element": "warn"
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@next/next/no-img-element": "warn",
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error"
   }
 }

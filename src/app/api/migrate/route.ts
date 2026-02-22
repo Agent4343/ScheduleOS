@@ -111,10 +111,18 @@ const migrationStatements = [
 ]
 
 export async function GET(request: NextRequest) {
+  // Block in production — use prisma migrate deploy instead
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Migration endpoint is disabled in production" },
+      { status: 403 }
+    )
+  }
+
   const migrateKey = request.nextUrl.searchParams.get("key")
 
-  // Require a key for security
-  if (migrateKey !== process.env.SETUP_KEY && migrateKey !== "migrate-2026") {
+  // Require SETUP_KEY — no hardcoded fallbacks
+  if (!process.env.SETUP_KEY || migrateKey !== process.env.SETUP_KEY) {
     return NextResponse.json({ error: "Invalid migration key" }, { status: 401 })
   }
 

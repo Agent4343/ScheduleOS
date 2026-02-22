@@ -1,0 +1,71 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Run unit tests"
+  lane :test do
+    run_tests(
+      project: "ShiftSync.xcodeproj",
+      scheme: "ShiftSync",
+      devices: ["iPhone 15 Pro"],
+      clean: true
+    )
+  end
+
+  desc "Build for App Store"
+  lane :build do
+    increment_build_number(
+      build_number: ENV["BUILD_NUMBER"] || latest_testflight_build_number + 1,
+      xcodeproj: "ShiftSync.xcodeproj"
+    )
+
+    build_app(
+      project: "ShiftSync.xcodeproj",
+      scheme: "ShiftSync",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "ShiftSync.ipa",
+      clean: true,
+      include_symbols: true
+    )
+  end
+
+  desc "Upload to TestFlight"
+  lane :beta do
+    build
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      apple_id: "YOUR_APPLE_ID"
+    )
+  end
+
+  desc "Submit to App Store"
+  lane :release do
+    build
+    upload_to_app_store(
+      submit_for_review: true,
+      automatic_release: false,
+      force: false,
+      skip_screenshots: true,
+      app_version: get_version_number(xcodeproj: "ShiftSync.xcodeproj"),
+      submission_information: {
+        add_id_info_uses_idfa: false
+      }
+    )
+  end
+
+  desc "Generate App Store screenshots"
+  lane :screenshots do
+    capture_screenshots(
+      project: "ShiftSync.xcodeproj",
+      scheme: "ShiftSync",
+      devices: [
+        "iPhone 15 Pro Max",
+        "iPhone 15 Pro",
+        "iPhone SE (3rd generation)",
+        "iPad Pro (12.9-inch) (6th generation)"
+      ],
+      languages: ["en-US"],
+      output_directory: "./screenshots"
+    )
+  end
+end

@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 
 export async function DELETE() {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     // Check if user is the only admin in the organization
     if (session.user.role === "ADMIN") {

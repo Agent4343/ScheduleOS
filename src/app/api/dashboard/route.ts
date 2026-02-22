@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { ShiftType, PositionType } from "@/types"
 import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
 
@@ -13,38 +12,11 @@ interface OrgSettings {
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const organizationId = session.user.organizationId
-
-    // If user has no organization, return empty stats
-    if (!organizationId) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          stats: {
-            totalWorkers: 0,
-            activeCrews: 0,
-            onDutyToday: 0,
-            pendingRequests: 0,
-            upcomingShutdowns: 0,
-            staffingGaps: 0,
-          },
-          staffingGapDetails: [],
-          recentActivity: [],
-          upcomingTimeOff: [],
-          todayBreakdown: {
-            dayShift: 0,
-            nightShift: 0,
-          },
-          noOrganization: true,
-        },
-      })
-    }
 
     const today = getTodayUTC()
 

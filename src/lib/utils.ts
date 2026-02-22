@@ -83,6 +83,7 @@ export function generateSlug(name: string): string {
 }
 
 export function generateToken(length: number = 32): string {
-  const crypto = require('crypto')
-  return crypto.randomBytes(length).toString('hex').slice(0, length)
+  const array = new Uint8Array(length)
+  crypto.getRandomValues(array)
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('').slice(0, length)
 }

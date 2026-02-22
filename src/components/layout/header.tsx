@@ -4,7 +4,8 @@ import { useSession, signOut } from "next-auth/react"
 import { Bell, LogOut, Menu, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Avatar } from "@/components/ui/avatar"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import Link from "next/link"
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -13,6 +14,16 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const { data: session } = useSession()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [announcementCount, setAnnouncementCount] = useState(0)
+
+  useEffect(() => {
+    fetch("/api/announcements?limit=50")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setAnnouncementCount(data.data.length)
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
@@ -35,12 +46,16 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-            3
-          </span>
-        </Button>
+        <Link href="/announcements">
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {announcementCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                {announcementCount > 9 ? "9+" : announcementCount}
+              </span>
+            )}
+          </Button>
+        </Link>
 
         {/* User menu */}
         <div className="relative">

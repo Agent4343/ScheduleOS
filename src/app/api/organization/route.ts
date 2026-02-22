@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { updateOrganizationSchema } from "@/lib/validations"
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const organization = await prisma.organization.findUnique({
       where: { id: session.user.organizationId },
@@ -38,15 +35,9 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Only admins can update organization settings" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
     const validatedData = updateOrganizationSchema.parse(body)

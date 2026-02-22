@@ -228,6 +228,14 @@ const sqlStatements = [
 ]
 
 export async function GET(request: NextRequest) {
+  // Block in production — use prisma migrate deploy instead
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Setup endpoint is disabled in production" },
+      { status: 403 }
+    )
+  }
+
   const setupKey = request.nextUrl.searchParams.get("key")
 
   if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {

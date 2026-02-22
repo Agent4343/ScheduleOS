@@ -11,22 +11,22 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    default: "ShiftSync | AI-Powered Workforce Scheduling & Shift Management",
     template: "%s | ShiftSync",
   },
   description:
-    "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing. Free 14-day trial.",
+    "AI-powered scheduling for teams that work around the clock. Manage crew rotations, track certifications, and optimize staffing across oil & gas, mining, energy, and manufacturing. Free 14-day trial.",
   keywords: [
-    "offshore scheduling",
+    "workforce scheduling",
     "crew rotation software",
-    "workforce management",
-    "shift scheduling",
-    "offshore oil and gas",
+    "shift management",
+    "employee scheduling",
     "rotation pattern",
-    "14/14 schedule",
-    "21/21 rotation",
     "crew management",
     "certification tracking",
+    "AI scheduling",
+    "24/7 operations",
+    "shift planning",
   ],
   authors: [{ name: "ShiftSync" }],
   creator: "ShiftSync",
@@ -35,9 +35,9 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     siteName: "ShiftSync",
-    title: "ShiftSync | Offshore Crew Scheduling & Rotation Management Software",
+    title: "ShiftSync | AI-Powered Workforce Scheduling & Shift Management",
     description:
-      "AI-powered workforce scheduling built for offshore oil & gas operations. Manage crew rotations, track certifications, and optimize staffing.",
+      "AI-powered scheduling for teams that work around the clock. Manage crew rotations, track certifications, and optimize staffing. Free 14-day trial.",
     images: [
       {
         url: "/og-image.png",
@@ -49,9 +49,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ShiftSync | Offshore Crew Scheduling Software",
+    title: "ShiftSync | AI-Powered Workforce Scheduling",
     description:
-      "AI-powered workforce scheduling built for offshore oil & gas operations. Free 14-day trial.",
+      "AI-powered scheduling for teams that work around the clock. Manage rotations, track certifications, and optimize staffing. Free 14-day trial.",
     images: ["/og-image.png"],
   },
   robots: {
@@ -76,6 +76,12 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#2563eb" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="ShiftSync" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -86,7 +92,7 @@ export default function RootLayout({
               applicationCategory: "BusinessApplication",
               operatingSystem: "Web",
               description:
-                "AI-powered workforce scheduling software for offshore oil & gas operations",
+                "AI-powered workforce scheduling for teams that work around the clock",
               offers: {
                 "@type": "Offer",
                 price: "49",

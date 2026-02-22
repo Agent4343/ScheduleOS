@@ -28,7 +28,7 @@ export default function TermsOfServicePage() {
       <h2>2. Description of Service</h2>
       <p>
         ShiftSync provides a workforce scheduling platform designed for organizations with
-        rotating shift patterns, including offshore oil and gas operations. Our services include:
+        rotating shift patterns, including oil &amp; gas, mining, energy, and manufacturing operations. Our services include:
       </p>
       <ul>
         <li>Schedule creation and management</li>

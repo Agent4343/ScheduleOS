@@ -19,6 +19,7 @@ import {
   Loader2,
   CalendarPlus,
   RotateCcw,
+  Info,
 } from "lucide-react"
 import { ShiftType, UserRole } from "@/types"
 
@@ -174,6 +175,7 @@ function SchedulePageContent() {
   const [scheduleEditSaving, setScheduleEditSaving] = useState(false)
   const [scheduleEditError, setScheduleEditError] = useState<string | null>(null)
   const [scheduleEditSuccess, setScheduleEditSuccess] = useState<string | null>(null)
+  const [showLegend, setShowLegend] = useState(false)
 
   // Get all days for the year
   const yearMonths = useMemo(() => getYearDays(currentYear), [currentYear])
@@ -657,28 +659,36 @@ function SchedulePageContent() {
         />
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: style.bg, color: style.text }}
-          >
-            <span className="font-bold">{style.label}</span>
-            <span>= {type.replace("_", " ")}</span>
+      {/* Legend Toggle */}
+      <div>
+        <Button variant="outline" size="sm" onClick={() => setShowLegend(!showLegend)}>
+          <Info className="h-4 w-4 mr-1" />
+          {showLegend ? "Hide Legend" : "Show Legend"}
+        </Button>
+        {showLegend && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {Object.entries(BUILT_IN_SHIFT_STYLES).map(([type, style]) => (
+              <div
+                key={type}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: style.bg, color: style.text }}
+              >
+                <span className="font-bold">{style.label}</span>
+                <span>= {type.replace("_", " ")}</span>
+              </div>
+            ))}
+            {customShiftTypes.filter(t => t.isActive).map((t) => (
+              <div
+                key={t.code}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs"
+                style={{ backgroundColor: t.color, color: t.textColor }}
+              >
+                <span className="font-bold">{t.code}</span>
+                <span>= {t.name}</span>
+              </div>
+            ))}
           </div>
-        ))}
-        {customShiftTypes.filter(t => t.isActive).map((t) => (
-          <div
-            key={t.code}
-            className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-            style={{ backgroundColor: t.color, color: t.textColor }}
-          >
-            <span className="font-bold">{t.code}</span>
-            <span>= {t.name}</span>
-          </div>
-        ))}
+        )}
       </div>
 
       {/* Schedule Table */}
@@ -780,7 +790,8 @@ function SchedulePageContent() {
                               ? `CUSTOM:${schedule.customShiftCode}`
                               : schedule.shiftType
                             : null
-                          const style = shiftKey ? SHIFT_STYLES[shiftKey] : null
+                          const isOff = schedule?.shiftType === "OFF"
+                          const style = shiftKey && !isOff ? SHIFT_STYLES[shiftKey] : null
 
                           return (
                             <td
@@ -795,7 +806,7 @@ function SchedulePageContent() {
                                   ? { backgroundColor: style.bg, color: style.text }
                                   : undefined
                               }
-                              title={schedule ? `${shiftKey} - Click to edit` : "Click to add schedule"}
+                              title={schedule ? (isOff ? "Off - Click to edit" : `${shiftKey} - Click to edit`) : "Click to add schedule"}
                               onClick={() => openScheduleEditModal(worker, month, day)}
                             >
                               <span className="text-xs font-bold">

@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { z } from "zod"
 import { ShiftType } from "@/types"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
 import { generateRotationSchedule } from "@/lib/scheduling"
 import { normalizeToUTCMidnight } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const auth = await requireAuth()
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const organizationId = session.user.organizationId
 
@@ -97,15 +94,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.organizationId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    if (!["ADMIN", "SUPERVISOR"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 })
-    }
+    const auth = await requireAuth({ roles: ["ADMIN", "SUPERVISOR"] })
+    if (auth.error) return auth.error
+    const { session } = auth
 
     const body = await request.json()
 
