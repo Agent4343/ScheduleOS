@@ -164,6 +164,18 @@ export const createScheduleSchema = z.object({
 
 export const updateScheduleSchema = createScheduleSchema.partial().omit({ userId: true, date: true })
 
+/** POST /api/schedules/bulk — one shift for every day in a range */
+export const bulkScheduleSchema = z
+  .object({
+    userId: z.string(),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    shiftType: z.nativeEnum(ShiftType),
+    customShiftCode: z.string().max(32).nullish(),
+    overrideReason: z.string().max(500).nullish(),
+  })
+  .refine((d) => d.endDate >= d.startDate, { message: "End date must be on or after start date", path: ["endDate"] })
+
 export const generateScheduleSchema = z.object({
   userId: z.string().optional(),
   crewId: z.string().optional(),

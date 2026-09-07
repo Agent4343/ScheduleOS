@@ -9,19 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Clock, Plus, Pencil, Trash2, X } from "lucide-react"
 
-interface RotationPattern {
-  id: string
-  name: string
-  description: string | null
-  daysOn: number
-  daysOff: number
-  includesNights: boolean
-  nightDays: number
-  nightsAtStart: boolean
-  alternatesShifts: boolean
-  isDefault: boolean
-  _count: { crews: number }
-}
+import type { RotationPattern } from "@/features/types"
 
 interface NewPattern {
   name: string
@@ -289,7 +277,7 @@ export function RotationPatternsCard({ patterns, isAdmin, onRefresh, onMessage }
               </div>
               <div className="flex items-center gap-2">
                 {pattern.isDefault && <Badge variant="secondary">Default</Badge>}
-                <Badge variant="outline">{pattern._count.crews} crews</Badge>
+                <Badge variant="outline">{(pattern._count?.crews ?? 0)} crews</Badge>
                 {isAdmin && (
                   <>
                     <Button variant="ghost" size="sm" onClick={() => startEdit(pattern)}>
@@ -299,7 +287,7 @@ export function RotationPatternsCard({ patterns, isAdmin, onRefresh, onMessage }
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDelete(pattern.id)}
-                      disabled={pattern._count.crews > 0}
+                      disabled={(pattern._count?.crews ?? 0) > 0}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

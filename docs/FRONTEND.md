@@ -47,3 +47,18 @@ Real instants (`createdAt`, `checkInTime`) are fine with `new Date(ts).toLocaleS
 ## Dialog state
 
 One `dialog` state per page — `{ kind: "create" } | { kind: "edit"; crew } | null` — instead of a boolean per modal plus an "editing" object. Give the edit form a `key={item.id}` so it resets when a different item is opened.
+
+## One component per job
+
+Things that used to exist in several copies now have exactly one home:
+
+| Job | Component | Used by |
+|---|---|---|
+| Generate or extend a rotation | `features/schedules/components/generate-schedule-dialog.tsx` | Crews, Schedule (per worker), Getting Started |
+| Set a shift over a date range | `features/schedules/components/override-shift-dialog.tsx` (POST `/api/schedules/bulk`, one request) | Schedule |
+| Year grid | `features/schedules/components/schedule-grid.tsx` (memoised `DayCell`) | Schedule |
+| Add / edit a worker | `features/workers/components/worker-form.tsx` | Workers, Schedule, Settings → Add User, Getting Started |
+| Add / edit a crew | `features/crews/components/crew-form.tsx` | Crews, Getting Started |
+| Settings sections | `features/settings/components/*-card.tsx`, framed by `SettingsCard` | Settings |
+
+Settings has no "Save All": `useOrgSettings().saveSettings(patch)` persists each change immediately (the server merges the keys you send). Getting Started is a checklist over `/api/setup-status`; it opens the same dialogs as the real pages rather than carrying its own forms. The old `/setup` wizard is gone.

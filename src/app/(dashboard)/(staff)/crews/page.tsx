@@ -10,15 +10,12 @@ import { useToast } from "@/components/ui/toast"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Users2, Plus, Users, Calendar, Settings, MoreVertical, RefreshCw, Pencil, Trash2 } from "lucide-react"
 import { errorMessage } from "@/lib/api-client"
-import { addMonthsKey, formatDateOnly, todayKey } from "@/lib/dates"
+import { formatDateOnly } from "@/lib/dates"
 import type { Crew } from "@/features/types"
 import { useCrews, useCreateCrew, useUpdateCrew, useDeleteCrew } from "@/features/crews/hooks"
 import { useRotationPatterns } from "@/features/rotation-patterns/hooks"
-import { useGenerateSchedule } from "@/features/schedules/hooks"
+import { GenerateScheduleDialog } from "@/features/schedules/components/generate-schedule-dialog"
 import { CrewForm, type CrewFormValues } from "@/features/crews/components/crew-form"
-
-/** Months of schedule the Generate button creates or extends. */
-const GENERATE_MONTHS = 3
 
 export default function CrewsPage() {
   const toast = useToast()
@@ -29,13 +26,12 @@ export default function CrewsPage() {
   const createCrew = useCreateCrew()
   const updateCrew = useUpdateCrew()
   const deleteCrew = useDeleteCrew()
-  const generate = useGenerateSchedule()
 
   const crews = crewsQuery.data ?? []
   const patterns = patternsQuery.data ?? []
 
   // Which dialog is open. One piece of state instead of three booleans.
-  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "edit"; crew: Crew } | null>(null)
+  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "edit"; crew: Crew } | { kind: "generate"; crew: Crew } | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -101,41 +97,6 @@ export default function CrewsPage() {
       toast.success(`Crew ${crew.name} deleted`)
     } catch (error) {
       toast.error(errorMessage(error, "Failed to delete crew"))
-    }
-  }
-
-  const handleGenerate = async (crew: Crew) => {
-    if (!crew.rotationPattern) {
-      toast.error("Assign a rotation pattern to this crew first")
-      return
-    }
-    const startDate = todayKey()
-    const endDate = addMonthsKey(startDate, GENERATE_MONTHS)
-    const anchored = !!crew.rotationAnchorDate
-
-    const ok = await confirm({
-      title: `Generate schedule for ${crew.name}?`,
-      description: anchored
-        ? `Creates or extends the ${crew.rotationPattern.daysOn}/${crew.rotationPattern.daysOff} rotation from ${formatDateOnly(startDate)} to ${formatDateOnly(endDate)} for ${crew._count.workers} worker(s). The rotation continues from where it is now; manual edits are kept.`
-        : `Starts the ${crew.rotationPattern.daysOn}/${crew.rotationPattern.daysOff} rotation on ${formatDateOnly(startDate)} at day ${crew.currentPhase + 1} of the cycle and generates ${GENERATE_MONTHS} months for ${crew._count.workers} worker(s). This becomes the crew's fixed rotation.`,
-      confirmLabel: "Generate",
-    })
-    if (!ok) return
-
-    try {
-      const { data } = await generate.mutateAsync({
-        crewId: crew.id,
-        patternId: crew.rotationPattern.id,
-        startDate,
-        endDate,
-        startPhase: crew.currentPhase,
-      })
-      toast.success(
-        `Generated ${data.daysGenerated} days for ${data.usersProcessed} worker(s)` +
-          (data.timeOffReapplied ? `, re-applied ${data.timeOffReapplied} approved time-off request(s)` : "")
-      )
-    } catch (error) {
-      toast.error(errorMessage(error, "Failed to generate schedule"))
     }
   }
 
@@ -283,10 +244,11 @@ export default function CrewsPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => handleGenerate(crew)}
-                    disabled={!crew.rotationPattern || generate.isPending}
+                    onClick={() => setDialog({ kind: "generate", crew })}
+                    disabled={!crew.rotationPattern}
+                    title={crew.rotationPattern ? undefined : "Assign a rotation pattern first"}
                   >
-                    <RefreshCw className={`h-3 w-3 mr-1 ${generate.isPending ? "animate-spin" : ""}`} />
+                    <RefreshCw className="h-3 w-3 mr-1" />
                     {crew.rotationAnchorDate ? "Extend" : "Generate"}
                   </Button>
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(crew)}>
@@ -331,6 +293,13 @@ export default function CrewsPage() {
           />
         )}
       </Modal>
+
+      <GenerateScheduleDialog
+        key={dialog?.kind === "generate" ? dialog.crew.id : "none"}
+        open={dialog?.kind === "generate"}
+        onClose={() => setDialog(null)}
+        target={dialog?.kind === "generate" ? { kind: "crew", crew: dialog.crew } : null}
+      />
     </div>
   )
 }

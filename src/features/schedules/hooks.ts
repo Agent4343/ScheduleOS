@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { schedulesApi, type GenerateScheduleInput, type ScheduleQuery, type SetShiftInput } from "./api"
+import { schedulesApi, type BulkSetShiftInput, type GenerateScheduleInput, type ScheduleQuery, type SetShiftInput } from "./api"
 
 export const scheduleKeys = {
   all: ["schedules"] as const,
@@ -23,6 +23,14 @@ export function useSetShift() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: SetShiftInput) => schedulesApi.setShift(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: scheduleKeys.all }),
+  })
+}
+
+export function useBulkSetShift() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: BulkSetShiftInput) => schedulesApi.bulkSetShift(input),
     onSuccess: () => qc.invalidateQueries({ queryKey: scheduleKeys.all }),
   })
 }

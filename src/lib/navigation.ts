@@ -33,7 +33,7 @@ export const STAFF: Role[] = ["ADMIN", "SUPERVISOR"]
  * the mobile drawer, and the (staff) route-group guard, so a page cannot be
  * hidden from the menu yet reachable by URL.
  *
- * /setup is a one-time wizard reached from Getting Started; not listed here.
+ * Onboarding lives at /getting-started (a checklist that reuses the real pages' dialogs).
  */
 export const navigation: NavItem[] = [
   { name: "Getting Started", href: "/getting-started", icon: Rocket, roles: STAFF },

@@ -20,14 +20,14 @@ export interface CrewRef {
 export interface RotationPattern {
   id: string
   name: string
-  description?: string | null
+  description: string | null
   daysOn: number
   daysOff: number
   includesNights: boolean
-  nightsAtStart?: boolean
-  nightDays?: number
-  alternatesShifts?: boolean
-  isDefault?: boolean
+  nightsAtStart: boolean
+  nightDays: number
+  alternatesShifts: boolean
+  isDefault: boolean
   _count?: { crews: number }
 }
 

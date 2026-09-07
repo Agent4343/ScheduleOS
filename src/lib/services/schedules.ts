@@ -82,6 +82,7 @@ export interface SetShiftRangeInput {
   startDate: Date
   endDate: Date
   shiftType: ShiftType
+  customShiftCode?: string | null
   reason?: string | null
 }
 
@@ -100,11 +101,18 @@ export async function setShiftOverrideRange(actor: Actor, input: SetShiftRangeIn
     dates.map((date) =>
       prisma.schedule.upsert({
         where: { userId_date: { userId: worker.id, date } },
-        update: { shiftType: input.shiftType, isOverride: true, overrideReason: input.reason ?? null, crewId: worker.crewId },
+        update: {
+          shiftType: input.shiftType,
+          customShiftCode: input.customShiftCode ?? null,
+          isOverride: true,
+          overrideReason: input.reason ?? null,
+          crewId: worker.crewId,
+        },
         create: {
           userId: worker.id,
           date,
           shiftType: input.shiftType,
+          customShiftCode: input.customShiftCode ?? null,
           isOverride: true,
           overrideReason: input.reason ?? null,
           crewId: worker.crewId,
