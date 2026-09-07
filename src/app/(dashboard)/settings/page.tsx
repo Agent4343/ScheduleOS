@@ -1,5 +1,10 @@
 "use client"
 
+import { Switch } from "@/components/ui/switch"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/components/ui/toast"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import { formatDateOnly } from "@/lib/dates"
 import { useEffect, useState, useCallback } from "react"
 import { useSession, signOut } from "next-auth/react"
 import { useTheme } from "next-themes"
@@ -8,7 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Modal } from "@/components/ui/modal"
 import { Select } from "@/components/ui/select"
 import {
@@ -139,6 +143,7 @@ const POSITION_LABELS: Record<string, string> = {
 }
 
 function StaffingRulesManager({ isAdmin }: { isAdmin: boolean }) {
+  const confirmDialog = useConfirm()
   const [rules, setRules] = useState<StaffingRule[]>([])
   const [crews, setCrews] = useState<{ id: string; name: string; color: string }[]>([])
   const [loading, setLoading] = useState(true)
@@ -266,7 +271,8 @@ function StaffingRulesManager({ isAdmin }: { isAdmin: boolean }) {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this staffing rule?")) return
+    const ok = await confirmDialog({ title: "Delete this staffing rule?", confirmLabel: "Delete", destructive: true })
+    if (!ok) return
 
     try {
       const res = await fetch(`/api/staffing-rules/${id}`, { method: "DELETE" })
@@ -547,7 +553,6 @@ export default function SettingsPage() {
   const [patterns, setPatterns] = useState<RotationPattern[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState("")
 
   // Custom shift type state
   const [customShiftTypes, setCustomShiftTypes] = useState<CustomShiftType[]>([])
@@ -614,9 +619,17 @@ export default function SettingsPage() {
     fetchData()
   }, [fetchData])
 
-  const showMessage = (msg: string) => {
-    setMessage(msg)
-    setTimeout(() => setMessage(""), 3000)
+  const toast = useToast()
+  const confirmDialog = useConfirm()
+
+  /**
+   * Feedback for the user. Kind is explicit at every call site; the old
+   * implementation guessed from whether the text contained "success", which
+   * painted "Holiday added" red.
+   */
+  const showMessage = (msg: string, kind: "success" | "error" = "error") => {
+    if (kind === "success") toast.success(msg)
+    else toast.error(msg)
   }
 
   // Toggle functions
@@ -671,7 +684,7 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        showMessage("Password changed successfully")
+        showMessage("Password changed successfully", "success")
         setShowPasswordModal(false)
         setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
       } else {
@@ -706,7 +719,7 @@ export default function SettingsPage() {
         setHolidays([...holidays, data.data])
         setNewHoliday({ name: "", date: "", recurring: true })
         setShowHolidayForm(false)
-        showMessage("Holiday added")
+        showMessage("Holiday added", "success")
       } else {
         showMessage(data.error || "Failed to add holiday")
       }
@@ -724,7 +737,7 @@ export default function SettingsPage() {
 
       if (data.success) {
         setHolidays(holidays.filter(h => h.id !== holidayId))
-        showMessage("Holiday deleted")
+        showMessage("Holiday deleted", "success")
       }
     } catch {
       showMessage("Failed to delete holiday")
@@ -761,7 +774,7 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        showMessage(`User ${inviteForm.name} created successfully. They can now log in with their email and password.`)
+        showMessage(`User ${inviteForm.name} created successfully. They can now log in with their email and password.`, "success")
         setShowInviteModal(false)
         setInviteForm({ email: "", name: "", role: "WORKER", password: "" })
       } else {
@@ -791,7 +804,7 @@ export default function SettingsPage() {
       window.URL.revokeObjectURL(url)
       a.remove()
 
-      showMessage("Export downloaded successfully")
+      showMessage("Export downloaded successfully", "success")
     } catch {
       showMessage("Failed to export data")
     } finally {
@@ -818,7 +831,7 @@ export default function SettingsPage() {
       const data = await response.json()
 
       if (data.success) {
-        showMessage("Settings saved successfully")
+        showMessage("Settings saved successfully", "success")
       } else {
         showMessage(data.error || "Failed to save settings")
       }
@@ -831,14 +844,14 @@ export default function SettingsPage() {
 
   // Delete account handler
   const handleDeleteAccount = async () => {
-    const confirm1 = confirm("Are you sure you want to delete your account? This cannot be undone.")
-    if (!confirm1) return
-
-    const confirm2 = prompt("Type DELETE to confirm account deletion:")
-    if (confirm2 !== "DELETE") {
-      showMessage("Account deletion cancelled")
-      return
-    }
+    const ok = await confirmDialog({
+      title: "Delete your account?",
+      description: "This permanently deletes your account and cannot be undone.",
+      confirmLabel: "Delete account",
+      destructive: true,
+      typeToConfirm: "DELETE",
+    })
+    if (!ok) return
 
     try {
       const response = await fetch("/api/auth/delete-account", { method: "DELETE" })
@@ -879,12 +892,6 @@ export default function SettingsPage() {
           </Button>
         )}
       </div>
-
-      {message && (
-        <Alert variant={message.includes("success") ? "default" : "destructive"}>
-          <AlertDescription>{message}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Organization Info */}
@@ -1062,20 +1069,12 @@ export default function SettingsPage() {
                 <p className="font-medium text-sm">Email Notifications</p>
                 <p className="text-xs text-muted-foreground">Receive updates via email</p>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleSetting("emailNotificationsEnabled", !organization?.settings?.emailNotificationsEnabled)}
+              <Switch
+                label="Email notifications"
+                checked={!!organization?.settings?.emailNotificationsEnabled}
+                onCheckedChange={(v) => toggleSetting("emailNotificationsEnabled", v)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  organization?.settings?.emailNotificationsEnabled ? "bg-primary" : "bg-muted"
-                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.emailNotificationsEnabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
+              />
             </div>
 
             <div className="flex items-center justify-between">
@@ -1083,20 +1082,12 @@ export default function SettingsPage() {
                 <p className="font-medium text-sm">SMS Notifications</p>
                 <p className="text-xs text-muted-foreground">Receive urgent updates via SMS</p>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleSetting("smsNotificationsEnabled", !organization?.settings?.smsNotificationsEnabled)}
+              <Switch
+                label="SMS notifications"
+                checked={!!organization?.settings?.smsNotificationsEnabled}
+                onCheckedChange={(v) => toggleSetting("smsNotificationsEnabled", v)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  organization?.settings?.smsNotificationsEnabled ? "bg-primary" : "bg-muted"
-                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.smsNotificationsEnabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
+              />
             </div>
 
             <div className="flex items-center justify-between">
@@ -1104,20 +1095,12 @@ export default function SettingsPage() {
                 <p className="font-medium text-sm">Minimum Staffing Alerts</p>
                 <p className="text-xs text-muted-foreground">Get notified when staffing drops below minimum</p>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleSetting("minStaffingAlertEnabled", !organization?.settings?.minStaffingAlertEnabled)}
+              <Switch
+                label="Minimum staffing alerts"
+                checked={!!organization?.settings?.minStaffingAlertEnabled}
+                onCheckedChange={(v) => toggleSetting("minStaffingAlertEnabled", v)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  organization?.settings?.minStaffingAlertEnabled ? "bg-primary" : "bg-muted"
-                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.minStaffingAlertEnabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
+              />
             </div>
 
             {organization?.settings?.minStaffingAlertEnabled && (
@@ -1141,20 +1124,12 @@ export default function SettingsPage() {
                 <p className="font-medium text-sm">Enable Auto-Checkout</p>
                 <p className="text-xs text-muted-foreground">Workers will be checked out after the configured shift duration</p>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleSetting("autoCheckoutEnabled", !organization?.settings?.autoCheckoutEnabled)}
+              <Switch
+                label="Auto check-out"
+                checked={!!organization?.settings?.autoCheckoutEnabled}
+                onCheckedChange={(v) => toggleSetting("autoCheckoutEnabled", v)}
                 disabled={!isAdmin}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  organization?.settings?.autoCheckoutEnabled ? "bg-primary" : "bg-muted"
-                } ${!isAdmin ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    organization?.settings?.autoCheckoutEnabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-              </button>
+              />
             </div>
 
             {organization?.settings?.autoCheckoutEnabled && (
@@ -1309,7 +1284,7 @@ export default function SettingsPage() {
                   <div>
                     <p className="font-medium text-sm">{holiday.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(holiday.date).toLocaleDateString()}
+                      {formatDateOnly(holiday.date, "short")}
                       {holiday.isRecurring && " (yearly)"}
                     </p>
                   </div>
@@ -1332,7 +1307,7 @@ export default function SettingsPage() {
           patterns={patterns}
           isAdmin={isAdmin}
           onRefresh={fetchData}
-          onMessage={showMessage}
+          onMessage={(msg, kind) => showMessage(msg, kind ?? (/fail|required|invalid|error/i.test(msg) ? "error" : "success"))}
         />
 
         {/* Custom Shift Types */}
@@ -1341,7 +1316,7 @@ export default function SettingsPage() {
           shiftColors={shiftColors}
           isAdmin={isAdmin}
           onRefresh={fetchData}
-          onMessage={showMessage}
+          onMessage={(msg, kind) => showMessage(msg, kind ?? (/fail|required|invalid|error/i.test(msg) ? "error" : "success"))}
           onShiftColorsChange={setShiftColors}
         />
 

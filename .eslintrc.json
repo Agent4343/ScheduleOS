@@ -1,5 +1,8 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"],
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript"
+  ],
   "rules": {
     "@typescript-eslint/no-unused-vars": [
       "error",
@@ -12,6 +15,14 @@
     "@next/next/no-img-element": "warn",
     "no-eval": "error",
     "no-implied-eval": "error",
-    "no-new-func": "error"
+    "no-new-func": "error",
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "CallExpression[callee.property.name='toLocaleDateString'][callee.object.type='NewExpression'][callee.object.callee.name='Date'][callee.object.arguments.length=1]",
+        "message": "new Date(value).toLocaleDateString() shows the previous day west of UTC for date-only values. Use formatDateOnly()/parseDateOnly() from @/lib/dates for dates, or new Date(ts).toLocaleString() for real timestamps."
+      }
+    ],
+    "no-alert": "warn"
   }
 }

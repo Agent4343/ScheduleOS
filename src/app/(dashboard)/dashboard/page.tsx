@@ -1,5 +1,6 @@
 "use client"
 
+import { formatDateOnly, parseDateOnly } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -277,9 +278,9 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="text-right text-sm">
-                      <p>{new Date(request.startDate).toLocaleDateString()}</p>
+                      <p>{formatDateOnly(request.startDate, "short")}</p>
                       <p className="text-muted-foreground">
-                        to {new Date(request.endDate).toLocaleDateString()}
+                        to {formatDateOnly(request.endDate, "short")}
                       </p>
                     </div>
                   </div>
@@ -310,7 +311,7 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-destructive" />
-                      <span>{new Date(gap.date).toLocaleDateString()}</span>
+                      <span>{formatDateOnly(gap.date, "short")}</span>
                     </div>
                     <Badge variant="destructive">
                       {gap.shiftType}: -{gap.shortage}
@@ -360,7 +361,7 @@ export default function DashboardPage() {
             <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20">
               <p className="text-xs text-muted-foreground">Next Shift</p>
               <p className="font-semibold">
-                {new Date(mySchedule.nextShift.date).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                {parseDateOnly(mySchedule.nextShift.date).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                 {" - "}
                 <Badge variant={mySchedule.nextShift.shiftType === "NIGHT" ? "night" : "day"} className="text-xs">
                   {mySchedule.nextShift.shiftType === "DAY" ? "Day Shift" : mySchedule.nextShift.shiftType === "NIGHT" ? "Night Shift" : mySchedule.nextShift.shiftType}
@@ -372,7 +373,7 @@ export default function DashboardPage() {
           {mySchedule?.schedules && mySchedule.schedules.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {mySchedule.schedules.map(day => {
-                const date = new Date(day.date)
+                const date = parseDateOnly(day.date)
                 const dayName = date.toLocaleDateString("en-US", { weekday: "short" })
                 const dayNum = date.getDate()
                 const isOff = ["OFF", "LEAVE", "VACATION", "SICK"].includes(day.shiftType)

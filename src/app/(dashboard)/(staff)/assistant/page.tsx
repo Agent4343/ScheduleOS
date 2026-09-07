@@ -153,17 +153,12 @@ export default function AssistantPage() {
     setError(null)
 
     try {
-      // Limit to last 10 messages to avoid token limits
-      const recentMessages = [...messages, userMessage].slice(-10)
-
       const response = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // History comes from the stored session on the server; only the new
+        // message and the session id are sent.
         body: JSON.stringify({
-          messages: recentMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
           sessionId: currentSessionId,
           userMessage: content.trim(),
         }),

@@ -1,5 +1,6 @@
 "use client"
 
+import { addDaysKey, todayKey, formatDateOnly } from "@/lib/dates"
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -61,11 +62,7 @@ export default function ShiftSwapsPage() {
 
   // Form state
   const [targetId, setTargetId] = useState("")
-  const [swapDate, setSwapDate] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() + 1)
-    return d.toISOString().split("T")[0]
-  })
+  const [swapDate, setSwapDate] = useState(() => addDaysKey(todayKey(), 1))
   const [swapShiftType, setSwapShiftType] = useState("DAY")
   const [swapReason, setSwapReason] = useState("")
 
@@ -279,7 +276,7 @@ export default function ShiftSwapsPage() {
             const StatusIcon = config.icon
             const isRequester = swap.requester.id === currentUserId
             const isTarget = swap.target.id === currentUserId
-            const date = new Date(swap.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+            const date = formatDateOnly(swap.date, "weekday")
 
             return (
               <Card key={swap.id}>

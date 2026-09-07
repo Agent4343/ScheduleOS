@@ -1,5 +1,6 @@
 "use client"
 
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -48,10 +49,11 @@ interface Props {
   patterns: RotationPattern[]
   isAdmin: boolean
   onRefresh: () => void
-  onMessage: (msg: string) => void
+  onMessage: (msg: string, kind?: "success" | "error") => void
 }
 
 export function RotationPatternsCard({ patterns, isAdmin, onRefresh, onMessage }: Props) {
+  const confirmDialog = useConfirm()
   const [showForm, setShowForm] = useState(false)
   const [editingPattern, setEditingPattern] = useState<RotationPattern | null>(null)
   const [saving, setSaving] = useState(false)
@@ -112,7 +114,8 @@ export function RotationPatternsCard({ patterns, isAdmin, onRefresh, onMessage }
   }
 
   const handleDelete = async (patternId: string) => {
-    if (!confirm("Are you sure you want to delete this pattern?")) return
+    const ok = await confirmDialog({ title: "Delete this rotation pattern?", description: "Crews using it will lose their pattern assignment.", confirmLabel: "Delete", destructive: true })
+    if (!ok) return
 
     try {
       const response = await fetch(`/api/rotation-patterns?id=${patternId}`, { method: "DELETE" })

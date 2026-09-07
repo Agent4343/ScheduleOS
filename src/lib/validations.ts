@@ -99,7 +99,8 @@ const userFieldsSchema = z.object({
     .optional(),
   positionType: z.nativeEnum(PositionType),
   phone: z.string().optional(),
-  crewId: z.string().optional(),
+  // null clears the crew on update
+  crewId: z.string().nullable().optional(),
   hireDate: z.coerce.date().optional(),
 })
 

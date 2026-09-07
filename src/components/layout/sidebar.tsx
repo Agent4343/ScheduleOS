@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { navigation } from "@/lib/navigation"
+import { navForRole } from "@/lib/navigation"
 import { Clock } from "lucide-react"
 
 export function Sidebar() {
@@ -12,9 +12,7 @@ export function Sidebar() {
   const { data: session } = useSession()
   const role = session?.user?.role
 
-  const visibleItems = navigation.filter(
-    (item) => !item.adminOnly || role === "ADMIN" || role === "SUPERVISOR"
-  )
+  const visibleItems = navForRole(role)
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-card hidden lg:block">

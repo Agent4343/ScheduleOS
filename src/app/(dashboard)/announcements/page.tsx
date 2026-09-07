@@ -1,5 +1,6 @@
 "use client"
 
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,6 +40,7 @@ const PRIORITY_CONFIG = {
 }
 
 export default function AnnouncementsPage() {
+  const confirmDialog = useConfirm()
   const { data: session } = useSession()
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
@@ -130,7 +132,8 @@ export default function AnnouncementsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this announcement?")) return
+    const ok = await confirmDialog({ title: "Delete this announcement?", description: "It will disappear for everyone in the organization.", confirmLabel: "Delete", destructive: true })
+    if (!ok) return
     try {
       const res = await fetch(`/api/announcements/${id}`, { method: "DELETE" })
       if (res.ok) {

@@ -1,5 +1,7 @@
 "use client"
 
+import { useRole } from "@/lib/auth/use-role"
+import { parseDateOnly } from "@/lib/dates"
 import { Suspense, useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -124,6 +126,8 @@ function getYearDays(year: number) {
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 function SchedulePageContent() {
+  // Workers can look but not edit; the API enforces this too.
+  const { isStaff } = useRole()
   const searchParams = useSearchParams()
   const yearFromUrl = searchParams.get("year")
 
@@ -336,7 +340,7 @@ function SchedulePageContent() {
 
     let hireDateStr = ""
     if (worker.hireDate) {
-      const hireDate = new Date(worker.hireDate)
+      const hireDate = parseDateOnly(worker.hireDate)
       if (!isNaN(hireDate.getTime()) && hireDate.getFullYear() > 1970) {
         hireDateStr = formatDate(hireDate.getFullYear(), hireDate.getMonth(), hireDate.getDate())
       }
@@ -761,8 +765,11 @@ function SchedulePageContent() {
                   {sortedWorkers.map((worker) => (
                     <tr key={worker.id} className="hover:bg-muted/20">
                       <td
-                        className="border p-2 sticky left-0 bg-background cursor-pointer hover:bg-muted/50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]"
-                        onClick={() => openEditModal(worker)}
+                        className={cn(
+                          "border p-2 sticky left-0 bg-background z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] dark:shadow-[2px_0_5px_-2px_rgba(255,255,255,0.1)]",
+                          isStaff && "cursor-pointer hover:bg-muted/50"
+                        )}
+                        onClick={isStaff ? () => openEditModal(worker) : undefined}
                       >
                         <div className="flex items-center gap-2">
                           <div
@@ -797,7 +804,8 @@ function SchedulePageContent() {
                             <td
                               key={`${month}-${day}`}
                               className={cn(
-                                "border text-center w-8 min-w-[32px] h-8 cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset transition-all",
+                                "border text-center w-8 min-w-[32px] h-8 transition-all",
+                                isStaff && "cursor-pointer hover:ring-2 hover:ring-blue-300 dark:hover:ring-blue-500 hover:ring-inset",
                                 !style && (isWeekend ? "bg-muted/50" : "bg-background dark:bg-gray-900/50"),
                                 isTodayCell && "ring-2 ring-blue-400 ring-inset"
                               )}
@@ -806,8 +814,12 @@ function SchedulePageContent() {
                                   ? { backgroundColor: style.bg, color: style.text }
                                   : undefined
                               }
-                              title={schedule ? (isOff ? "Off - Click to edit" : `${shiftKey} - Click to edit`) : "Click to add schedule"}
-                              onClick={() => openScheduleEditModal(worker, month, day)}
+                              title={
+                                isStaff
+                                  ? schedule ? (isOff ? "Off - Click to edit" : `${shiftKey} - Click to edit`) : "Click to add schedule"
+                                  : schedule ? (isOff ? "Off" : (shiftKey ?? undefined)) : undefined
+                              }
+                              onClick={isStaff ? () => openScheduleEditModal(worker, month, day) : undefined}
                             >
                               <span className="text-xs font-bold">
                                 {style ? style.label : ""}

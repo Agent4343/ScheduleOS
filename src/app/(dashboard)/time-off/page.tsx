@@ -1,5 +1,7 @@
 "use client"
 
+import { useToast } from "@/components/ui/toast"
+import { formatDateOnly } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -61,6 +63,7 @@ const TYPE_LABELS: Record<TimeOffType, string> = {
 }
 
 export default function TimeOffPage() {
+  const toast = useToast()
   const { data: session } = useSession()
   const [requests, setRequests] = useState<TimeOffRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,11 +125,11 @@ export default function TimeOffPage() {
           reason: "",
         })
       } else {
-        alert(data.error || "Failed to submit request")
+        toast.error(data.error || "Failed to submit request")
       }
     } catch (error) {
       console.error("Failed to submit request:", error)
-      alert("Failed to submit request")
+      toast.error("Failed to submit request")
     } finally {
       setSubmitting(false)
     }
@@ -147,11 +150,11 @@ export default function TimeOffPage() {
           prev.map((r) => (r.id === requestId ? { ...r, status } : r))
         )
       } else {
-        alert(data.error || "Failed to update request")
+        toast.error(data.error || "Failed to update request")
       }
     } catch (error) {
       console.error("Failed to update request:", error)
-      alert("Failed to update request")
+      toast.error("Failed to update request")
     }
   }
 
@@ -242,9 +245,9 @@ export default function TimeOffPage() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <p>{new Date(request.startDate).toLocaleDateString()}</p>
+                        <p>{formatDateOnly(request.startDate, "short")}</p>
                         <p className="text-muted-foreground">
-                          to {new Date(request.endDate).toLocaleDateString()}
+                          to {formatDateOnly(request.endDate, "short")}
                         </p>
                       </div>
                     </TableCell>

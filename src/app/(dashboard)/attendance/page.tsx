@@ -1,5 +1,6 @@
 "use client"
 
+import { todayKey, parseDateOnly } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,7 +37,7 @@ export default function AttendancePage() {
   const { data: session } = useSession()
   const [records, setRecords] = useState<CheckInRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [date, setDate] = useState(new Date().toLocaleDateString("en-CA")) // local calendar date, not UTC
+  const [date, setDate] = useState(() => todayKey())
   const [selfChecking, setSelfChecking] = useState(false)
 
   const isAdminOrSupervisor = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERVISOR"
@@ -235,7 +236,7 @@ export default function AttendancePage() {
               All Records
             </CardTitle>
             <CardDescription>
-              {new Date(date).toLocaleDateString(undefined, {
+              {parseDateOnly(date).toLocaleDateString(undefined, {
                 weekday: "long",
                 year: "numeric",
                 month: "long",

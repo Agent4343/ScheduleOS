@@ -1,5 +1,6 @@
 "use client"
 
+import { monthStartKey, monthEndKey, todayKey } from "@/lib/dates"
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,17 +48,8 @@ interface CrewStats {
 
 export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true)
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date()
-    date.setDate(1) // First of current month
-    return date.toISOString().split("T")[0]
-  })
-  const [endDate, setEndDate] = useState(() => {
-    const date = new Date()
-    date.setMonth(date.getMonth() + 1)
-    date.setDate(0) // Last day of current month
-    return date.toISOString().split("T")[0]
-  })
+  const [startDate, setStartDate] = useState(() => monthStartKey(todayKey()))
+  const [endDate, setEndDate] = useState(() => monthEndKey(todayKey()))
 
   const [scheduleStats, setScheduleStats] = useState<ScheduleStats>({
     totalSchedules: 0,

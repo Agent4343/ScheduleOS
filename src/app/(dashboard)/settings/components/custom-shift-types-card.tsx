@@ -1,5 +1,6 @@
 "use client"
 
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -49,7 +50,7 @@ interface Props {
   shiftColors: Record<string, { bg: string; text: string }>
   isAdmin: boolean
   onRefresh: () => void
-  onMessage: (msg: string) => void
+  onMessage: (msg: string, kind?: "success" | "error") => void
   onShiftColorsChange: (colors: Record<string, { bg: string; text: string }>) => void
 }
 
@@ -61,6 +62,7 @@ export function CustomShiftTypesCard({
   onMessage,
   onShiftColorsChange,
 }: Props) {
+  const confirmDialog = useConfirm()
   const [showForm, setShowForm] = useState(false)
   const [editingShiftType, setEditingShiftType] = useState<CustomShiftType | null>(null)
   const [saving, setSaving] = useState(false)
@@ -119,7 +121,8 @@ export function CustomShiftTypesCard({
   }
 
   const handleDelete = async (shiftTypeId: string) => {
-    if (!confirm("Delete this shift type?")) return
+    const ok = await confirmDialog({ title: "Delete this shift type?", description: "Schedules already using this code keep it, but it can no longer be assigned.", confirmLabel: "Delete", destructive: true })
+    if (!ok) return
 
     try {
       const response = await fetch(`/api/custom-shift-types/${shiftTypeId}`, { method: "DELETE" })

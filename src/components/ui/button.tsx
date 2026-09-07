@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link, { type LinkProps } from "next/link"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
@@ -32,9 +33,7 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
-}
+    VariantProps<typeof buttonVariants> {}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, ...props }, ref) => {
@@ -49,4 +48,28 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 )
 Button.displayName = "Button"
 
-export { Button, buttonVariants }
+export interface LinkButtonProps
+  extends Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href">,
+    VariantProps<typeof buttonVariants> {
+  href: LinkProps["href"]
+  prefetch?: LinkProps["prefetch"]
+}
+
+/**
+ * A link styled as a button. Use this instead of wrapping <Button> in <Link>
+ * (which produced <a><button>) or the never-implemented `asChild` prop.
+ */
+const LinkButton = React.forwardRef<HTMLAnchorElement, LinkButtonProps>(
+  ({ className, variant, size, href, prefetch, ...props }, ref) => (
+    <Link
+      href={href}
+      prefetch={prefetch}
+      className={cn(buttonVariants({ variant, size, className }))}
+      ref={ref}
+      {...props}
+    />
+  )
+)
+LinkButton.displayName = "LinkButton"
+
+export { Button, LinkButton, buttonVariants }

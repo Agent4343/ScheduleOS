@@ -1,5 +1,6 @@
 "use client"
 
+import { todayKey, formatDateOnly } from "@/lib/dates"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -130,7 +131,7 @@ export default function GettingStartedPage() {
   // Schedule generation
   const [selectedCrewForSchedule, setSelectedCrewForSchedule] = useState("")
   const [selectedPatternForSchedule, setSelectedPatternForSchedule] = useState("")
-  const [scheduleStartDate, setScheduleStartDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [scheduleStartDate, setScheduleStartDate] = useState(() => todayKey())
   const [scheduleDuration, setScheduleDuration] = useState("12")
   const [startShift, setStartShift] = useState<"day" | "night">("day")
   const [generating, setGenerating] = useState(false)
@@ -938,7 +939,7 @@ export default function GettingStartedPage() {
                       <strong>{workers.filter(w => w.crewId === selectedCrewForSchedule).length} worker(s)</strong> in{" "}
                       <strong>{crews.find(c => c.id === selectedCrewForSchedule)?.name}</strong> using{" "}
                       <strong>{patterns.find(p => p.id === selectedPatternForSchedule)?.name || "..."}</strong> pattern,
-                      starting {new Date(scheduleStartDate).toLocaleDateString()}.
+                      starting {formatDateOnly(scheduleStartDate, "short")}.
                     </div>
                   )}
 

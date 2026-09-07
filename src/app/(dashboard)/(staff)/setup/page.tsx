@@ -1,9 +1,10 @@
 "use client"
 
+import { todayKey, addMonthsKey, formatDateOnly } from "@/lib/dates"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Button, LinkButton } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -65,10 +66,7 @@ export default function SetupPage() {
   const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set())
   const [selectedCrew, setSelectedCrew] = useState<string>("")
   const [selectedPattern, setSelectedPattern] = useState<string>("")
-  const [startDate, setStartDate] = useState(() => {
-    const today = new Date()
-    return today.toISOString().split("T")[0]
-  })
+  const [startDate, setStartDate] = useState(() => todayKey())
   const [duration, setDuration] = useState("12") // months
   const [scheduleType, setScheduleType] = useState<"duration" | "endDate" | "ongoing">("duration")
   const [customEndDate, setCustomEndDate] = useState("")
@@ -79,16 +77,12 @@ export default function SetupPage() {
   const getEndDate = () => {
     if (scheduleType === "ongoing") {
       // For ongoing, generate 5 years ahead
-      const start = new Date(startDate)
-      start.setFullYear(start.getFullYear() + 5)
-      return start.toISOString().split("T")[0]
+      return addMonthsKey(startDate, 60)
     }
     if (scheduleType === "endDate" && customEndDate) {
       return customEndDate
     }
-    const start = new Date(startDate)
-    start.setMonth(start.getMonth() + parseInt(duration))
-    return start.toISOString().split("T")[0]
+    return addMonthsKey(startDate, parseInt(duration))
   }
 
   // Add worker form state
@@ -278,7 +272,7 @@ export default function SetupPage() {
       }
 
       const scheduleYear = new Date(startDate).getFullYear()
-      setSuccess(`Successfully generated schedules for ${successCount} of ${workerIds.length} worker(s)! Schedules start from ${new Date(startDate).toLocaleDateString()}.`)
+      setSuccess(`Successfully generated schedules for ${successCount} of ${workerIds.length} worker(s)! Schedules start from ${formatDateOnly(startDate, "short")}.`)
 
       // Redirect to schedule view after short delay
       setTimeout(() => {
@@ -721,7 +715,7 @@ export default function SetupPage() {
                     {scheduleType === "ongoing"
                       ? "Ongoing (no end date)"
                       : scheduleType === "endDate"
-                      ? `Until ${customEndDate ? new Date(customEndDate).toLocaleDateString() : "Not set"}`
+                      ? `Until ${customEndDate ? formatDateOnly(customEndDate, "short") : "Not set"}`
                       : parseInt(duration) >= 12
                       ? `${parseInt(duration) / 12} year${parseInt(duration) > 12 ? "s" : ""}`
                       : `${duration} months`}
@@ -787,30 +781,22 @@ export default function SetupPage() {
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/workers">
+            <LinkButton href="/workers" variant="outline" className="h-auto py-4 flex-col gap-2">
                 <Users className="h-5 w-5" />
                 <span>Manage Workers</span>
-              </a>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/crews">
+              </LinkButton>
+            <LinkButton href="/crews" variant="outline" className="h-auto py-4 flex-col gap-2">
                 <Users className="h-5 w-5" />
                 <span>Manage Crews</span>
-              </a>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/schedule">
+              </LinkButton>
+            <LinkButton href="/schedule" variant="outline" className="h-auto py-4 flex-col gap-2">
                 <Calendar className="h-5 w-5" />
                 <span>View Schedule</span>
-              </a>
-            </Button>
-            <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-              <a href="/settings">
+              </LinkButton>
+            <LinkButton href="/settings" variant="outline" className="h-auto py-4 flex-col gap-2">
                 <ArrowRight className="h-5 w-5" />
                 <span>Edit Patterns</span>
-              </a>
-            </Button>
+              </LinkButton>
           </div>
         </CardContent>
       </Card>

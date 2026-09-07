@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
-import { navigation } from "@/lib/navigation"
+import { navForRole } from "@/lib/navigation"
 import { Clock, X } from "lucide-react"
 
 interface MobileNavProps {
@@ -17,9 +17,7 @@ export function MobileNav({ isOpen, onClose }: MobileNavProps) {
   const { data: session } = useSession()
   const role = session?.user?.role
 
-  const visibleItems = navigation.filter(
-    (item) => !item.adminOnly || role === "ADMIN" || role === "SUPERVISOR"
-  )
+  const visibleItems = navForRole(role)
 
   if (!isOpen) return null
 
