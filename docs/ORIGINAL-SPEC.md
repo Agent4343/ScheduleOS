@@ -1,3 +1,9 @@
+> **Historical document.** This is the original build specification the
+> project was generated from. It is kept for context on intent, but it is not
+> maintained and no longer describes the code accurately — where the two
+> disagree, the code and the documents in `docs/` are correct. Start with
+> [ARCHITECTURE.md](ARCHITECTURE.md) instead.
+
 # ShiftSync — Full Application Prompt
 
 ## Overview

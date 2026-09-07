@@ -46,9 +46,27 @@ Never run `prisma db push` against a database that has migrations. It edits the 
 
 `npm run db:migrate:check` compares `prisma/schema.prisma` against what `prisma/migrations/` would build, and exits non-zero on any difference. It needs `SHADOW_DATABASE_URL` pointing at an empty scratch database Prisma may create and drop tables in. Run it before opening a PR that touches the schema; CI should run it too.
 
-## One-time baseline for the existing production database
+## What actually happened to this project's production database
 
-Production was built before this repository had a migrations folder (`prisma db push` plus hand-written SQL). Its tables already match `0_init`, so that migration must be recorded as applied **without running it**. Do this once, before merging the migrations PR:
+Worth reading before you touch production, because the baseline did not go to plan.
+
+Production was built before this repository had a migrations folder (`prisma db push` plus hand-written SQL), so `0_init` was recorded as applied without being run — the procedure below. The assumption behind that step was that the live schema already matched `0_init`.
+
+It did not. The database had been shaped by an **earlier, more built-out fork** of the application, and `prisma db pull` showed the real picture:
+
+* **Extra tables production has and this repository does not:** `Department`, `CustomRole`, `CertificationType`, `UserCertification`, `TransferRequest`, plus Stripe billing columns on `Organization` (`stripeCustomerId`, `subscriptionTier`, `workerLimit`, …) and extra `User` columns (`sortOrder`, `departmentId`, `includeInStaffingCount`, `isControlRoomTrained`, `isGasOperatorTrained`, …).
+* **Tables this repository needs and production never had:** `ShiftCheckIn`, `ShiftSwap`, `Announcement`, `AuditLog` — because `0_init` was recorded rather than run. Attendance, shift swaps, announcements and the audit log were failing in production until `20260908100000_missing_core_tables` created them.
+
+Two rules follow, and they matter:
+
+1. **Never apply `prisma migrate diff` output against production.** Because those extra tables are absent from `schema.prisma`, the diff proposes `DROP TABLE` on all of them. It is a data-loss command wearing a migration's clothes.
+2. **Write migrations defensively.** `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, and `DO $$ … EXCEPTION WHEN duplicate_object $$` for enums and constraints, so a migration is safe on a database whose exact state you cannot be certain of. `20260908100000_missing_core_tables` is the worked example.
+
+The extra tables remain unmodelled: Prisma simply ignores tables it does not know about, so they are inert at runtime. Folding them into `schema.prisma` — or migrating their data into the coverage model, which covers much of the same ground — is unfinished business.
+
+### The baseline procedure
+
+For reference, and for any other pre-existing database:
 
 ```bash
 # From a machine that can reach the production database.
