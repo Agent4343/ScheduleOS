@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
+import { swapShifts } from "@/lib/services/schedules"
+import { ServiceError } from "@/lib/services/errors"
 
 export async function PATCH(
   request: NextRequest,
@@ -56,45 +58,37 @@ export async function PATCH(
 
       const newStatus = action === "approve" ? "APPROVED" : "CANCELLED"
 
-      // If approving, actually swap the schedules
+      // If approving, actually swap the schedules.
+      //
+      // This goes through the shared swapShifts service rather than writing
+      // the rows here: it refuses when either worker has no shift on the day
+      // (this route used to mark the swap APPROVED and silently change
+      // nothing), it carries the duty code across as well as the shift type
+      // (swapping only shiftType left a CUSTOM row with no code, which
+      // disappears from coverage), and it writes the audit entry.
       if (action === "approve") {
-        const swapDate = swap.date
-
-        // Get both workers' schedules for that date
-        const [requesterSchedule, targetSchedule] = await Promise.all([
-          prisma.schedule.findFirst({ where: { userId: swap.requesterId, date: swapDate } }),
-          prisma.schedule.findFirst({ where: { userId: swap.targetId, date: swapDate } }),
-        ])
-
-        // Swap the shift types
-        const updates = []
-        if (requesterSchedule && targetSchedule) {
-          updates.push(
-            prisma.schedule.update({
-              where: { id: requesterSchedule.id },
-              data: { shiftType: targetSchedule.shiftType, isOverride: true },
-            }),
-            prisma.schedule.update({
-              where: { id: targetSchedule.id },
-              data: { shiftType: requesterSchedule.shiftType, isOverride: true },
-            })
+        try {
+          await swapShifts(
+            { userId: session.user.id, organizationId: session.user.organizationId },
+            {
+              worker1Id: swap.requesterId,
+              date1: swap.date,
+              worker2Id: swap.targetId,
+              date2: swap.date,
+            }
           )
+        } catch (error) {
+          if (error instanceof ServiceError) {
+            return NextResponse.json({ error: error.message }, { status: error.status })
+          }
+          throw error
         }
-
-        updates.push(
-          prisma.shiftSwap.update({
-            where: { id },
-            data: { status: newStatus, adminNote: adminNote || null },
-          })
-        )
-
-        await prisma.$transaction(updates)
-      } else {
-        await prisma.shiftSwap.update({
-          where: { id },
-          data: { status: newStatus, adminNote: adminNote || null },
-        })
       }
+
+      await prisma.shiftSwap.update({
+        where: { id },
+        data: { status: newStatus, adminNote: adminNote || null },
+      })
 
       const updated = await prisma.shiftSwap.findFirst({
         where: { id },

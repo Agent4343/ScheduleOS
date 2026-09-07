@@ -396,6 +396,10 @@ model TimeOffRequest {
   approvedById String?
   approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
   approvedAt   DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([userId, startDate])
 }
 
 enum TimeOffType {
@@ -545,7 +549,7 @@ model Invitation {
 
   // Created by
   createdById String
-  createdBy   User   @relation("InvitationCreator", fields: [createdById], references: [id])
+  createdBy   User   @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email])
 }

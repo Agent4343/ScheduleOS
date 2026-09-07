@@ -25,15 +25,14 @@ export async function DELETE() {
       }
     }
 
-    // Delete user's schedules
-    await prisma.schedule.deleteMany({
-      where: { userId: session.user.id },
-    })
-
-    // Delete user
-    await prisma.user.delete({
-      where: { id: session.user.id },
-    })
+    // Schedules and invitations first: schedules are the bulk of the rows,
+    // and an invitation this user sent would otherwise block the delete on a
+    // foreign key and surface as an unexplained 500.
+    await prisma.$transaction([
+      prisma.schedule.deleteMany({ where: { userId: session.user.id } }),
+      prisma.invitation.deleteMany({ where: { createdById: session.user.id } }),
+      prisma.user.delete({ where: { id: session.user.id } }),
+    ])
 
     return NextResponse.json({ success: true, message: "Account deleted successfully" })
   } catch (error) {
