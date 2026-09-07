@@ -57,7 +57,9 @@ Things that used to exist in several copies now have exactly one home:
 | Generate or extend a rotation | `features/schedules/components/generate-schedule-dialog.tsx` | Crews, Schedule (per worker), Getting Started |
 | Set a shift over a date range | `features/schedules/components/override-shift-dialog.tsx` (POST `/api/schedules/bulk`, one request) | Schedule |
 | Year grid | `features/schedules/components/schedule-grid.tsx` (memoised `DayCell`) | Schedule |
-| Add / edit a worker | `features/workers/components/worker-form.tsx` | Workers, Schedule, Settings → Add User, Getting Started |
+| Add / edit a worker | `features/workers/components/worker-form.tsx` (`workerPayload()` builds the API body) | Workers, Schedule, Settings → Add User, Getting Started |
+| Coverage board | `features/coverage/components/coverage-board.tsx`, data from `features/coverage/hooks.ts` (see docs/COVERAGE.md) | Coverage |
+| Coverage rules | `features/settings/components/coverage-card.tsx` | Settings |
 | Add / edit a crew | `features/crews/components/crew-form.tsx` | Crews, Getting Started |
 | Settings sections | `features/settings/components/*-card.tsx`, framed by `SettingsCard` | Settings |
 

@@ -11,7 +11,7 @@ import { errorMessage } from "@/lib/api-client"
 import type { Organization } from "@/features/types"
 import { useCrews } from "@/features/crews/hooks"
 import { useCreateWorker } from "@/features/workers/hooks"
-import { WorkerForm, type WorkerFormValues } from "@/features/workers/components/worker-form"
+import { WorkerForm, workerPayload, type WorkerFormValues } from "@/features/workers/components/worker-form"
 import { SettingsCard } from "./settings-card"
 
 interface Props {
@@ -32,13 +32,9 @@ export function OrganizationCard({ organization, isAdmin, saving, onSaveName }: 
   const handleAdd = async (values: WorkerFormValues) => {
     try {
       await createWorker.mutateAsync({
-        name: values.name,
-        email: values.email,
+        ...workerPayload(values),
         role: values.role,
-        position: values.position || undefined,
-        phone: values.phone || undefined,
         crewId: values.crewId || undefined,
-        hireDate: values.hireDate || undefined,
         password: values.password,
       })
       toast.success(`${values.name} added. They can sign in with their email and the temporary password.`)

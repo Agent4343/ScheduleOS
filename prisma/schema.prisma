@@ -71,6 +71,8 @@ model Organization {
   holidays         Holiday[]
   invitations      Invitation[]
   customShiftTypes CustomShiftType[]
+  positionGroups   PositionGroup[]
+  coverageRoles    CoverageRole[]
   aiChatSessions   AIChatSession[]
   shiftSwaps       ShiftSwap[]
   announcements    Announcement[]
@@ -101,6 +103,15 @@ model User {
   crewId String?
   crew   Crew?   @relation(fields: [crewId], references: [id])
 
+  // Role-based coverage (see docs/COVERAGE.md)
+  /// Home position group (OIM, Production Lead, OCR Ops, Ops Tech, …)
+  positionGroupId String?
+  positionGroup   PositionGroup? @relation(fields: [positionGroupId], references: [id], onDelete: SetNull)
+  /// Order within the group on the schedule grid and roster
+  rosterOrder     Int?
+  /// Free-form qualification tags, e.g. ["CCR"] for control-room trained
+  qualifications  String[]       @default([])
+
   // Relations
   accounts           Account[]
   sessions           Session[]
@@ -120,6 +131,7 @@ model User {
 
   @@index([organizationId])
   @@index([crewId])
+  @@index([positionGroupId])
 }
 
 enum UserRole {
@@ -287,11 +299,79 @@ model CustomShiftType {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Role-based coverage: a duty code such as OCR-D or PL-N says which half of
+  // the day is worked and which coverage role it fills, whatever the worker's
+  // home group. Null coverageShift means the code is not a working shift.
+  coverageShift  CoverageShift?
+  coverageRoleId String?
+  coverageRole   CoverageRole?  @relation(fields: [coverageRoleId], references: [id], onDelete: SetNull)
+  /// True for backfill codes (BCCR-D, PS, OIM) — shown as "(Backfill)" on the roster
+  isBackfill     Boolean        @default(false)
+
   // Organization
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, code])
+}
+
+// =====================
+// Role-based coverage
+// =====================
+
+/// Which half of the day a duty code or coverage count refers to.
+enum CoverageShift {
+  DAY
+  NIGHT
+}
+
+/// A group of people with the same job (OIM, Production Supervisor, Production
+/// Leads, OCR Ops, Ops Techs). Plain DAY/NIGHT shifts by a member count toward
+/// the group's default coverage role.
+model PositionGroup {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// What a plain D/N shift by a member fills. Null = the group is not counted.
+  defaultCoverageRoleId String?
+  defaultCoverageRole   CoverageRole? @relation("GroupDefaultRole", fields: [defaultCoverageRoleId], references: [id], onDelete: SetNull)
+
+  members User[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, sortOrder])
+}
+
+/// A line on the coverage sheet: "Outside Ops", "Control Room", "OIM"…
+/// Red below `min`, amber below `target`, green at or above target.
+model CoverageRole {
+  id          String   @id @default(cuid())
+  name        String
+  sortOrder   Int      @default(0)
+  minDay      Int      @default(1)
+  targetDay   Int      @default(1)
+  minNight    Int      @default(0)
+  targetNight Int      @default(0)
+  /// Qualification tag a worker must carry to fill this role (e.g. "CCR"); null = none
+  requiredQualification String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  defaultForGroups PositionGroup[]   @relation("GroupDefaultRole")
+  dutyCodes        CustomShiftType[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, sortOrder])
 }
 
 model TimeOffRequest {

@@ -10,6 +10,9 @@ const updateCustomShiftTypeSchema = z.object({
   textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format").optional(),
   description: z.string().max(200).optional(),
   isActive: z.boolean().optional(),
+  coverageShift: z.enum(["DAY", "NIGHT"]).nullable().optional(),
+  coverageRoleId: z.string().nullable().optional(),
+  isBackfill: z.boolean().optional(),
 })
 
 export async function GET(

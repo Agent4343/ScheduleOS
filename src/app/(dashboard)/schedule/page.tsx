@@ -23,7 +23,7 @@ import { ScheduleGrid, type GridWorker } from "@/features/schedules/components/s
 import { ShiftLegend } from "@/features/schedules/components/shift-legend"
 import { OverrideShiftDialog } from "@/features/schedules/components/override-shift-dialog"
 import { GenerateScheduleDialog } from "@/features/schedules/components/generate-schedule-dialog"
-import { WorkerForm, type WorkerFormValues } from "@/features/workers/components/worker-form"
+import { WorkerForm, workerPayload, type WorkerFormValues } from "@/features/workers/components/worker-form"
 
 type Dialog =
   | { kind: "worker"; worker: Worker }
@@ -58,25 +58,23 @@ function SchedulePageContent() {
     () => mergeShiftStyles(customTypesQuery.data ?? [], orgQuery.data?.settings.shiftColors ?? {}),
     [customTypesQuery.data, orgQuery.data?.settings.shiftColors]
   )
-  const workers = useMemo(
-    () =>
-      [...(workersQuery.data ?? [])].sort(
-        (a, b) => (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ") || (a.name || "").localeCompare(b.name || "")
-      ),
-    [workersQuery.data]
-  )
+  // With position groups the API already orders by group, roster order, name
+  // (the roster layout); otherwise fall back to crew then name.
+  const workers = useMemo(() => {
+    const list = workersQuery.data ?? []
+    if (list.some((w) => w.positionGroup)) return list
+    return [...list].sort(
+      (a, b) => (a.crew?.name || "ZZZ").localeCompare(b.crew?.name || "ZZZ") || (a.name || "").localeCompare(b.name || "")
+    )
+  }, [workersQuery.data])
   const workerById = useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers])
 
   const saveWorker = async (worker: Worker, values: WorkerFormValues) => {
     try {
       await updateWorker.mutateAsync({
         id: worker.id,
-        name: values.name,
-        email: values.email,
-        position: values.position || undefined,
-        phone: values.phone || undefined,
+        ...workerPayload(values),
         crewId: values.crewId || null,
-        hireDate: values.hireDate || undefined,
         ...(isAdmin && worker.id !== userId && { role: values.role, status: values.status }),
       })
       toast.success(`${values.name} updated`)

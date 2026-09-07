@@ -18,7 +18,7 @@ import { useRole } from "@/lib/auth/use-role"
 import type { UserStatus, Worker } from "@/features/types"
 import { useWorkers, useCreateWorker, useUpdateWorker, useDeleteWorker } from "@/features/workers/hooks"
 import { useCrews } from "@/features/crews/hooks"
-import { WorkerForm, ROLE_LABELS, STATUS_LABELS, type WorkerFormValues } from "@/features/workers/components/worker-form"
+import { WorkerForm, workerPayload, ROLE_LABELS, STATUS_LABELS, type WorkerFormValues } from "@/features/workers/components/worker-form"
 
 const STATUS_VARIANT: Record<UserStatus, "default" | "secondary" | "destructive" | "outline"> = {
   ACTIVE: "default",
@@ -69,13 +69,9 @@ export default function WorkersPage() {
   const handleCreate = async (values: WorkerFormValues) => {
     try {
       await createWorker.mutateAsync({
-        name: values.name,
-        email: values.email,
+        ...workerPayload(values),
         role: values.role,
-        position: values.position || undefined,
-        phone: values.phone || undefined,
         crewId: values.crewId || undefined,
-        hireDate: values.hireDate || undefined,
         password: values.password,
       })
       toast.success(`${values.name} added. They can sign in with their email and the temporary password.`)
@@ -89,12 +85,8 @@ export default function WorkersPage() {
     try {
       await updateWorker.mutateAsync({
         id: worker.id,
-        name: values.name,
-        email: values.email,
-        position: values.position || undefined,
-        phone: values.phone || undefined,
+        ...workerPayload(values),
         crewId: values.crewId || null,
-        hireDate: values.hireDate || undefined,
         // Only send role/status when the caller is allowed to change them
         ...(isAdmin && worker.id !== userId && { role: values.role, status: values.status }),
       })

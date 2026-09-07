@@ -18,6 +18,9 @@ export interface CreateWorkerInput {
   /** YYYY-MM-DD */
   hireDate?: string
   password?: string
+  positionGroupId?: string | null
+  rosterOrder?: number | null
+  qualifications?: string[]
 }
 
 export type UpdateWorkerInput = Partial<Omit<CreateWorkerInput, "password" | "crewId">> & {

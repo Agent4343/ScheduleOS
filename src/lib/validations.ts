@@ -102,6 +102,10 @@ const userFieldsSchema = z.object({
   // null clears the crew on update
   crewId: z.string().nullable().optional(),
   hireDate: z.coerce.date().optional(),
+  // Role-based coverage
+  positionGroupId: z.string().nullable().optional(),
+  rosterOrder: z.number().int().min(0).max(9999).nullable().optional(),
+  qualifications: z.array(z.string().trim().min(1).max(32)).max(20).optional(),
 })
 
 export const createUserSchema = userFieldsSchema.extend({
@@ -277,3 +281,37 @@ export type CreateStaffingRuleInput = z.infer<typeof createStaffingRuleSchema>
 export type CreateShutdownInput = z.infer<typeof createShutdownSchema>
 export type CreateHolidayInput = z.infer<typeof createHolidaySchema>
 export type CreateInvitationInput = z.infer<typeof createInvitationSchema>
+
+// Role-based coverage validations
+export const coverageRoleSchema = z
+  .object({
+    name: z.string().trim().min(1).max(60),
+    sortOrder: z.number().int().min(0).max(999).default(0),
+    minDay: z.number().int().min(0).max(999).default(1),
+    targetDay: z.number().int().min(0).max(999).default(1),
+    minNight: z.number().int().min(0).max(999).default(0),
+    targetNight: z.number().int().min(0).max(999).default(0),
+    requiredQualification: z.string().trim().max(32).nullable().optional(),
+  })
+  .refine((r) => r.targetDay >= r.minDay && r.targetNight >= r.minNight, {
+    message: "Target must be at least the minimum",
+  })
+export const updateCoverageRoleSchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  sortOrder: z.number().int().min(0).max(999).optional(),
+  minDay: z.number().int().min(0).max(999).optional(),
+  targetDay: z.number().int().min(0).max(999).optional(),
+  minNight: z.number().int().min(0).max(999).optional(),
+  targetNight: z.number().int().min(0).max(999).optional(),
+  requiredQualification: z.string().trim().max(32).nullable().optional(),
+})
+
+export const positionGroupSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  sortOrder: z.number().int().min(0).max(999).default(0),
+  color: hexColor.nullable().optional(),
+  defaultCoverageRoleId: z.string().nullable().optional(),
+})
+export const updatePositionGroupSchema = positionGroupSchema.partial()
+
+export const coverageShiftSchema = z.enum(["DAY", "NIGHT"])

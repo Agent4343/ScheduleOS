@@ -8,15 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Palette, Plus, Pencil, Trash2, X } from "lucide-react"
 
-interface CustomShiftType {
-  id: string
-  code: string
-  name: string
-  color: string
-  textColor: string
-  description: string | null
-  isActive: boolean
-}
+import type { CustomShiftType } from "@/features/custom-shift-types/hooks"
+import type { CoverageRole } from "@/features/coverage/hooks"
 
 interface NewShiftType {
   code: string
@@ -24,6 +17,10 @@ interface NewShiftType {
   color: string
   textColor: string
   description: string
+  /** Coverage: which role and shift this code counts toward ("" = none) */
+  coverageShift: "" | "DAY" | "NIGHT"
+  coverageRoleId: string
+  isBackfill: boolean
 }
 
 const DEFAULT_SHIFT_TYPE: NewShiftType = {
@@ -32,6 +29,9 @@ const DEFAULT_SHIFT_TYPE: NewShiftType = {
   color: "#6b7280",
   textColor: "#ffffff",
   description: "",
+  coverageShift: "",
+  coverageRoleId: "",
+  isBackfill: false,
 }
 
 const DEFAULT_SHIFT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -47,6 +47,8 @@ const DEFAULT_SHIFT_COLORS: Record<string, { bg: string; text: string }> = {
 
 interface Props {
   customShiftTypes: CustomShiftType[]
+  /** Coverage roles a duty code may count toward (empty when coverage is not set up) */
+  coverageRoles?: CoverageRole[]
   shiftColors: Record<string, { bg: string; text: string }>
   isAdmin: boolean
   onRefresh: () => void
@@ -56,6 +58,7 @@ interface Props {
 
 export function CustomShiftTypesCard({
   customShiftTypes,
+  coverageRoles = [],
   shiftColors,
   isAdmin,
   onRefresh,
@@ -83,6 +86,9 @@ export function CustomShiftTypesCard({
       color: shiftType.color,
       textColor: shiftType.textColor,
       description: shiftType.description || "",
+      coverageShift: shiftType.coverageShift ?? "",
+      coverageRoleId: shiftType.coverageRoleId ?? "",
+      isBackfill: shiftType.isBackfill ?? false,
     })
     setShowForm(true)
   }
@@ -102,7 +108,12 @@ export function CustomShiftTypesCard({
       const response = await fetch(url, {
         method: editingShiftType ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          // A code only counts toward coverage when both a role and a shift are chosen
+          coverageShift: form.coverageRoleId && form.coverageShift ? form.coverageShift : null,
+          coverageRoleId: form.coverageRoleId && form.coverageShift ? form.coverageRoleId : null,
+        }),
       })
 
       const data = await response.json()
@@ -271,6 +282,41 @@ export function CustomShiftTypesCard({
                   />
                 </div>
               </div>
+              {coverageRoles.length > 0 && (
+                <div className="md:col-span-2 grid gap-4 md:grid-cols-3 rounded-lg border p-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="shift-type-coverage-role">Counts toward (coverage)</Label>
+                    <select
+                      id="shift-type-coverage-role"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={form.coverageRoleId}
+                      onChange={(e) => setForm({ ...form, coverageRoleId: e.target.value, coverageShift: e.target.value && !form.coverageShift ? "DAY" : form.coverageShift })}
+                    >
+                      <option value="">Nothing (time off, training…)</option>
+                      {coverageRoles.map((r) => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="shift-type-coverage-shift">On shift</Label>
+                    <select
+                      id="shift-type-coverage-shift"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={form.coverageShift}
+                      disabled={!form.coverageRoleId}
+                      onChange={(e) => setForm({ ...form, coverageShift: e.target.value as NewShiftType["coverageShift"] })}
+                    >
+                      <option value="DAY">Days</option>
+                      <option value="NIGHT">Nights</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm self-end pb-2">
+                    <input type="checkbox" className="h-4 w-4" checked={form.isBackfill} disabled={!form.coverageRoleId} onChange={(e) => setForm({ ...form, isBackfill: e.target.checked })} />
+                    Backfill (acting up)
+                  </label>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <Label>Preview</Label>
                 <div className="mt-2">
@@ -305,6 +351,12 @@ export function CustomShiftTypesCard({
                 <div>
                   <p className="font-medium">{st.name}</p>
                   {st.description && <p className="text-sm text-muted-foreground">{st.description}</p>}
+                  {st.coverageRoleId && st.coverageShift && (
+                    <p className="text-xs text-muted-foreground">
+                      Counts as {coverageRoles.find((r) => r.id === st.coverageRoleId)?.name ?? "a coverage role"} on {st.coverageShift === "DAY" ? "days" : "nights"}
+                      {st.isBackfill && " (backfill)"}
+                    </p>
+                  )}
                 </div>
               </div>
               {isAdmin && (

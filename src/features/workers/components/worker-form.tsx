@@ -8,6 +8,8 @@ import { Select } from "@/components/ui/select"
 import { useRole } from "@/lib/auth/use-role"
 import { toDateKey } from "@/lib/dates"
 import type { CrewRef, UserRole, UserStatus, Worker } from "@/features/types"
+import type { CreateWorkerInput } from "@/features/workers/api"
+import { usePositionGroups } from "@/features/coverage/hooks"
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrator",
@@ -36,6 +38,30 @@ export interface WorkerFormValues {
   /** YYYY-MM-DD or "" */
   hireDate: string
   password: string
+  /** Coverage: the position group this worker fills by default ("" = none) */
+  positionGroupId: string
+  /** Order within the group on the schedule ("" = unset) */
+  rosterOrder: string
+  /** Free-text qualifications, e.g. CCR */
+  qualifications: string[]
+}
+
+/**
+ * The fields every caller sends to the API, derived from the form. Create
+ * and update payloads add role/status/password/crew on top of this.
+ */
+export function workerPayload(values: WorkerFormValues): Pick<CreateWorkerInput, "name" | "email" | "position" | "phone" | "hireDate" | "positionGroupId" | "rosterOrder" | "qualifications"> {
+  const order = Number.parseInt(values.rosterOrder, 10)
+  return {
+    name: values.name,
+    email: values.email,
+    position: values.position || undefined,
+    phone: values.phone || undefined,
+    hireDate: values.hireDate || undefined,
+    positionGroupId: values.positionGroupId || null,
+    rosterOrder: Number.isFinite(order) ? order : null,
+    qualifications: values.qualifications,
+  }
 }
 
 interface WorkerFormProps {
@@ -77,7 +103,18 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
     crewId: worker?.crew?.id ?? defaultCrewId ?? "",
     hireDate: worker?.hireDate ? toDateKey(worker.hireDate) : "",
     password: "",
+    positionGroupId: worker?.positionGroupId ?? "",
+    rosterOrder: worker?.rosterOrder != null ? String(worker.rosterOrder) : "",
+    qualifications: worker?.qualifications ?? [],
   })
+  const groups = usePositionGroups()
+  const groupList = groups.data ?? []
+  const [qualDraft, setQualDraft] = useState("")
+  const addQualification = () => {
+    const q = qualDraft.trim().toUpperCase()
+    if (q && !values.qualifications.includes(q)) set("qualifications", [...values.qualifications, q])
+    setQualDraft("")
+  }
   const set = <K extends keyof WorkerFormValues>(key: K, value: WorkerFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
 
@@ -141,6 +178,53 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
           <Input id={id("phone")} type="tel" value={values.phone} onChange={(e) => set("phone", e.target.value)} autoComplete="tel" />
         </div>
       </div>
+
+      {groupList.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor={id("positionGroup")}>Position group</Label>
+            <Select
+              id={id("positionGroup")}
+              value={values.positionGroupId}
+              onChange={(e) => set("positionGroupId", e.target.value)}
+              options={[{ value: "", label: "None (not counted for coverage)" }, ...groupList.map((g) => ({ value: g.id, label: g.name }))]}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={id("rosterOrder")}>Roster order</Label>
+            <Input id={id("rosterOrder")} type="number" min={0} value={values.rosterOrder} onChange={(e) => set("rosterOrder", e.target.value)} placeholder="1" />
+          </div>
+          <div className="col-span-3 space-y-2">
+            <Label htmlFor={id("qualification")}>Qualifications</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {values.qualifications.map((q) => (
+                <span key={q} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm">
+                  {q}
+                  <button type="button" aria-label={`Remove ${q}`} className="text-muted-foreground hover:text-foreground" onClick={() => set("qualifications", values.qualifications.filter((x) => x !== q))}>
+                    ×
+                  </button>
+                </span>
+              ))}
+              <Input
+                id={id("qualification")}
+                className="w-40"
+                value={qualDraft}
+                placeholder="e.g. CCR"
+                maxLength={40}
+                onChange={(e) => setQualDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault()
+                    addQualification()
+                  }
+                }}
+                onBlur={addQualification}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Press Enter to add. Roles that require a qualification only count qualified workers.</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">

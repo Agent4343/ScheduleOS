@@ -9,6 +9,10 @@ const createCustomShiftTypeSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format"),
   textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format").optional(),
   description: z.string().max(200).optional(),
+  // Role-based coverage
+  coverageShift: z.enum(["DAY", "NIGHT"]).nullable().optional(),
+  coverageRoleId: z.string().nullable().optional(),
+  isBackfill: z.boolean().optional(),
 })
 
 export async function GET() {
@@ -62,6 +66,9 @@ export async function POST(request: NextRequest) {
         color: validatedData.color,
         textColor: validatedData.textColor || "#ffffff",
         description: validatedData.description,
+        coverageShift: validatedData.coverageShift ?? null,
+        coverageRoleId: validatedData.coverageRoleId ?? null,
+        isBackfill: validatedData.isBackfill ?? false,
         organizationId: session.user.organizationId,
       },
     })

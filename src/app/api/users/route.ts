@@ -34,6 +34,9 @@ export async function GET(request: NextRequest) {
         status: true,
         hireDate: true,
         createdAt: true,
+        positionGroupId: true,
+        rosterOrder: true,
+        qualifications: true,
         crew: {
           select: {
             id: true,
@@ -41,8 +44,9 @@ export async function GET(request: NextRequest) {
             color: true,
           },
         },
+        positionGroup: { select: { id: true, name: true, color: true, sortOrder: true } },
       },
-      orderBy: [{ name: "asc" }],
+      orderBy: [{ positionGroup: { sortOrder: "asc" } }, { rosterOrder: "asc" }, { name: "asc" }],
     })
 
     return NextResponse.json({ success: true, data: users })
@@ -108,6 +112,9 @@ export async function POST(request: NextRequest) {
         phone: validatedData.phone,
         hireDate: validatedData.hireDate,
         crewId: validatedData.crewId,
+        positionGroupId: validatedData.positionGroupId ?? null,
+        rosterOrder: validatedData.rosterOrder ?? null,
+        qualifications: validatedData.qualifications ?? [],
         organizationId: session.user.organizationId,
         passwordHash,
         status: "ACTIVE",

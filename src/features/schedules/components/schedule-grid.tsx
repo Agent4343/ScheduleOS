@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useMemo } from "react"
+import { Fragment, memo, useMemo } from "react"
 import { Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { todayKey } from "@/lib/dates"
@@ -13,6 +13,8 @@ export interface GridWorker {
   id: string
   name: string | null
   crew: { id: string; name: string; color: string } | null
+  /** When set, the grid shows a divider row each time the group changes */
+  positionGroup?: { id: string; name: string; color: string | null } | null
 }
 
 interface DayInfo {
@@ -91,6 +93,7 @@ interface ScheduleGridProps {
  */
 export function ScheduleGrid({ year, workers, schedules, styles, editable, onWorkerClick, onDayClick }: ScheduleGridProps) {
   const months = useMemo(() => buildYear(year), [year])
+  const totalDays = months.reduce((n, m) => n + m.days.length, 0)
 
   // (userId, YYYY-MM-DD) → shift key
   const lookup = useMemo(() => {
@@ -136,8 +139,17 @@ export function ScheduleGrid({ year, workers, schedules, styles, editable, onWor
           </tr>
         </thead>
         <tbody>
-          {workers.map((worker) => (
-            <tr key={worker.id} className="hover:bg-muted/20">
+          {workers.map((worker, i) => (
+            <Fragment key={worker.id}>
+            {worker.positionGroup && worker.positionGroup.id !== workers[i - 1]?.positionGroup?.id && (
+              <tr className="bg-muted/70">
+                <th scope="rowgroup" colSpan={1 + totalDays} className="sticky left-0 z-20 border px-2 py-1 text-left text-xs font-semibold uppercase tracking-wide bg-muted/70">
+                  <span className="inline-block h-2 w-2 rounded-full mr-2 align-middle" style={{ backgroundColor: worker.positionGroup.color ?? "#94a3b8" }} aria-hidden />
+                  {worker.positionGroup.name}
+                </th>
+              </tr>
+            )}
+            <tr className="hover:bg-muted/20">
               <th
                 scope="row"
                 className={cn(
@@ -172,6 +184,7 @@ export function ScheduleGrid({ year, workers, schedules, styles, editable, onWor
                 })
               )}
             </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>

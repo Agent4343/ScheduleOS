@@ -16,7 +16,7 @@ import { useCrews, useCreateCrew } from "@/features/crews/hooks"
 import { useCreateWorker } from "@/features/workers/hooks"
 import { useRotationPatterns } from "@/features/rotation-patterns/hooks"
 import { CrewForm, type CrewFormValues } from "@/features/crews/components/crew-form"
-import { WorkerForm, type WorkerFormValues } from "@/features/workers/components/worker-form"
+import { WorkerForm, workerPayload, type WorkerFormValues } from "@/features/workers/components/worker-form"
 import { GenerateScheduleDialog } from "@/features/schedules/components/generate-schedule-dialog"
 
 type Dialog = { kind: "crew" } | { kind: "worker" } | { kind: "generate"; crew: Crew } | null
@@ -67,13 +67,9 @@ export default function GettingStartedPage() {
   const addWorker = async (values: WorkerFormValues) => {
     try {
       await createWorker.mutateAsync({
-        name: values.name,
-        email: values.email,
+        ...workerPayload(values),
         role: values.role,
-        position: values.position || undefined,
-        phone: values.phone || undefined,
         crewId: values.crewId || undefined,
-        hireDate: values.hireDate || undefined,
         password: values.password,
       })
       toast.success(`${values.name} added`)

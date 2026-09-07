@@ -9,6 +9,9 @@ export interface CustomShiftType {
   textColor: string
   description: string | null
   isActive: boolean
+  coverageShift?: "DAY" | "NIGHT" | null
+  coverageRoleId?: string | null
+  isBackfill?: boolean
 }
 
 export const customShiftTypeKeys = { all: ["custom-shift-types"] as const }

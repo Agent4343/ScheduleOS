@@ -19,6 +19,8 @@ import { HolidaysCard } from "@/features/settings/components/holidays-card"
 import { AccountCard } from "@/features/settings/components/account-card"
 import { RotationPatternsCard } from "@/features/settings/components/rotation-patterns-card"
 import { CustomShiftTypesCard, DEFAULT_SHIFT_COLORS } from "@/features/settings/components/custom-shift-types-card"
+import { CoverageCard } from "@/features/settings/components/coverage-card"
+import { useCoverageRoles } from "@/features/coverage/hooks"
 
 /**
  * Settings is a grid of independent cards. Every control saves as soon as it
@@ -31,6 +33,7 @@ export default function SettingsPage() {
   const org = useOrgSettings()
   const patterns = useRotationPatterns()
   const customTypes = useCustomShiftTypes()
+  const coverageRoles = useCoverageRoles()
 
   // Shift colours: edited locally as the colour pickers move, saved shortly after
   const [shiftColors, setShiftColors] = useState(DEFAULT_SHIFT_COLORS)
@@ -103,8 +106,10 @@ export default function SettingsPage() {
           }}
           onMessage={onMessage}
         />
+        <CoverageCard isAdmin={isAdmin} />
         <CustomShiftTypesCard
           customShiftTypes={customTypes.data ?? []}
+          coverageRoles={coverageRoles.data ?? []}
           shiftColors={shiftColors}
           isAdmin={isAdmin}
           onRefresh={() => qc.invalidateQueries({ queryKey: customShiftTypeKeys.all })}

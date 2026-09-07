@@ -15,6 +15,9 @@ export interface UpdateWorkerInput {
   phone?: string
   crewId?: string | null
   hireDate?: Date
+  positionGroupId?: string | null
+  rosterOrder?: number | null
+  qualifications?: string[]
 }
 
 export const workerSelect = {
@@ -27,7 +30,11 @@ export const workerSelect = {
   phone: true,
   status: true,
   hireDate: true,
+  positionGroupId: true,
+  rosterOrder: true,
+  qualifications: true,
   crew: { select: { id: true, name: true, color: true } },
+  positionGroup: { select: { id: true, name: true, color: true } },
 } as const
 
 /**
@@ -75,6 +82,14 @@ export async function updateWorker(
     }
   }
 
+  if (input.positionGroupId) {
+    const group = await prisma.positionGroup.findFirst({
+      where: { id: input.positionGroupId, organizationId: actor.organizationId },
+      select: { id: true },
+    })
+    if (!group) throw new ServiceError("Invalid position group", 400)
+  }
+
   if (input.crewId) {
     const crew = await prisma.crew.findFirst({
       where: { id: input.crewId, organizationId: actor.organizationId },
@@ -95,6 +110,9 @@ export async function updateWorker(
       ...(input.phone !== undefined && { phone: input.phone }),
       ...(input.crewId !== undefined && { crewId: input.crewId }),
       ...(input.hireDate !== undefined && { hireDate: input.hireDate }),
+      ...(input.positionGroupId !== undefined && { positionGroupId: input.positionGroupId }),
+      ...(input.rosterOrder !== undefined && { rosterOrder: input.rosterOrder }),
+      ...(input.qualifications !== undefined && { qualifications: input.qualifications }),
     },
     select: workerSelect,
   })

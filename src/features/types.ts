@@ -54,6 +54,10 @@ export interface Worker {
   hireDate: string | null
   createdAt?: string
   crew: CrewRef | null
+  positionGroupId?: string | null
+  positionGroup?: { id: string; name: string; color: string | null; sortOrder?: number } | null
+  rosterOrder?: number | null
+  qualifications?: string[]
 }
 
 export interface Schedule {
