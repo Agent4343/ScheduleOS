@@ -3,8 +3,12 @@
 ## Environment Variables Required
 
 ```bash
-# Database
+# Database (DIRECT_URL is used by prisma migrate deploy at startup)
 DATABASE_URL="postgresql://user:password@host:5432/database"
+DIRECT_URL="postgresql://user:password@host:5432/database"
+
+# Cron secret for POST /api/attendance/auto-checkout
+CRON_SECRET="generate-with-openssl-rand-base64-32"
 
 # Authentication
 NEXTAUTH_URL="https://your-domain.com"
@@ -14,6 +18,12 @@ NEXTAUTH_SECRET="generate-with-openssl-rand-base64-32"
 SENTRY_DSN="https://xxx@sentry.io/xxx"
 NEXT_PUBLIC_SENTRY_DSN="https://xxx@sentry.io/xxx"
 ```
+
+## Database Migrations
+
+- [ ] `prisma/migrations/` is committed and `npm run db:migrate:status` shows no pending migrations
+- [ ] Existing database has been baselined once (`prisma migrate resolve --applied 0_init`) — see docs/DEPLOYMENT.md
+- [ ] Start command runs `prisma migrate deploy` before the server (railway.json)
 
 ## Railway Database Backups
 

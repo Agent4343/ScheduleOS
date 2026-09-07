@@ -307,8 +307,6 @@ All under `(dashboard)` layout with sidebar navigation:
 ### System
 - `GET /api/health` — Health check
 - `GET /api/setup-status` — Check if initial setup is done
-- `POST /api/setup` — Initial organization setup (disabled in production)
-- `POST /api/migrate` — Run database migrations (disabled in production)
 
 ---
 
@@ -423,7 +421,7 @@ Single page with card-based sections:
 
 **Auth:** NextAuth `withAuth` middleware with JWT
 
-**Public paths:** `/login`, `/register`, `/pricing`, `/api/auth`, `/api/health`, `/api/setup`, `/api/register`, `/api/stripe`
+**Public paths:** `/login`, `/register`, `/pricing`, `/contact`, `/terms`, `/privacy`, `/cookies`, `/api/auth`, `/api/health`, `/api/register`, `/api/stripe`
 
 **CSRF:** Origin verification on POST/PUT/PATCH/DELETE (exempts `/api/stripe/webhook`)
 
@@ -445,7 +443,7 @@ NEXTAUTH_URL=https://your-app.up.railway.app
 NEXTAUTH_SECRET=           # openssl rand -base64 32
 
 # Admin (disabled in production)
-SETUP_KEY=
+CRON_SECRET=
 
 # Rate Limiting (Upstash Redis)
 UPSTASH_REDIS_REST_URL=

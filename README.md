@@ -51,10 +51,10 @@ ShiftSync is a comprehensive workforce scheduling platform designed for industri
    DIRECT_URL=${{Postgres.DATABASE_URL}}
    ```
 
-5. **Run database migrations** (in Railway shell or locally):
-   ```bash
-   npx prisma db push
-   ```
+5. **Database migrations** run automatically on every deploy (`prisma migrate deploy`
+   is part of the start command). For an existing database created before
+   migrations were introduced, follow the one-time baseline in
+   [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) first.
 
 6. **Seed database** (creates organization, crews, rotation patterns):
    ```bash
@@ -103,9 +103,9 @@ cp .env.example .env
 # Edit .env with your settings
 ```
 
-4. Push database schema:
+4. Create the database schema:
 ```bash
-npm run db:push
+npm run db:migrate
 ```
 
 5. Seed database (creates organization, crews, rotation patterns):
@@ -199,9 +199,17 @@ npm run dev          # Start development server
 npm run build        # Build for production
 npm run start        # Start production server
 npm run lint         # Run ESLint
-npm run db:push      # Push schema to database
-npm run db:migrate   # Run migrations
+npm run typecheck    # TypeScript check (tsc --noEmit)
+npm run test         # Run unit tests (vitest)
+npm run db:migrate       # Apply pending migrations (prisma migrate deploy)
+npm run db:migrate:dev   # Create a new migration from schema changes (local)
+npm run db:migrate:status  # Show applied / pending migrations
+npm run db:migrate:check   # Fail if schema.prisma drifted from prisma/migrations
+npm run db:studio    # Browse the database
 npm run db:seed      # Seed demo data
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how migrations are applied in production.
 ```
 
 ## License

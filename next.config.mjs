@@ -5,7 +5,7 @@ const nextConfig = {
   // Output standalone for optimal Railway/Docker deployment
   output: "standalone",
 
-  // Enable instrumentation hook for automatic database migrations
+  // Enable instrumentation hook (src/instrumentation.ts initialises Sentry on the server)
   experimental: {
     instrumentationHook: true,
   },
