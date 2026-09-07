@@ -1,14 +1,9 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
-import { ShiftType, PositionType } from "@/types"
+import { ShiftType } from "@/types"
 import { getTodayUTC, addDaysUTC, startOfWeekUTC, endOfWeekUTC } from "@/lib/timezone"
-
-interface OrgSettings {
-  minStaffOperators?: number
-  minStaffOnshoreControlRoom?: number
-  minStaffingAlertEnabled?: boolean
-}
+import { findStaffingGaps } from "@/lib/services/staffing"
 
 export async function GET() {
   try {
@@ -30,9 +25,6 @@ export async function GET() {
       todaySchedules,
       pendingRequests,
       upcomingShutdowns,
-      weekSchedules,
-      staffingRules,
-      organization,
     ] = await Promise.all([
       // Total active workers
       prisma.user.count({
@@ -68,131 +60,21 @@ export async function GET() {
           startDate: { gte: today },
         },
       }),
-
-      // This week's schedules for staffing analysis
-      prisma.schedule.findMany({
-        where: {
-          user: { organizationId },
-          date: { gte: weekStart, lte: weekEnd },
-          shiftType: { in: [ShiftType.DAY, ShiftType.NIGHT] },
-        },
-        include: {
-          user: { select: { id: true, name: true, positionType: true } },
-        },
-      }),
-
-      // Staffing rules
-      prisma.staffingRule.findMany({
-        where: { organizationId, isActive: true },
-      }),
-
-      // Organization settings
-      prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { settings: true },
-      }),
     ])
 
-    // Calculate staffing gaps for the week
-    let staffingGaps = 0
-    const gapDetails: Array<{ date: Date; shiftType: string; shortage: number; positionType?: string }> = []
-
-    // Get organization settings for position-based minimums
-    const orgSettings = (organization?.settings || {}) as OrgSettings
-    const minOperators = orgSettings.minStaffOperators ?? 1
-    const minOnshoreControlRoom = orgSettings.minStaffOnshoreControlRoom ?? 1
-
-    // Group schedules by date
-    const schedulesByDate = new Map<string, typeof weekSchedules>()
-    for (const schedule of weekSchedules) {
-      const dateKey = schedule.date.toISOString().split("T")[0]
-      if (!schedulesByDate.has(dateKey)) {
-        schedulesByDate.set(dateKey, [])
-      }
-      schedulesByDate.get(dateKey)!.push(schedule)
-    }
-
-    // Check each day against staffing rules and position-based minimums
-    for (let i = 0; i < 7; i++) {
-      const checkDate = addDaysUTC(weekStart, i)
-      const dateKey = checkDate.toISOString().split("T")[0]
-      const daySchedules = schedulesByDate.get(dateKey) || []
-
-      // Check traditional staffing rules
-      for (const rule of staffingRules) {
-        // Filter by position type if the rule specifies one
-        let filteredSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === rule.shiftType)
-
-        if (rule.positionType) {
-          filteredSchedules = filteredSchedules.filter(
-            (s: { user: { positionType: string } }) => s.user.positionType === rule.positionType
-          )
-        }
-
-        const count = filteredSchedules.length
-        if (count < rule.minWorkers) {
-          staffingGaps++
-          gapDetails.push({
-            date: checkDate,
-            shiftType: rule.shiftType,
-            shortage: rule.minWorkers - count,
-            positionType: rule.positionType || undefined,
-          })
-        }
-      }
-
-      // Check position-based minimums from organization settings
-      const workShifts = [ShiftType.DAY, ShiftType.NIGHT]
-      for (const shiftType of workShifts) {
-        const shiftSchedules = daySchedules.filter((s: { shiftType: string }) => s.shiftType === shiftType)
-
-        // Count operators
-        const operatorCount = shiftSchedules.filter(
-          (s: { user: { positionType: string } }) => s.user.positionType === PositionType.OPERATOR
-        ).length
-
-        if (operatorCount < minOperators) {
-          // Avoid duplicating gap if a rule already caught this
-          const existingGap = gapDetails.find(
-            g => g.date.getTime() === checkDate.getTime() &&
-                 g.shiftType === shiftType &&
-                 g.positionType === PositionType.OPERATOR
-          )
-          if (!existingGap) {
-            staffingGaps++
-            gapDetails.push({
-              date: checkDate,
-              shiftType: shiftType,
-              shortage: minOperators - operatorCount,
-              positionType: PositionType.OPERATOR,
-            })
-          }
-        }
-
-        // Count onshore control room staff
-        const onshoreCount = shiftSchedules.filter(
-          (s: { user: { positionType: string } }) => s.user.positionType === PositionType.ONSHORE_CONTROL_ROOM
-        ).length
-
-        if (onshoreCount < minOnshoreControlRoom) {
-          // Avoid duplicating gap if a rule already caught this
-          const existingGap = gapDetails.find(
-            g => g.date.getTime() === checkDate.getTime() &&
-                 g.shiftType === shiftType &&
-                 g.positionType === PositionType.ONSHORE_CONTROL_ROOM
-          )
-          if (!existingGap) {
-            staffingGaps++
-            gapDetails.push({
-              date: checkDate,
-              shiftType: shiftType,
-              shortage: minOnshoreControlRoom - onshoreCount,
-              positionType: PositionType.ONSHORE_CONTROL_ROOM,
-            })
-          }
-        }
-      }
-    }
+    // Staffing gaps for the week (same evaluator the assistant uses)
+    const staffing = await findStaffingGaps(organizationId, weekStart, weekEnd)
+    const gapDetails = staffing.alertsEnabled
+      ? staffing.gaps.map((g) => ({
+          date: g.date,
+          shiftType: g.shiftType,
+          shortage: g.shortage,
+          positionType: g.positionType,
+          crewId: g.crewId,
+          rule: g.ruleName,
+        }))
+      : []
+    const staffingGaps = gapDetails.length
 
     // Get recent activity
     const recentActivity = await prisma.notification.findMany({

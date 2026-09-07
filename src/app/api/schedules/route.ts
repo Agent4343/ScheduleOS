@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
@@ -10,6 +9,9 @@ import {
   type WorkingShift,
 } from "@/lib/scheduling"
 import { addDaysUTC, normalizeToUTCMidnight } from "@/lib/timezone"
+import { setShiftOverride } from "@/lib/services/schedules"
+import { apiOk, handleRouteError } from "@/lib/api-helpers"
+import { getClientIP } from "@/lib/rate-limit"
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,84 +113,22 @@ export async function POST(request: NextRequest) {
 
     const validatedData = createScheduleSchema.parse(body)
 
-    // Normalize date to UTC midnight to ensure consistent comparison
-    const scheduleDate = new Date(validatedData.date)
-    const normalizedDate = new Date(Date.UTC(
-      scheduleDate.getUTCFullYear(),
-      scheduleDate.getUTCMonth(),
-      scheduleDate.getUTCDate()
-    ))
-
-    // Verify user belongs to organization
-    const user = await prisma.user.findFirst({
-      where: {
-        id: validatedData.userId,
-        organizationId: session.user.organizationId,
-      },
-      select: {
-        id: true,
-        crewId: true,
-      },
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "Invalid user" }, { status: 400 })
-    }
-
-    // Upsert schedule
-    const schedule = await prisma.schedule.upsert({
-      where: {
-        userId_date: {
-          userId: validatedData.userId,
-          date: normalizedDate,
-        },
-      },
-      // A single-day edit made by a person is an override by definition:
-      // it must survive the next rotation regeneration.
-      update: {
-        shiftType: validatedData.shiftType,
-        customShiftCode: validatedData.customShiftCode || null,
-        isOverride: validatedData.isOverride ?? true,
-        overrideReason: validatedData.overrideReason ?? null,
-        notes: validatedData.notes ?? null,
-        crewId: user.crewId,
-      },
-      create: {
+    // A single-day edit made by a person is an override by definition
+    const schedule = await setShiftOverride(
+      { organizationId: session.user.organizationId, userId: session.user.id, ipAddress: getClientIP(request) },
+      {
         userId: validatedData.userId,
-        date: normalizedDate,
+        date: validatedData.date,
         shiftType: validatedData.shiftType,
-        customShiftCode: validatedData.customShiftCode || null,
-        isOverride: validatedData.isOverride ?? true,
-        overrideReason: validatedData.overrideReason ?? null,
-        notes: validatedData.notes ?? null,
-        crewId: user.crewId,
-      },
-      include: {
-        user: {
-          select: { id: true, name: true },
-        },
-      },
-    })
-
-    return NextResponse.json(
-      { success: true, data: schedule, message: "Schedule updated" },
-      { status: 200 }
+        customShiftCode: validatedData.customShiftCode,
+        reason: validatedData.overrideReason,
+        notes: validatedData.notes,
+      }
     )
+
+    return apiOk(schedule, { message: "Schedule updated" })
   } catch (error) {
-    console.error("Error creating schedule:", error)
-
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Invalid input data", details: error.issues },
-        { status: 400 }
-      )
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json({
-      error: "Failed to create schedule",
-      details: errorMessage
-    }, { status: 500 })
+    return handleRouteError(error, "Failed to create schedule")
   }
 }
 

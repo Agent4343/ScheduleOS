@@ -4,10 +4,11 @@ import { requireAuth } from "@/lib/api-auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
 import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/timezone"
-import { timeOffTypeToShiftType } from "@/lib/scheduling"
-import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
-import { logAudit, AuditAction } from "@/lib/audit-log"
+import { sendEmail, timeOffRequestEmail } from "@/lib/email"
+
 import { getClientIP } from "@/lib/rate-limit"
+import { reviewTimeOffRequest } from "@/lib/services/time-off"
+import { apiError, apiOk, handleRouteError, parseBody } from "@/lib/api-helpers"
 
 export async function GET(request: NextRequest) {
   try {
@@ -239,139 +240,23 @@ export async function PATCH(request: NextRequest) {
     if (auth.error) return auth.error
     const { session } = auth
 
-    const { searchParams } = new URL(request.url)
-    const requestId = searchParams.get("id")
-
+    const requestId = new URL(request.url).searchParams.get("id")
     if (!requestId) {
-      return NextResponse.json({ error: "Request ID is required" }, { status: 400 })
+      return apiError("Request ID is required", 400)
     }
 
-    const body = await request.json()
-    const validatedData = updateTimeOffRequestSchema.parse(body)
+    const validatedData = await parseBody(updateTimeOffRequestSchema, request)
 
-    // Verify request belongs to organization
-    const existingRequest = await prisma.timeOffRequest.findFirst({
-      where: {
-        id: requestId,
-        user: {
-          organizationId: session.user.organizationId,
-        },
-      },
-      include: {
-        user: true,
-      },
-    })
+    // All the rules (org scoping, no self-approval, PENDING only, atomic
+    // schedule update, audit, notification, email) live in the service and
+    // are shared with the AI assistant.
+    const { request: updatedRequest } = await reviewTimeOffRequest(
+      { organizationId: session.user.organizationId, userId: session.user.id, ipAddress: getClientIP(request) },
+      { requestId, status: validatedData.status, adminNotes: validatedData.adminNotes }
+    )
 
-    if (!existingRequest) {
-      return NextResponse.json({ error: "Request not found" }, { status: 404 })
-    }
-
-    // Prevent supervisors from approving their own requests
-    if (existingRequest.userId === session.user.id) {
-      return NextResponse.json(
-        { error: "You cannot approve your own time-off request" },
-        { status: 403 }
-      )
-    }
-
-    if (existingRequest.status !== "PENDING") {
-      return NextResponse.json(
-        { error: "Only pending requests can be updated" },
-        { status: 400 }
-      )
-    }
-
-    // Status change and the schedule rows it implies are one unit: a failure
-    // part-way through must not leave an APPROVED request with a half-applied
-    // vacation on the calendar.
-    const updatedRequest = await prisma.$transaction(async (tx) => {
-      const updated = await tx.timeOffRequest.update({
-        where: { id: requestId },
-        data: {
-          status: validatedData.status,
-          adminNotes: validatedData.adminNotes,
-          approvedById: session.user.id,
-          approvedAt: new Date(),
-        },
-      })
-
-      if (validatedData.status === "APPROVED") {
-        const shiftType = timeOffTypeToShiftType(existingRequest.type)
-        const overrideReason = `Time off: ${existingRequest.type}`
-
-        for (const date of getDateRange(existingRequest.startDate, existingRequest.endDate)) {
-          await tx.schedule.upsert({
-            where: { userId_date: { userId: existingRequest.userId, date } },
-            update: { shiftType, isOverride: true, overrideReason },
-            create: {
-              userId: existingRequest.userId,
-              date,
-              shiftType,
-              crewId: existingRequest.user.crewId,
-              isOverride: true,
-              overrideReason,
-            },
-          })
-        }
-      }
-
-      return updated
-    })
-
-    // Log audit event
-    await logAudit({
-      action: validatedData.status === "APPROVED" ? AuditAction.TIME_OFF_APPROVED : AuditAction.TIME_OFF_DENIED,
-      userId: session.user.id,
-      organizationId: session.user.organizationId,
-      targetId: requestId,
-      targetType: "TimeOffRequest",
-      metadata: {
-        requestUserId: existingRequest.userId,
-        startDate: existingRequest.startDate,
-        endDate: existingRequest.endDate,
-        type: existingRequest.type,
-        adminNotes: validatedData.adminNotes,
-      },
-      ipAddress: getClientIP(request),
-    })
-
-    // Notify user
-    await prisma.notification.create({
-      data: {
-        userId: existingRequest.userId,
-        type: validatedData.status === "APPROVED" ? "TIME_OFF_APPROVED" : "TIME_OFF_DENIED",
-        title: `Time Off Request ${validatedData.status === "APPROVED" ? "Approved" : "Denied"}`,
-        message: validatedData.status === "APPROVED"
-          ? `Your time off request has been approved.`
-          : `Your time off request has been denied.${validatedData.adminNotes ? ` Reason: ${validatedData.adminNotes}` : ""}`,
-        data: { requestId },
-      },
-    })
-
-    // Send email notification to worker
-    if (existingRequest.user.email) {
-      const emailHtml = timeOffResponseEmail(
-        existingRequest.user.name || "Worker",
-        validatedData.status,
-        existingRequest.type,
-        existingRequest.startDate.toLocaleDateString(),
-        existingRequest.endDate.toLocaleDateString(),
-        validatedData.adminNotes
-      )
-      await sendEmail({
-        to: existingRequest.user.email,
-        subject: `Your Time-Off Request has been ${validatedData.status === "APPROVED" ? "Approved" : "Denied"}`,
-        html: emailHtml,
-      })
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: updatedRequest,
-      message: `Request ${validatedData.status.toLowerCase()}`,
-    })
+    return apiOk(updatedRequest, { message: `Request ${validatedData.status.toLowerCase()}` })
   } catch (error) {
-    console.error("Error updating time off request:", error)
-    return NextResponse.json({ error: "Failed to update request" }, { status: 500 })
+    return handleRouteError(error, "Failed to update request")
   }
 }
