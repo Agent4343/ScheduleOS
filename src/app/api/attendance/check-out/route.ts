@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
-import { getTodayUTC } from "@/lib/timezone"
 
 // POST - Check out a worker
 export async function POST(request: NextRequest) {
@@ -34,19 +33,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "You can only check yourself out" }, { status: 403 })
     }
 
-    const today = getTodayUTC()
-
-    // Find today's check-in
-    const checkIn = await prisma.shiftCheckIn.findUnique({
-      where: { userId_date: { userId, date: today } },
+    // Close the worker's open check-in, whichever calendar day it started on.
+    // Looking up "today's" row broke every night shift that crossed midnight.
+    const checkIn = await prisma.shiftCheckIn.findFirst({
+      where: { userId, checkOutTime: null },
+      orderBy: { checkInTime: "desc" },
     })
 
     if (!checkIn) {
-      return NextResponse.json({ error: "No check-in found for today" }, { status: 404 })
-    }
-
-    if (checkIn.checkOutTime) {
-      return NextResponse.json({ error: "Already checked out today" }, { status: 409 })
+      return NextResponse.json({ error: "No open check-in found" }, { status: 404 })
     }
 
     const now = new Date()

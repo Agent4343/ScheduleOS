@@ -36,7 +36,7 @@ export default function AttendancePage() {
   const { data: session } = useSession()
   const [records, setRecords] = useState<CheckInRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString("en-CA")) // local calendar date, not UTC
   const [selfChecking, setSelfChecking] = useState(false)
 
   const isAdminOrSupervisor = session?.user?.role === "ADMIN" || session?.user?.role === "SUPERVISOR"

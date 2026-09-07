@@ -208,6 +208,8 @@ model RotationPattern {
 
 model ShiftCheckIn {
   id             String    @id @default(cuid())
+  /// Business date: the calendar day the check-in happened on in the
+  /// organization's timezone (see businessDateInTimeZone). One per user per day.
   date           DateTime  @db.Date
   checkInTime    DateTime
   checkOutTime   DateTime?

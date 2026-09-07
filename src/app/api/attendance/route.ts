@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
-import { getTodayUTC } from "@/lib/timezone"
+import { businessDateInTimeZone, todayInTimeZone, toUTCDate } from "@/lib/timezone"
+import { getOrganizationTimeZone } from "@/lib/org-timezone"
 
 // GET - List attendance records
 export async function GET(request: NextRequest) {
@@ -19,7 +20,10 @@ export async function GET(request: NextRequest) {
       ? session.user.id
       : userId || undefined
 
-    const targetDate = date ? new Date(date) : getTodayUTC()
+    // `date` is a business date (YYYY-MM-DD in the organization's timezone)
+    const targetDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? toUTCDate(date)
+      : todayInTimeZone(await getOrganizationTimeZone(session.user.organizationId))
 
     const checkIns = await prisma.shiftCheckIn.findMany({
       where: {
@@ -80,14 +84,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "You can only check yourself in" }, { status: 403 })
     }
 
-    const today = getTodayUTC()
     const now = new Date()
+    // The check-in belongs to the calendar day it happened on in the
+    // organization's timezone, not the server's. A 21:00 Newfoundland check-in
+    // is already "tomorrow" in UTC and must not collide with tomorrow's shift.
+    const timeZone = await getOrganizationTimeZone(session.user.organizationId)
+    const businessDate = businessDateInTimeZone(now, timeZone)
 
-    // Check if already checked in today
-    const existing = await prisma.shiftCheckIn.findUnique({
-      where: { userId_date: { userId, date: today } },
+    // A worker can only be checked in once at a time
+    const open = await prisma.shiftCheckIn.findFirst({
+      where: { userId, checkOutTime: null },
+      orderBy: { checkInTime: "desc" },
     })
+    if (open) {
+      return NextResponse.json(
+        { error: "Already checked in — check out first", data: open },
+        { status: 409 }
+      )
+    }
 
+    // ...and only once per business day
+    const existing = await prisma.shiftCheckIn.findUnique({
+      where: { userId_date: { userId, date: businessDate } },
+    })
     if (existing) {
       return NextResponse.json(
         { error: "Already checked in today", data: existing },
@@ -98,7 +117,7 @@ export async function POST(request: NextRequest) {
     const checkIn = await prisma.shiftCheckIn.create({
       data: {
         userId,
-        date: today,
+        date: businessDate,
         checkInTime: now,
         notes,
         scannedById: session.user.id !== userId ? session.user.id : null,

@@ -26,8 +26,46 @@ export function toDateString(date: Date): string {
  * Get today's date as a UTC midnight Date object.
  */
 export function getTodayUTC(): Date {
-  const now = new Date()
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0))
+  // UTC getters: the old local getters made "today" depend on the server's
+  // timezone. Prefer businessDateInTimeZone() when an organization is known.
+  return normalizeToUTCMidnight(new Date())
+}
+
+/** Default when an organization has no timezone setting. */
+export const DEFAULT_TIMEZONE = "America/St_Johns"
+
+/** True if `timeZone` is an IANA name this runtime understands. */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    Intl.DateTimeFormat("en-CA", { timeZone })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The calendar date on which `instant` falls in `timeZone`, returned as a
+ * UTC-midnight Date (the storage convention for date-only columns).
+ *
+ * A night-shift check-in at 21:00 Newfoundland time on March 2 is
+ * 00:30 UTC on March 3; this returns March 2.
+ */
+export function businessDateInTimeZone(instant: Date, timeZone: string): Date {
+  const tz = isValidTimeZone(timeZone) ? timeZone : "UTC"
+  // en-CA formats as YYYY-MM-DD
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(instant)
+  return toUTCDate(ymd)
+}
+
+/** Today's calendar date in `timeZone`, as a UTC-midnight Date. */
+export function todayInTimeZone(timeZone: string): Date {
+  return businessDateInTimeZone(new Date(), timeZone)
 }
 
 /**
