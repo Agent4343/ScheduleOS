@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/api-auth"
 import { updateUserSchema } from "@/lib/validations"
 import { logAudit, AuditAction } from "@/lib/audit-log"
 import { getClientIP } from "@/lib/rate-limit"
+import { checkUserChangeAllowed, wouldRemoveLastAdmin } from "@/lib/user-permissions"
 
 export async function GET(
   request: NextRequest,
@@ -66,7 +67,7 @@ export async function PATCH(
         id: params.id,
         organizationId: session.user.organizationId,
       },
-      select: { id: true },
+      select: { id: true, role: true, status: true },
     })
 
     if (!existingUser) {
@@ -75,6 +76,43 @@ export async function PATCH(
 
     const body = await request.json()
     const validatedData = updateUserSchema.parse(body)
+
+    // Role and status changes are restricted (see user-permissions.ts)
+    const denied = checkUserChangeAllowed({
+      actorId: session.user.id,
+      actorRole: session.user.role,
+      targetId: existingUser.id,
+      targetRole: existingUser.role,
+      newRole: validatedData.role,
+      newStatus: validatedData.status,
+    })
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 })
+    }
+
+    // Never leave the organization without an active admin
+    if (validatedData.role !== undefined || validatedData.status !== undefined) {
+      const activeAdminCount = await prisma.user.count({
+        where: {
+          organizationId: session.user.organizationId,
+          role: "ADMIN",
+          status: "ACTIVE",
+        },
+      })
+      const removesLastAdmin = wouldRemoveLastAdmin({
+        targetRole: existingUser.role,
+        targetStatus: existingUser.status,
+        newRole: validatedData.role,
+        newStatus: validatedData.status,
+        activeAdminCount,
+      })
+      if (removesLastAdmin) {
+        return NextResponse.json(
+          { error: "Cannot remove the only active admin. Assign another admin first." },
+          { status: 400 }
+        )
+      }
+    }
 
     // Verify crew belongs to organization if provided
     if (validatedData.crewId) {
@@ -131,7 +169,11 @@ export async function PATCH(
       targetId: params.id,
       targetType: "User",
       metadata: {
-        changes: validatedData,
+        // updateUserSchema has no password field, so nothing secret lands here.
+        // Record which fields changed rather than every value.
+        changedFields: Object.keys(validatedData),
+        ...(validatedData.role !== undefined && { role: validatedData.role }),
+        ...(validatedData.status !== undefined && { status: validatedData.status }),
       },
       ipAddress: getClientIP(request),
     })

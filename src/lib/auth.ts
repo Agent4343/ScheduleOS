@@ -32,13 +32,28 @@ declare module "next-auth/jwt" {
     id: string
     role: UserRole
     organizationId: string | null
+    /** Epoch ms of the last time role/status/org were re-read from the DB */
+    refreshedAt?: number
+    /** Set when the account no longer exists or is not ACTIVE */
+    invalidated?: boolean
   }
 }
+
+/** How long a session may live before the user must sign in again. */
+export const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
+
+/**
+ * How often the JWT re-reads role, status and organization from the database.
+ * A terminated or demoted user is locked out within this window instead of
+ * keeping their old claims until the token expires.
+ */
+export const CLAIMS_REFRESH_INTERVAL_MS = 60 * 1000
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as NextAuthOptions["adapter"],
   session: {
     strategy: "jwt",
+    maxAge: SESSION_MAX_AGE_SECONDS,
   },
   pages: {
     signIn: "/login",
@@ -106,28 +121,50 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        // Fresh sign-in: claims come straight from authorize()
         token.id = user.id
         token.role = user.role
         token.organizationId = user.organizationId
-      } else if (token.id && !token.organizationId) {
-        // Refresh organizationId from database if missing from token
-        // This handles cases where users signed in before organizationId was added to JWT
-        const dbUser = await prisma.user.findUnique({
-          where: { id: token.id },
-          select: { organizationId: true, role: true },
-        })
-        if (dbUser) {
-          token.organizationId = dbUser.organizationId
-          token.role = dbUser.role
-        }
+        token.refreshedAt = Date.now()
+        token.invalidated = false
+        return token
       }
+
+      if (!token.id || token.invalidated) {
+        return token
+      }
+
+      // Periodically re-read the claims so role changes, terminations and
+      // deletions take effect without waiting for the token to expire.
+      const stale =
+        !token.refreshedAt || Date.now() - token.refreshedAt > CLAIMS_REFRESH_INTERVAL_MS
+      if (!stale) {
+        return token
+      }
+
+      const dbUser = await prisma.user.findUnique({
+        where: { id: token.id },
+        select: { organizationId: true, role: true, status: true },
+      })
+
+      if (!dbUser || dbUser.status !== "ACTIVE") {
+        // Account gone or deactivated: strip the claims so requireAuth()
+        // returns 401 and the middleware sends the user back to /login.
+        token.invalidated = true
+        token.organizationId = null
+        return token
+      }
+
+      token.organizationId = dbUser.organizationId
+      token.role = dbUser.role
+      token.refreshedAt = Date.now()
       return token
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id
         session.user.role = token.role
-        session.user.organizationId = token.organizationId
+        session.user.organizationId = token.invalidated ? null : token.organizationId
       }
       return session
     },

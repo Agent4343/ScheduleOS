@@ -65,6 +65,12 @@ export default withAuth(
           "/login",
           "/register",
           "/pricing",
+          // Legal + contact pages are linked from the landing page, footer
+          // and cookie banner, so they must be reachable when logged out.
+          "/contact",
+          "/terms",
+          "/privacy",
+          "/cookies",
           "/api/auth",
           "/api/health",
           "/api/setup",
@@ -73,16 +79,17 @@ export default withAuth(
         ]
 
         // Check if the path is public
-        const isPublicPath = publicPaths.some(
-          (path) => pathname.startsWith(path) || pathname === "/"
-        )
+        const isPublicPath =
+          pathname === "/" || publicPaths.some((path) => pathname.startsWith(path))
 
         if (isPublicPath) {
           return true
         }
 
-        // Require token for protected paths
-        return !!token
+        // Require a live token for protected paths. A token is marked
+        // invalidated by the jwt callback when the account was deleted or
+        // is no longer ACTIVE (see src/lib/auth.ts).
+        return !!token && !token.invalidated
       },
     },
   }

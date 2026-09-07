@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
 import { updateOrganizationSchema } from "@/lib/validations"
+import { mergeOrganizationSettings } from "@/lib/organization-settings"
 
 export async function GET() {
   try {
@@ -42,12 +43,27 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
     const validatedData = updateOrganizationSchema.parse(body)
 
-    const organization = await prisma.organization.update({
-      where: { id: session.user.organizationId },
-      data: {
-        ...(validatedData.name && { name: validatedData.name }),
-        ...(validatedData.settings && { settings: validatedData.settings }),
-      },
+    // Settings are a partial update merged over the stored value, so a client
+    // that sends only the keys it knows about never erases the rest (billing
+    // fields written by the Stripe webhook, shift colours, auto-checkout, ...).
+    const organization = await prisma.$transaction(async (tx) => {
+      const current = await tx.organization.findUnique({
+        where: { id: session.user.organizationId },
+        select: { settings: true },
+      })
+      if (!current) {
+        throw new Error("Organization not found")
+      }
+
+      return tx.organization.update({
+        where: { id: session.user.organizationId },
+        data: {
+          ...(validatedData.name && { name: validatedData.name }),
+          ...(validatedData.settings && {
+            settings: mergeOrganizationSettings(current.settings, validatedData.settings),
+          }),
+        },
+      })
     })
 
     return NextResponse.json({
@@ -57,6 +73,11 @@ export async function PATCH(request: NextRequest) {
     })
   } catch (error) {
     console.error("Error updating organization:", error)
+
+    if (error instanceof Error && error.name === "ZodError") {
+      return NextResponse.json({ error: "Invalid input data" }, { status: 400 })
+    }
+
     return NextResponse.json({ error: "Failed to update organization" }, { status: 500 })
   }
 }

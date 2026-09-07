@@ -29,43 +29,90 @@ export const registerSchema = z.object({
 })
 
 // Organization validations
+
+const hexColor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format")
+
+/**
+ * Every organization setting an admin may edit through the API.
+ *
+ * Deliberately no defaults: this schema is used for PATCH, and a default
+ * would silently overwrite a stored value whenever the client omits a key.
+ * Unknown keys are stripped, which is what keeps billing fields
+ * (see PROTECTED_ORGANIZATION_SETTINGS) out of reach of this endpoint.
+ */
+export const organizationSettingsSchema = z.object({
+  timezone: z.string().min(1).max(64).optional(),
+  weekStartsOn: z.number().int().min(0).max(6).optional(),
+  dateFormat: z.string().max(32).optional(),
+  minStaffingAlertEnabled: z.boolean().optional(),
+  emailNotificationsEnabled: z.boolean().optional(),
+  smsNotificationsEnabled: z.boolean().optional(),
+  autoCheckoutEnabled: z.boolean().optional(),
+  autoCheckoutHours: z.number().int().min(1).max(24).optional(),
+  minStaffOperators: z.number().int().min(0).max(1000).optional(),
+  minStaffOnshoreControlRoom: z.number().int().min(0).max(1000).optional(),
+  shiftColors: z
+    .record(z.string().max(32), z.object({ bg: hexColor, text: hexColor }))
+    .optional(),
+})
+
+export type OrganizationSettingsInput = z.infer<typeof organizationSettingsSchema>
+
+/**
+ * Settings keys written by the Stripe webhook. They are never accepted from
+ * a user request and are always carried over from the stored value.
+ */
+export const PROTECTED_ORGANIZATION_SETTINGS = [
+  "plan",
+  "stripeCustomerId",
+  "stripeSubscriptionId",
+  "subscriptionStatus",
+] as const
+
 export const createOrganizationSchema = z.object({
   name: z.string()
     .min(2, "Organization name must be at least 2 characters")
     .max(100, "Organization name must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_&.,']+$/, "Organization name contains invalid characters"),
-  settings: z.object({
-    timezone: z.string().default("America/St_Johns"),
-    weekStartsOn: z.number().min(0).max(6).default(0),
-    minStaffingAlertEnabled: z.boolean().default(true),
-    emailNotificationsEnabled: z.boolean().default(true),
-    smsNotificationsEnabled: z.boolean().default(false),
-  }).optional(),
+  settings: organizationSettingsSchema.optional(),
 })
 
 export const updateOrganizationSchema = createOrganizationSchema.partial()
 
 // User validations
-export const createUserSchema = z.object({
+
+// Fields shared by create and update, with no defaults. Defaults live only on
+// the create schema: Zod's .partial() keeps .default(), so deriving the update
+// schema from the create schema would reset role/status/positionType on every
+// PATCH that omitted them.
+const userFieldsSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string()
     .min(2, "Name must be at least 2 characters")
     .max(100, "Name must be at most 100 characters")
     .regex(/^[a-zA-Z\s\-'.]+$/, "Name contains invalid characters"),
-  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
-  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
+  role: z.nativeEnum(UserRole),
+  status: z.nativeEnum(UserStatus),
   position: z.string()
     .max(100, "Position must be at most 100 characters")
     .regex(/^[a-zA-Z0-9\s\-_.,'&/()]+$/, "Position contains invalid characters")
     .optional(),
-  positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
+  positionType: z.nativeEnum(PositionType),
   phone: z.string().optional(),
   crewId: z.string().optional(),
   hireDate: z.coerce.date().optional(),
+})
+
+export const createUserSchema = userFieldsSchema.extend({
+  role: z.nativeEnum(UserRole).default(UserRole.WORKER),
+  status: z.nativeEnum(UserStatus).default(UserStatus.ACTIVE),
+  positionType: z.nativeEnum(PositionType).default(PositionType.OTHER),
   password: z.string().min(8).optional(),
 })
 
-export const updateUserSchema = createUserSchema.partial()
+// Password changes go through /api/auth/change-password; never through a
+// general update, where the value would end up in the audit log.
+export const updateUserSchema = userFieldsSchema.partial()
 
 // Crew validations
 export const createCrewSchema = z.object({

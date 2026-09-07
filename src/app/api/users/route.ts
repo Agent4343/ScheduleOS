@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
 import { hashPassword } from "@/lib/auth"
 import { createUserSchema } from "@/lib/validations"
+import { checkUserCreateAllowed } from "@/lib/user-permissions"
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,6 +60,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const validatedData = createUserSchema.parse(body)
+
+    // Supervisors may only create worker accounts
+    const denied = checkUserCreateAllowed(session.user.role, validatedData.role)
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 })
+    }
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({

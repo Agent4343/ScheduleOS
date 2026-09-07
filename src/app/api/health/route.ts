@@ -2,10 +2,9 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   const response: {
-    status: string
+    status: "healthy" | "unhealthy"
     timestamp: string
-    database?: string
-    error?: string
+    database?: "connected" | "disconnected" | "not_configured"
   } = {
     status: "healthy",
     timestamp: new Date().toISOString(),
@@ -18,14 +17,16 @@ export async function GET() {
       await prisma.$queryRaw`SELECT 1`
       response.database = "connected"
     } catch (error) {
+      // Log the detail server-side only: the raw error can include the
+      // connection string's host and user. This endpoint is public.
       console.error("Database check failed:", error)
       response.database = "disconnected"
-      response.error = error instanceof Error ? error.message : "Unknown error"
-      // Still return 200 - app is running, just database is not ready
+      response.status = "unhealthy"
     }
   } else {
     response.database = "not_configured"
   }
 
-  return NextResponse.json(response)
+  // 503 lets the platform healthcheck fail a deploy whose database is unreachable
+  return NextResponse.json(response, { status: response.status === "healthy" ? 200 : 503 })
 }

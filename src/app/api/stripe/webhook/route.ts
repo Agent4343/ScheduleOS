@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getStripe } from "@/lib/stripe"
 import { prisma } from "@/lib/prisma"
 import Stripe from "stripe"
+import { mergeBillingSettings } from "@/lib/organization-settings"
 
 export async function POST(request: NextRequest) {
   const body = await request.text()
@@ -36,20 +37,24 @@ export async function POST(request: NextRequest) {
 
         // Store plan info on the organization if we can match by email
         if (session.customer_email) {
+          // Emails are stored lowercased at registration
           const user = await prisma.user.findUnique({
-            where: { email: session.customer_email },
+            where: { email: session.customer_email.toLowerCase() },
+            include: { organization: { select: { id: true, settings: true } } },
           })
 
-          if (user?.organizationId) {
+          if (user?.organization) {
             await prisma.organization.update({
-              where: { id: user.organizationId },
+              where: { id: user.organization.id },
               data: {
-                settings: {
+                // Merge, don't replace: the org's timezone, shift colours etc.
+                // live in the same JSON column.
+                settings: mergeBillingSettings(user.organization.settings, {
                   plan,
                   stripeCustomerId: session.customer as string,
                   stripeSubscriptionId: subscriptionId,
                   subscriptionStatus: "trialing",
-                },
+                }),
               },
             })
           }

@@ -1,59 +1,80 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
+import { timingSafeEqual } from "crypto"
 import { prisma } from "@/lib/prisma"
-import { authOptions } from "@/lib/auth"
+import { requireAuth } from "@/lib/api-auth"
+
+/**
+ * Constant-time comparison of a request-supplied secret against the
+ * configured one. Returns false when the secret isn't configured at all.
+ */
+function isValidCronSecret(supplied: string | null): boolean {
+  const expected = process.env.CRON_SECRET
+  if (!expected || !supplied) return false
+  const a = Buffer.from(supplied)
+  const b = Buffer.from(expected)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/**
+ * Close open check-ins older than the organization's auto-checkout window.
+ * Returns the number of check-ins closed.
+ */
+async function autoCheckoutOrganization(org: {
+  id: string
+  settings: unknown
+}): Promise<number> {
+  const settings = (org.settings ?? {}) as Record<string, unknown>
+  const hours = Number(settings.autoCheckoutHours)
+  if (!settings.autoCheckoutEnabled || !Number.isFinite(hours) || hours <= 0) {
+    return 0
+  }
+
+  const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000)
+
+  const result = await prisma.shiftCheckIn.updateMany({
+    where: {
+      user: { organizationId: org.id },
+      checkOutTime: null,
+      checkInTime: { lte: cutoffTime },
+    },
+    data: {
+      checkOutTime: new Date(),
+      autoCheckedOut: true,
+    },
+  })
+
+  return result.count
+}
 
 // POST - Auto-checkout workers after shift duration
-// Can be called by a cron job or manually by an admin
+//
+// Two callers:
+//  - a cron job carrying `x-cron-secret`, which runs across every organization
+//  - an ADMIN clicking "run now", which only touches their own organization
 export async function POST(request: NextRequest) {
   try {
-    // Allow both authenticated admin calls and cron calls with secret
-    const cronSecret = request.headers.get("x-cron-secret")
-    const isAuthorizedCron = cronSecret === process.env.CRON_SECRET
+    const isCron = isValidCronSecret(request.headers.get("x-cron-secret"))
 
-    if (!isAuthorizedCron) {
-      const session = await getServerSession(authOptions)
-      if (!session?.user?.organizationId || session.user.role !== "ADMIN") {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
+    let organizations: Array<{ id: string; settings: unknown }>
+
+    if (isCron) {
+      organizations = await prisma.organization.findMany({
+        select: { id: true, settings: true },
+      })
+    } else {
+      const auth = await requireAuth({ roles: ["ADMIN"] })
+      if (auth.error) return auth.error
+
+      const org = await prisma.organization.findUnique({
+        where: { id: auth.session.user.organizationId },
+        select: { id: true, settings: true },
+      })
+      organizations = org ? [org] : []
     }
 
-    // Find all organizations with auto-checkout enabled
-    const organizations = await prisma.organization.findMany({
-      select: { id: true, settings: true },
-    })
-
     let totalCheckedOut = 0
-
     for (const org of organizations) {
-      const settings = org.settings as Record<string, unknown> | null
-      if (!settings?.autoCheckoutEnabled || !settings?.autoCheckoutHours) continue
-
-      const hours = settings.autoCheckoutHours as number
-      const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000)
-
-      // Find check-ins that are still open and older than the cutoff
-      const openCheckIns = await prisma.shiftCheckIn.findMany({
-        where: {
-          user: { organizationId: org.id },
-          checkOutTime: null,
-          checkInTime: { lte: cutoffTime },
-        },
-      })
-
-      if (openCheckIns.length > 0) {
-        await prisma.shiftCheckIn.updateMany({
-          where: {
-            id: { in: openCheckIns.map((c) => c.id) },
-          },
-          data: {
-            checkOutTime: new Date(),
-            autoCheckedOut: true,
-          },
-        })
-
-        totalCheckedOut += openCheckIns.length
-      }
+      totalCheckedOut += await autoCheckoutOrganization(org)
     }
 
     return NextResponse.json({
