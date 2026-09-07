@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 import { ShiftType, UserStatus, RequestStatus } from "@/types"
+import { timeOffTypeToShiftType } from "@/lib/scheduling"
+import { getDateRange } from "@/lib/timezone"
 
 // Tool definitions for the AI assistant
 const tools: Anthropic.Tool[] = [
@@ -309,7 +311,8 @@ interface ToolInput {
 async function executeTool(
   name: string,
   input: ToolInput,
-  organizationId: string
+  organizationId: string,
+  userId: string
 ): Promise<string> {
   try {
     switch (name) {
@@ -571,46 +574,45 @@ async function executeTool(
           return "Time off request not found or access denied."
         }
 
-        const updateData: { status: RequestStatus; reviewNotes?: string; reviewedAt: Date } = {
-          status: input.status as RequestStatus,
-          reviewedAt: new Date(),
-        }
-        if (input.reason) {
-          updateData.reviewNotes = input.reason
+        if (existingRequest.status !== "PENDING") {
+          return "Only pending requests can be approved or denied."
         }
 
-        const request = await prisma.timeOffRequest.update({
-          where: { id: input.requestId! },
-          data: updateData,
-          include: { user: true },
-        })
+        // Same rules as PATCH /api/time-off: status + schedule rows in one
+        // transaction, every day marked as an override so regeneration keeps it.
+        const request = await prisma.$transaction(async (tx) => {
+          const updated = await tx.timeOffRequest.update({
+            where: { id: input.requestId! },
+            data: {
+              status: input.status as RequestStatus,
+              adminNotes: input.reason ?? undefined,
+              approvedById: userId,
+              approvedAt: new Date(),
+            },
+            include: { user: { select: { name: true, crewId: true } } },
+          })
 
-        // If approved, update the schedules
-        if (input.status === "APPROVED") {
-          const startDate = new Date(request.startDate)
-          const endDate = new Date(request.endDate)
-          const currentDate = new Date(startDate)
-
-          while (currentDate <= endDate) {
-            await prisma.schedule.upsert({
-              where: {
-                userId_date: {
-                  userId: request.userId,
-                  date: new Date(currentDate),
+          if (input.status === "APPROVED") {
+            const shiftType = timeOffTypeToShiftType(updated.type)
+            const overrideReason = `Time off: ${updated.type}`
+            for (const date of getDateRange(updated.startDate, updated.endDate)) {
+              await tx.schedule.upsert({
+                where: { userId_date: { userId: updated.userId, date } },
+                update: { shiftType, isOverride: true, overrideReason },
+                create: {
+                  userId: updated.userId,
+                  date,
+                  shiftType,
+                  crewId: updated.user.crewId,
+                  isOverride: true,
+                  overrideReason,
                 },
-              },
-              update: {
-                shiftType: request.type === "VACATION" ? "VACATION" : "LEAVE",
-              },
-              create: {
-                userId: request.userId,
-                date: new Date(currentDate),
-                shiftType: request.type === "VACATION" ? "VACATION" : "LEAVE",
-              },
-            })
-            currentDate.setDate(currentDate.getDate() + 1)
+              })
+            }
           }
-        }
+
+          return updated
+        })
 
         return `Time off request for ${request.user.name} has been ${input.status!.toLowerCase()}.${input.status === "APPROVED" ? " Schedule has been updated." : ""}`
       }
@@ -1060,7 +1062,8 @@ Important: When the user asks to change a schedule, you must:
         const result = await executeTool(
           toolUse.name,
           toolUse.input as ToolInput,
-          session.user.organizationId
+          session.user.organizationId,
+          session.user.id
         )
 
         toolCalls.push({

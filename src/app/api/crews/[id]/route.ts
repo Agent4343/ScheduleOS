@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
+import { updateCrewSchema } from "@/lib/validations"
+import { crewPatternSelect, withCurrentPhase } from "@/lib/crew-phase"
+import { getTodayUTC } from "@/lib/timezone"
 
 export async function GET(
   _request: NextRequest,
@@ -19,15 +22,7 @@ export async function GET(
         organizationId: session.user.organizationId,
       },
       include: {
-        rotationPattern: {
-          select: {
-            id: true,
-            name: true,
-            daysOn: true,
-            daysOff: true,
-            includesNights: true,
-          },
-        },
+        rotationPattern: { select: crewPatternSelect },
         _count: {
           select: { workers: true },
         },
@@ -38,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, data: crew })
+    return NextResponse.json({ success: true, data: withCurrentPhase(crew) })
   } catch (error) {
     console.error("Error fetching crew:", error)
     return NextResponse.json({ error: "Failed to fetch crew" }, { status: 500 })
@@ -68,7 +63,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 })
     }
 
-    const body = await request.json()
+    const body = updateCrewSchema.parse(await request.json())
 
     // Verify rotation pattern if provided
     if (body.rotationPatternId) {
@@ -102,34 +97,61 @@ export async function PATCH(
       }
     }
 
+    // Only touch fields that were sent. Changing the pattern clears the anchor:
+    // the crew is re-anchored by its next schedule generation.
+    const patternChanged =
+      body.rotationPatternId !== undefined && body.rotationPatternId !== existingCrew.rotationPatternId
+
+    // Editing the phase of an anchored crew means "as of today, the crew is on
+    // day N" — so re-anchor at today rather than letting the stored number and
+    // the derived one disagree.
+    const existingWithPattern = await prisma.crew.findUnique({
+      where: { id },
+      select: {
+        currentPhase: true,
+        rotationAnchorDate: true,
+        anchorPhase: true,
+        anchorStartingShift: true,
+        rotationPattern: { select: crewPatternSelect },
+      },
+    })
+    const today = getTodayUTC()
+    const derivedPhase = existingWithPattern ? withCurrentPhase(existingWithPattern, today).currentPhase : null
+    const reanchor =
+      !patternChanged &&
+      body.currentPhase !== undefined &&
+      existingCrew.rotationAnchorDate !== null &&
+      body.currentPhase !== derivedPhase
+
     const crew = await prisma.crew.update({
       where: { id },
       data: {
-        name: body.name,
-        description: body.description,
-        color: body.color,
-        rotationPatternId: body.rotationPatternId || null,
-        currentPhase: body.currentPhase ?? existingCrew.currentPhase,
+        ...(reanchor && { rotationAnchorDate: today, anchorPhase: body.currentPhase }),
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.description !== undefined && { description: body.description }),
+        ...(body.color !== undefined && { color: body.color }),
+        ...(body.rotationPatternId !== undefined && { rotationPatternId: body.rotationPatternId || null }),
+        ...(body.currentPhase !== undefined && { currentPhase: body.currentPhase }),
+        ...(patternChanged && {
+          rotationAnchorDate: null,
+          anchorPhase: 0,
+          anchorStartingShift: null,
+        }),
       },
       include: {
-        rotationPattern: {
-          select: {
-            id: true,
-            name: true,
-            daysOn: true,
-            daysOff: true,
-            includesNights: true,
-          },
-        },
+        rotationPattern: { select: crewPatternSelect },
         _count: {
           select: { workers: true },
         },
       },
     })
 
-    return NextResponse.json({ success: true, data: crew })
+    return NextResponse.json({ success: true, data: withCurrentPhase(crew) })
   } catch (error) {
     console.error("Error updating crew:", error)
+    if (error instanceof Error && error.name === "ZodError") {
+      return NextResponse.json({ error: "Invalid input data" }, { status: 400 })
+    }
     return NextResponse.json({ error: "Failed to update crew" }, { status: 500 })
   }
 }

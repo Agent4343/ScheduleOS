@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
 import { createCrewSchema } from "@/lib/validations"
+import { crewPatternSelect, withCurrentPhase } from "@/lib/crew-phase"
 
 export async function GET(_request: NextRequest) {
   try {
@@ -12,15 +13,7 @@ export async function GET(_request: NextRequest) {
     const crews = await prisma.crew.findMany({
       where: { organizationId: session.user.organizationId },
       include: {
-        rotationPattern: {
-          select: {
-            id: true,
-            name: true,
-            daysOn: true,
-            daysOff: true,
-            includesNights: true,
-          },
-        },
+        rotationPattern: { select: crewPatternSelect },
         _count: {
           select: { workers: true },
         },
@@ -28,7 +21,7 @@ export async function GET(_request: NextRequest) {
       orderBy: { name: "asc" },
     })
 
-    return NextResponse.json({ success: true, data: crews })
+    return NextResponse.json({ success: true, data: crews.map((c) => withCurrentPhase(c)) })
   } catch (error) {
     console.error("Error fetching crews:", error)
     return NextResponse.json({ error: "Failed to fetch crews" }, { status: 500 })

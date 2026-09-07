@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/api-auth"
 import { createTimeOffRequestSchema, updateTimeOffRequestSchema } from "@/lib/validations"
 import { ShiftType } from "@/types"
 import { getDateRange } from "@/lib/timezone"
+import { timeOffTypeToShiftType } from "@/lib/scheduling"
 import { sendEmail, timeOffRequestEmail, timeOffResponseEmail } from "@/lib/email"
 import { logAudit, AuditAction } from "@/lib/audit-log"
 import { getClientIP } from "@/lib/rate-limit"
@@ -280,15 +281,41 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Update request
-    const updatedRequest = await prisma.timeOffRequest.update({
-      where: { id: requestId },
-      data: {
-        status: validatedData.status,
-        adminNotes: validatedData.adminNotes,
-        approvedById: session.user.id,
-        approvedAt: new Date(),
-      },
+    // Status change and the schedule rows it implies are one unit: a failure
+    // part-way through must not leave an APPROVED request with a half-applied
+    // vacation on the calendar.
+    const updatedRequest = await prisma.$transaction(async (tx) => {
+      const updated = await tx.timeOffRequest.update({
+        where: { id: requestId },
+        data: {
+          status: validatedData.status,
+          adminNotes: validatedData.adminNotes,
+          approvedById: session.user.id,
+          approvedAt: new Date(),
+        },
+      })
+
+      if (validatedData.status === "APPROVED") {
+        const shiftType = timeOffTypeToShiftType(existingRequest.type)
+        const overrideReason = `Time off: ${existingRequest.type}`
+
+        for (const date of getDateRange(existingRequest.startDate, existingRequest.endDate)) {
+          await tx.schedule.upsert({
+            where: { userId_date: { userId: existingRequest.userId, date } },
+            update: { shiftType, isOverride: true, overrideReason },
+            create: {
+              userId: existingRequest.userId,
+              date,
+              shiftType,
+              crewId: existingRequest.user.crewId,
+              isOverride: true,
+              overrideReason,
+            },
+          })
+        }
+      }
+
+      return updated
     })
 
     // Log audit event
@@ -307,40 +334,6 @@ export async function PATCH(request: NextRequest) {
       },
       ipAddress: getClientIP(request),
     })
-
-    // If approved, create schedule entries
-    if (validatedData.status === "APPROVED") {
-      const shiftType =
-        existingRequest.type === "VACATION" ? ShiftType.VACATION :
-        existingRequest.type === "SICK" ? ShiftType.SICK :
-        ShiftType.OFF
-
-      const dateRange = getDateRange(existingRequest.startDate, existingRequest.endDate)
-
-      for (const date of dateRange) {
-        await prisma.schedule.upsert({
-          where: {
-            userId_date: {
-              userId: existingRequest.userId,
-              date,
-            },
-          },
-          update: {
-            shiftType,
-            isOverride: true,
-            overrideReason: `Time off: ${existingRequest.type}`,
-          },
-          create: {
-            userId: existingRequest.userId,
-            date,
-            shiftType,
-            crewId: existingRequest.user.crewId,
-            isOverride: true,
-            overrideReason: `Time off: ${existingRequest.type}`,
-          },
-        })
-      }
-    }
 
     // Notify user
     await prisma.notification.create({

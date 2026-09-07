@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { ShiftType } from "@/types"
 import { prisma } from "@/lib/prisma"
 import { requireAuth } from "@/lib/api-auth"
 import { createScheduleSchema, generateScheduleSchema } from "@/lib/validations"
-import { generateRotationSchedule } from "@/lib/scheduling"
-import { normalizeToUTCMidnight } from "@/lib/timezone"
+import {
+  generateFromAnchor,
+  timeOffTypeToShiftType,
+  type RotationAnchor,
+  type WorkingShift,
+} from "@/lib/scheduling"
+import { addDaysUTC, normalizeToUTCMidnight } from "@/lib/timezone"
 
 export async function GET(request: NextRequest) {
   try {
@@ -139,6 +143,8 @@ export async function POST(request: NextRequest) {
           date: normalizedDate,
         },
       },
+      // A single-day edit made by a person is an override by definition:
+      // it must survive the next rotation regeneration.
       update: {
         shiftType: validatedData.shiftType,
         customShiftCode: validatedData.customShiftCode || null,
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
         date: normalizedDate,
         shiftType: validatedData.shiftType,
         customShiftCode: validatedData.customShiftCode || null,
-        isOverride: validatedData.isOverride ?? false,
+        isOverride: validatedData.isOverride ?? true,
         overrideReason: validatedData.overrideReason ?? null,
         notes: validatedData.notes ?? null,
         crewId: user.crewId,
@@ -186,47 +192,82 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/** Rows per createMany call; keeps each statement well inside DB limits. */
+const CREATE_BATCH_SIZE = 5000
+/** Hard cap on one generation request. */
+const MAX_SCHEDULE_RECORDS = 50000
+
 async function generateSchedules(
   request: NextRequest,
   organizationId: string,
   body: unknown
 ) {
-  console.log("generateSchedules called with body:", JSON.stringify(body))
   const validatedData = generateScheduleSchema.parse(body)
-  console.log("Validated data:", JSON.stringify(validatedData))
+
+  const startDate = normalizeToUTCMidnight(validatedData.startDate)
+  const endDate = normalizeToUTCMidnight(validatedData.endDate)
+  if (endDate < startDate) {
+    return NextResponse.json({ error: "endDate must be on or after startDate" }, { status: 400 })
+  }
 
   // Get rotation pattern
   const pattern = await prisma.rotationPattern.findFirst({
-    where: {
-      id: validatedData.patternId,
-      organizationId,
-    },
+    where: { id: validatedData.patternId, organizationId },
   })
-
   if (!pattern) {
     return NextResponse.json({ error: "Invalid rotation pattern" }, { status: 400 })
   }
 
-  // Determine which users to generate for
+  // Determine which users to generate for, and which crew (if any) owns the anchor
   let userIds: string[] = []
+  let crew: {
+    id: string
+    rotationPatternId: string | null
+    rotationAnchorDate: Date | null
+    anchorPhase: number
+    anchorStartingShift: string | null
+  } | null = null
 
   if (validatedData.userId) {
-    // Single user
     const user = await prisma.user.findFirst({
       where: { id: validatedData.userId, organizationId },
-      select: { id: true },
+      select: {
+        id: true,
+        crew: {
+          select: {
+            id: true,
+            rotationPatternId: true,
+            rotationAnchorDate: true,
+            anchorPhase: true,
+            anchorStartingShift: true,
+          },
+        },
+      },
     })
     if (!user) {
       return NextResponse.json({ error: "Invalid user" }, { status: 400 })
     }
-    userIds = [validatedData.userId]
+    userIds = [user.id]
+    crew = user.crew
   } else if (validatedData.crewId) {
-    // All users in crew
-    const crewUsers = await prisma.user.findMany({
-      where: { crewId: validatedData.crewId, organizationId, status: "ACTIVE" },
-      select: { id: true, crewId: true },
+    crew = await prisma.crew.findFirst({
+      where: { id: validatedData.crewId, organizationId },
+      select: {
+        id: true,
+        rotationPatternId: true,
+        rotationAnchorDate: true,
+        anchorPhase: true,
+        anchorStartingShift: true,
+      },
     })
-    userIds = crewUsers.map((u: { id: string }) => u.id)
+    if (!crew) {
+      return NextResponse.json({ error: "Invalid crew" }, { status: 400 })
+    }
+    const crewUsers = await prisma.user.findMany({
+      where: { crewId: crew.id, organizationId, status: "ACTIVE" },
+      select: { id: true },
+    })
+    userIds = crewUsers.map((u) => u.id)
   } else {
     return NextResponse.json(
       { error: "Either userId or crewId is required" },
@@ -234,8 +275,37 @@ async function generateSchedules(
     )
   }
 
-  // Generate schedules for each user
-  const generatedSchedules = generateRotationSchedule(
+  // Resolve the anchor.
+  //
+  // A crew that already has an anchor for this pattern keeps it, so extending or
+  // regenerating a range never moves the rotation. The request's startPhase and
+  // startingShift are only used when there is no anchor yet, when the crew is
+  // switching to a different pattern, or when the caller explicitly asks to
+  // re-anchor with `resetAnchor: true`.
+  const crewAnchorApplies =
+    crew !== null &&
+    crew.rotationAnchorDate !== null &&
+    crew.rotationPatternId === pattern.id &&
+    !validatedData.resetAnchor
+
+  const anchor: RotationAnchor = crewAnchorApplies
+    ? {
+        anchorDate: crew!.rotationAnchorDate!,
+        anchorPhase: crew!.anchorPhase,
+        anchorShift: (crew!.anchorStartingShift === "NIGHT" ? "NIGHT" : "DAY") as WorkingShift,
+      }
+    : {
+        anchorDate: startDate,
+        anchorPhase: validatedData.startPhase ?? 0,
+        anchorShift: validatedData.startingShift ?? "DAY",
+      }
+
+  // Only a crew-wide generation may (re)anchor the crew. A single-worker
+  // generation on an unanchored crew uses the request values without saving
+  // them, so one worker's ad-hoc schedule can't redefine the whole crew.
+  const shouldSaveAnchor = !crewAnchorApplies && crew !== null && !!validatedData.crewId
+
+  const generatedSchedules = generateFromAnchor(
     {
       daysOn: pattern.daysOn,
       daysOff: pattern.daysOff,
@@ -244,83 +314,103 @@ async function generateSchedules(
       nightDays: pattern.nightDays,
       alternatesShifts: pattern.alternatesShifts,
     },
-    new Date(validatedData.startDate),
-    new Date(validatedData.endDate),
-    validatedData.startPhase ?? 0,
-    validatedData.startingShift
+    anchor,
+    startDate,
+    endDate
   )
 
-  // Batch size limit to prevent timeouts and memory issues
-  const MAX_SCHEDULE_RECORDS = 50000
   const estimatedRecords = userIds.length * generatedSchedules.length
   if (estimatedRecords > MAX_SCHEDULE_RECORDS) {
     return NextResponse.json(
       {
-        error: `Request would create ${estimatedRecords} records, which exceeds the limit of ${MAX_SCHEDULE_RECORDS}. Please reduce the date range or number of users.`
+        error: `Request would create ${estimatedRecords} records, which exceeds the limit of ${MAX_SCHEDULE_RECORDS}. Please reduce the date range or number of users.`,
       },
       { status: 400 }
     )
   }
 
-  // Batch fetch all users' crewIds in a single query (fixes N+1 problem)
   const usersWithCrews = await prisma.user.findMany({
     where: { id: { in: userIds } },
     select: { id: true, crewId: true },
   })
-  const userCrewMap = new Map<string, string | null>(
-    usersWithCrews.map((u: { id: string; crewId: string | null }) => [u.id, u.crewId])
+  const userCrewMap = new Map(usersWithCrews.map((u) => [u.id, u.crewId]))
+
+  const scheduleData = userIds.flatMap((userId) =>
+    generatedSchedules.map((s) => ({
+      userId,
+      date: s.date,
+      shiftType: s.shiftType,
+      crewId: userCrewMap.get(userId) ?? null,
+      isOverride: false,
+    }))
   )
 
-  // Create schedules for all users
-  const scheduleData: Array<{
-    userId: string
-    date: Date
-    shiftType: string
-    crewId: string | null
-    isOverride: boolean
-  }> = []
-  for (const userId of userIds) {
-    const crewId = userCrewMap.get(userId) ?? null
-
-    for (const schedule of generatedSchedules) {
-      scheduleData.push({
-        userId,
-        date: schedule.date,
-        shiftType: schedule.shiftType as ShiftType,
-        crewId,
-        isOverride: false,
-      })
-    }
-  }
-
-  // Use transaction to ensure atomicity - if createMany fails, deleteMany is rolled back
-  let deletedCount = 0
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await prisma.$transaction(async (tx: any) => {
-    // Delete existing schedules for the user(s) ONLY within the date range being generated
-    // If clearOverrides is true, delete ALL schedules including manual edits
-    // Otherwise, only delete non-override schedules (preserve manual edits)
-    // CRITICAL: Normalize dates to UTC midnight to match database storage format
-    const startDate = normalizeToUTCMidnight(new Date(validatedData.startDate))
-    const endDate = normalizeToUTCMidnight(new Date(validatedData.endDate))
-
-    const deleteWhere = validatedData.clearOverrides
-      ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }
-      : { userId: { in: userIds }, isOverride: false, date: { gte: startDate, lte: endDate } }
-
-    const deleteResult = await tx.schedule.deleteMany({
-      where: deleteWhere,
-    })
-    deletedCount = deleteResult.count
-    console.log(`Deleted ${deletedCount} existing schedules for users:`, userIds, validatedData.clearOverrides ? "(including overrides)" : "(excluding overrides)")
-
-    // Create new schedules
-    await tx.schedule.createMany({
-      data: scheduleData,
-      skipDuplicates: true,
-    })
-    console.log(`Created ${scheduleData.length} new schedules`)
+  // Approved time off inside the range is re-applied after regeneration, so
+  // `clearOverrides` can wipe stale manual edits without un-approving leave.
+  const approvedTimeOff = await prisma.timeOffRequest.findMany({
+    where: {
+      userId: { in: userIds },
+      status: "APPROVED",
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
+    select: { userId: true, startDate: true, endDate: true, type: true },
   })
+
+  let deletedCount = 0
+  await prisma.$transaction(
+    async (tx) => {
+      const deleteWhere = validatedData.clearOverrides
+        ? { userId: { in: userIds }, date: { gte: startDate, lte: endDate } }
+        : { userId: { in: userIds }, isOverride: false, date: { gte: startDate, lte: endDate } }
+
+      const deleteResult = await tx.schedule.deleteMany({ where: deleteWhere })
+      deletedCount = deleteResult.count
+
+      // Surviving override rows win the (userId, date) conflict via skipDuplicates
+      for (let i = 0; i < scheduleData.length; i += CREATE_BATCH_SIZE) {
+        await tx.schedule.createMany({
+          data: scheduleData.slice(i, i + CREATE_BATCH_SIZE),
+          skipDuplicates: true,
+        })
+      }
+
+      for (const req of approvedTimeOff) {
+        const shiftType = timeOffTypeToShiftType(req.type)
+        const from = req.startDate > startDate ? req.startDate : startDate
+        const to = req.endDate < endDate ? req.endDate : endDate
+        for (let d = normalizeToUTCMidnight(from); d <= to; d = addDaysUTC(d, 1)) {
+          await tx.schedule.upsert({
+            where: { userId_date: { userId: req.userId, date: d } },
+            update: { shiftType, isOverride: true, overrideReason: `Time off: ${req.type}` },
+            create: {
+              userId: req.userId,
+              date: d,
+              shiftType,
+              crewId: userCrewMap.get(req.userId) ?? null,
+              isOverride: true,
+              overrideReason: `Time off: ${req.type}`,
+            },
+          })
+        }
+      }
+
+      if (shouldSaveAnchor && crew) {
+        await tx.crew.update({
+          where: { id: crew.id },
+          data: {
+            rotationPatternId: pattern.id,
+            rotationAnchorDate: anchor.anchorDate,
+            anchorPhase: anchor.anchorPhase,
+            anchorStartingShift: anchor.anchorShift,
+          },
+        })
+      }
+    },
+    // Up to 50k rows across several statements; the 5s default is too tight
+    // on a pooled remote database.
+    { timeout: 60_000, maxWait: 10_000 }
+  )
 
   return NextResponse.json({
     success: true,
@@ -330,6 +420,14 @@ async function generateSchedules(
       daysGenerated: generatedSchedules.length,
       totalRecords: scheduleData.length,
       deletedRecords: deletedCount,
+      timeOffReapplied: approvedTimeOff.length,
+      anchor: {
+        date: anchor.anchorDate.toISOString().slice(0, 10),
+        phase: anchor.anchorPhase,
+        startingShift: anchor.anchorShift,
+        source: crewAnchorApplies ? "crew" : "request",
+        savedToCrew: shouldSaveAnchor,
+      },
     },
   })
 }

@@ -147,9 +147,19 @@ model Crew {
   name         String
   description  String?
   color        String   @default("#3B82F6")
+  /// Display only. Derived from the anchor when one is set; see src/lib/scheduling.ts.
   currentPhase Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // Rotation anchor: fixes where this crew is in its cycle so that regenerating
+  // any date range always produces the same rotation.
+  /// A date on which the crew's phase is known
+  rotationAnchorDate DateTime?  @db.Date
+  /// Day-in-cycle (0-based) on rotationAnchorDate
+  anchorPhase        Int        @default(0)
+  /// Shift of the first working block on/after the anchor (alternating patterns)
+  anchorStartingShift ShiftType?
 
   // Organization
   organizationId String

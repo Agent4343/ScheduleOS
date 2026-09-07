@@ -1,6 +1,17 @@
-import { ShiftType } from "@prisma/client"
-import { isSameDay } from "./utils"
-import { addDaysUTC, normalizeToUTCMidnight } from "./timezone"
+import { ShiftType, TimeOffType } from "@prisma/client"
+import { addDaysUTC, daysDifference, normalizeToUTCMidnight } from "./timezone"
+
+/**
+ * Rotation engine.
+ *
+ * A rotation pattern is a repeating cycle of `daysOn` working days followed by
+ * `daysOff` days off. Where a worker is in that cycle on a given date is fixed
+ * by an ANCHOR: a date, the phase (day-in-cycle, 0-based) on that date, and the
+ * shift of the first working block on or after it. Everything else is derived,
+ * so generating March–May and then April–June always agree on April.
+ *
+ * All dates are UTC-midnight `Date`s (see ./timezone).
+ */
 
 export interface RotationPattern {
   daysOn: number
@@ -8,7 +19,22 @@ export interface RotationPattern {
   includesNights: boolean
   nightsAtStart: boolean
   nightDays: number
+  /** When true, whole working blocks alternate DAY / NIGHT / DAY / … */
   alternatesShifts?: boolean
+}
+
+export type WorkingShift = "DAY" | "NIGHT"
+
+export interface RotationAnchor {
+  /** A date on which the phase is known. */
+  anchorDate: Date
+  /** Day-in-cycle on `anchorDate`, 0 = first working day. */
+  anchorPhase: number
+  /**
+   * Shift worked by the first working block on or after `anchorDate`.
+   * Only matters for patterns with `alternatesShifts`.
+   */
+  anchorShift: WorkingShift
 }
 
 export interface GeneratedSchedule {
@@ -16,292 +42,147 @@ export interface GeneratedSchedule {
   shiftType: ShiftType
 }
 
+/** Positive modulo: mod(-1, 28) === 27 */
+function mod(n: number, m: number): number {
+  return ((n % m) + m) % m
+}
+
+export function cycleLength(pattern: RotationPattern): number {
+  return pattern.daysOn + pattern.daysOff
+}
+
+export function assertValidPattern(pattern: RotationPattern): void {
+  if (!Number.isInteger(pattern.daysOn) || pattern.daysOn < 1) {
+    throw new Error("Rotation pattern needs at least one working day")
+  }
+  if (!Number.isInteger(pattern.daysOff) || pattern.daysOff < 0) {
+    throw new Error("Rotation pattern daysOff must be 0 or more")
+  }
+  if (pattern.includesNights && (pattern.nightDays < 0 || pattern.nightDays > pattern.daysOn)) {
+    throw new Error("nightDays must be between 0 and daysOn")
+  }
+}
+
 /**
- * Generate a schedule for a worker based on a rotation pattern
+ * Where a date sits relative to the anchor.
  *
- * @param pattern - The rotation pattern configuration
- * @param startDate - The start date for schedule generation
- * @param endDate - The end date for schedule generation
- * @param startPhase - The starting phase offset (0 = beginning of rotation)
- * @param startingShift - Optional starting shift type for alternating patterns ("DAY" or "NIGHT")
- * @returns Array of generated schedules
+ * `cycleIndex` counts working blocks from the one containing the anchor
+ * (0 = the anchor's own cycle; negative for dates before it).
  */
-export function generateRotationSchedule(
+export function positionInRotation(
   pattern: RotationPattern,
+  anchor: RotationAnchor,
+  date: Date
+): { dayInCycle: number; cycleIndex: number } {
+  const total = cycleLength(pattern)
+  const anchorPhase = mod(anchor.anchorPhase, total)
+  const absoluteDay =
+    daysDifference(normalizeToUTCMidnight(anchor.anchorDate), normalizeToUTCMidnight(date)) +
+    anchorPhase
+  return {
+    dayInCycle: mod(absoluteDay, total),
+    cycleIndex: Math.floor(absoluteDay / total),
+  }
+}
+
+/** Day-in-cycle (0-based) for a date. */
+export function phaseAt(pattern: RotationPattern, anchor: RotationAnchor, date: Date): number {
+  return positionInRotation(pattern, anchor, date).dayInCycle
+}
+
+/**
+ * The shift a worker on this rotation has on `date`.
+ */
+export function shiftTypeAt(
+  pattern: RotationPattern,
+  anchor: RotationAnchor,
+  date: Date
+): ShiftType {
+  const { dayInCycle, cycleIndex } = positionInRotation(pattern, anchor, date)
+
+  if (dayInCycle >= pattern.daysOn) {
+    return ShiftType.OFF
+  }
+
+  if (pattern.alternatesShifts) {
+    // `anchorShift` describes the first WORKING block on or after the anchor.
+    // If the anchor falls in an off block, that is the next cycle, not this one.
+    const total = cycleLength(pattern)
+    const anchorInOffBlock = mod(anchor.anchorPhase, total) >= pattern.daysOn
+    const firstWorkingCycle = anchorInOffBlock ? 1 : 0
+    const sameParity = mod(cycleIndex - firstWorkingCycle, 2) === 0
+    const isDay = sameParity === (anchor.anchorShift === "DAY")
+    return isDay ? ShiftType.DAY : ShiftType.NIGHT
+  }
+
+  if (pattern.includesNights) {
+    if (pattern.nightsAtStart) {
+      return dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
+    }
+    const dayShifts = pattern.daysOn - pattern.nightDays
+    return dayInCycle < dayShifts ? ShiftType.DAY : ShiftType.NIGHT
+  }
+
+  return ShiftType.DAY
+}
+
+/**
+ * Generate one entry per day from `startDate` to `endDate` inclusive,
+ * derived from the anchor. Safe to call for any range, any number of times.
+ */
+export function generateFromAnchor(
+  pattern: RotationPattern,
+  anchor: RotationAnchor,
   startDate: Date,
-  endDate: Date,
-  startPhase: number = 0,
-  startingShift?: "DAY" | "NIGHT"
+  endDate: Date
 ): GeneratedSchedule[] {
+  assertValidPattern(pattern)
   const schedules: GeneratedSchedule[] = []
-  const totalCycleDays = pattern.daysOn + pattern.daysOff
+  let current = normalizeToUTCMidnight(startDate)
+  const end = normalizeToUTCMidnight(endDate)
 
-  // Normalize dates to UTC midnight to ensure consistent behavior
-  let currentDate = normalizeToUTCMidnight(startDate)
-  const normalizedEndDate = normalizeToUTCMidnight(endDate)
-  let dayInCycle = startPhase % totalCycleDays
-
-  // Track which shift to start with for alternating patterns
-  let currentShiftIsDay = startingShift !== "NIGHT"
-
-  while (currentDate <= normalizedEndDate) {
-    let shiftType: ShiftType
-
-    if (dayInCycle < pattern.daysOn) {
-      // Working days
-      if (pattern.alternatesShifts) {
-        // Alternating shifts pattern - whole rotation is either DAY or NIGHT
-        shiftType = currentShiftIsDay ? ShiftType.DAY : ShiftType.NIGHT
-      } else if (pattern.includesNights) {
-        if (pattern.nightsAtStart) {
-          // Night shifts first, then day shifts
-          shiftType = dayInCycle < pattern.nightDays ? ShiftType.NIGHT : ShiftType.DAY
-        } else {
-          // Day shifts first, then night shifts
-          const dayShifts = pattern.daysOn - pattern.nightDays
-          shiftType = dayInCycle < dayShifts ? ShiftType.DAY : ShiftType.NIGHT
-        }
-      } else {
-        shiftType = ShiftType.DAY
-      }
-    } else {
-      // Off days
-      shiftType = ShiftType.OFF
-    }
-
-    schedules.push({
-      date: normalizeToUTCMidnight(currentDate),
-      shiftType,
-    })
-
-    currentDate = addDaysUTC(currentDate, 1)
-    dayInCycle = (dayInCycle + 1) % totalCycleDays
-
-    // When a cycle completes, alternate the shift for next cycle
-    if (dayInCycle === 0 && pattern.alternatesShifts) {
-      currentShiftIsDay = !currentShiftIsDay
-    }
+  while (current <= end) {
+    schedules.push({ date: current, shiftType: shiftTypeAt(pattern, anchor, current) })
+    current = addDaysUTC(current, 1)
   }
 
   return schedules
 }
 
 /**
- * Calculate the current phase in a rotation pattern for a given date
+ * Generate a schedule where the rotation is anchored at `startDate` itself.
  *
- * @param rotationStartDate - When the rotation cycle began
- * @param targetDate - The date to calculate the phase for
- * @param pattern - The rotation pattern
- * @returns The current phase (day in cycle)
+ * @param startPhase - day-in-cycle on `startDate` (0 = first working day)
+ * @param startingShift - shift of the first working block on or after `startDate`
  */
-export function calculateCurrentPhase(
-  rotationStartDate: Date,
-  targetDate: Date,
-  pattern: RotationPattern
-): number {
-  const totalCycleDays = pattern.daysOn + pattern.daysOff
-  const daysDiff = Math.floor(
-    (targetDate.getTime() - rotationStartDate.getTime()) / (1000 * 60 * 60 * 24)
-  )
-  return ((daysDiff % totalCycleDays) + totalCycleDays) % totalCycleDays
-}
-
-/**
- * Get the crew offset for synchronized crew rotations
- * This ensures crews alternate their on/off cycles
- *
- * @param crewIndex - The index of the crew (0, 1, 2, 3 for A, B, C, D)
- * @param pattern - The rotation pattern
- * @returns The phase offset for this crew
- */
-export function getCrewPhaseOffset(
-  crewIndex: number,
-  pattern: RotationPattern
-): number {
-  const totalCycleDays = pattern.daysOn + pattern.daysOff
-  // Offset each crew by a fraction of the total cycle
-  return Math.floor((crewIndex * totalCycleDays) / 2) % totalCycleDays
-}
-
-/**
- * Standard rotation patterns
- */
-export const standardPatterns: Record<string, RotationPattern> = {
-  "3on3off": {
-    daysOn: 3,
-    daysOff: 3,
-    includesNights: false,
-    nightsAtStart: false,
-    nightDays: 0,
-  },
-  "3on3off-nights": {
-    daysOn: 3,
-    daysOff: 3,
-    includesNights: true,
-    nightsAtStart: true,
-    nightDays: 2,
-  },
-  "2on2off": {
-    daysOn: 2,
-    daysOff: 2,
-    includesNights: false,
-    nightsAtStart: false,
-    nightDays: 0,
-  },
-  "2on2off-nights": {
-    daysOn: 2,
-    daysOff: 2,
-    includesNights: true,
-    nightsAtStart: true,
-    nightDays: 1,
-  },
-  "7on7off": {
-    daysOn: 7,
-    daysOff: 7,
-    includesNights: false,
-    nightsAtStart: false,
-    nightDays: 0,
-  },
-  "14on14off": {
-    daysOn: 14,
-    daysOff: 14,
-    includesNights: false,
-    nightsAtStart: false,
-    nightDays: 0,
-  },
-  "14on14off-nights": {
-    daysOn: 14,
-    daysOff: 14,
-    includesNights: true,
-    nightsAtStart: true,
-    nightDays: 7,
-  },
-  "21on21off": {
-    daysOn: 21,
-    daysOff: 21,
-    includesNights: false,
-    nightsAtStart: false,
-    nightDays: 0,
-  },
-}
-
-/**
- * Calculate staffing levels for a given date
- */
-export interface StaffingLevel {
-  date: Date
-  dayShift: number
-  nightShift: number
-  total: number
-}
-
-export function calculateStaffingLevels(
-  schedules: Array<{ date: Date; shiftType: ShiftType }>,
-  startDate: Date,
-  endDate: Date
-): StaffingLevel[] {
-  const levels: StaffingLevel[] = []
-  let currentDate = normalizeToUTCMidnight(startDate)
-  const normalizedEndDate = normalizeToUTCMidnight(endDate)
-
-  while (currentDate <= normalizedEndDate) {
-    const daySchedules = schedules.filter(s => isSameDay(s.date, currentDate))
-
-    const dayShift = daySchedules.filter(s => s.shiftType === ShiftType.DAY).length
-    const nightShift = daySchedules.filter(s => s.shiftType === ShiftType.NIGHT).length
-
-    levels.push({
-      date: normalizeToUTCMidnight(currentDate),
-      dayShift,
-      nightShift,
-      total: dayShift + nightShift,
-    })
-
-    currentDate = addDaysUTC(currentDate, 1)
-  }
-
-  return levels
-}
-
-/**
- * Check for staffing gaps against minimum requirements
- */
-export interface StaffingGap {
-  date: Date
-  shiftType: "DAY" | "NIGHT"
-  required: number
-  actual: number
-  shortage: number
-}
-
-export function findStaffingGaps(
-  levels: StaffingLevel[],
-  minDayStaff: number,
-  minNightStaff: number
-): StaffingGap[] {
-  const gaps: StaffingGap[] = []
-
-  for (const level of levels) {
-    if (level.dayShift < minDayStaff) {
-      gaps.push({
-        date: level.date,
-        shiftType: "DAY",
-        required: minDayStaff,
-        actual: level.dayShift,
-        shortage: minDayStaff - level.dayShift,
-      })
-    }
-
-    if (level.nightShift < minNightStaff) {
-      gaps.push({
-        date: level.date,
-        shiftType: "NIGHT",
-        required: minNightStaff,
-        actual: level.nightShift,
-        shortage: minNightStaff - level.nightShift,
-      })
-    }
-  }
-
-  return gaps
-}
-
-/**
- * Calculate onboarding date for a new worker to sync with their crew
- */
-export function calculateOnboardingSync(
-  crewCurrentPhase: number,
+export function generateRotationSchedule(
   pattern: RotationPattern,
-  targetStartDate: Date
-): { syncedStartDate: Date; adjustmentDays: number } {
-  const totalCycleDays = pattern.daysOn + pattern.daysOff
-
-  // Find the next day 0 (start of work cycle) from target date
-  const daysUntilCycleStart = (totalCycleDays - crewCurrentPhase) % totalCycleDays
-
-  const syncedStartDate = addDaysUTC(normalizeToUTCMidnight(targetStartDate), daysUntilCycleStart)
-
-  return {
-    syncedStartDate,
-    adjustmentDays: daysUntilCycleStart,
-  }
+  startDate: Date,
+  endDate: Date,
+  startPhase: number = 0,
+  startingShift: WorkingShift = "DAY"
+): GeneratedSchedule[] {
+  return generateFromAnchor(
+    pattern,
+    { anchorDate: startDate, anchorPhase: startPhase, anchorShift: startingShift },
+    startDate,
+    endDate
+  )
 }
 
 /**
- * Apply shutdown period to schedules
+ * How an approved time-off request shows on the schedule.
+ * Shared by the REST approval path and the AI assistant so they agree.
  */
-export function applyShutdown(
-  schedules: GeneratedSchedule[],
-  shutdownStart: Date,
-  shutdownEnd: Date
-): GeneratedSchedule[] {
-  return schedules.map(schedule => {
-    if (schedule.date >= shutdownStart && schedule.date <= shutdownEnd) {
-      return {
-        ...schedule,
-        shiftType: ShiftType.SHUTDOWN,
-      }
-    }
-    return schedule
-  })
+export function timeOffTypeToShiftType(type: TimeOffType): ShiftType {
+  switch (type) {
+    case TimeOffType.VACATION:
+      return ShiftType.VACATION
+    case TimeOffType.SICK:
+      return ShiftType.SICK
+    default:
+      // PERSONAL, BEREAVEMENT, JURY_DUTY, OTHER: distinguishable from a
+      // rotation OFF day on the calendar.
+      return ShiftType.LEAVE
+  }
 }

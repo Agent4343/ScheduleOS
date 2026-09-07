@@ -127,7 +127,12 @@ export const createCrewSchema = z.object({
   rotationPatternId: z.string().optional(),
 })
 
-export const updateCrewSchema = createCrewSchema.partial()
+export const updateCrewSchema = createCrewSchema.partial().extend({
+  // null or "" clears the pattern; omitted leaves it alone
+  rotationPatternId: z.string().nullable().optional(),
+  // Display-only phase for crews that have not been anchored yet
+  currentPhase: z.number().int().min(0).optional(),
+})
 
 // Rotation pattern validations
 export const createRotationPatternSchema = z.object({
@@ -150,7 +155,8 @@ export const createScheduleSchema = z.object({
   date: z.coerce.date(),
   shiftType: z.nativeEnum(ShiftType),
   customShiftCode: z.string().nullish(),
-  isOverride: z.boolean().default(false),
+  // Omitted means "this is a manual edit" → the route defaults it to true
+  isOverride: z.boolean().optional(),
   overrideReason: z.string().nullish(),
   notes: z.string().nullish(),
 })
@@ -163,9 +169,13 @@ export const generateScheduleSchema = z.object({
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   patternId: z.string(),
+  /** Day-in-cycle on startDate. Ignored when the crew already has an anchor. */
   startPhase: z.number().int().min(0).optional(),
+  /** Shift of the first working block. Ignored when the crew already has an anchor. */
   startingShift: z.enum(["DAY", "NIGHT"]).optional(),
   clearOverrides: z.boolean().default(false),
+  /** Re-anchor the crew at startDate using startPhase/startingShift. */
+  resetAnchor: z.boolean().default(false),
 })
 
 // Time off request validations

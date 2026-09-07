@@ -85,9 +85,11 @@ export function getYearEndUTC(year: number): Date {
  * Calculate the difference in days between two dates.
  */
 export function daysDifference(date1: Date, date2: Date): number {
-  const utc1 = Date.UTC(date1.getFullYear(), date1.getMonth(), date1.getDate())
-  const utc2 = Date.UTC(date2.getFullYear(), date2.getMonth(), date2.getDate())
-  return Math.floor((utc2 - utc1) / (1000 * 60 * 60 * 24))
+  // UTC components only: these are UTC-midnight dates, and local getters
+  // would shift them by a day on any server west of UTC.
+  const utc1 = Date.UTC(date1.getUTCFullYear(), date1.getUTCMonth(), date1.getUTCDate())
+  const utc2 = Date.UTC(date2.getUTCFullYear(), date2.getUTCMonth(), date2.getUTCDate())
+  return Math.round((utc2 - utc1) / (1000 * 60 * 60 * 24))
 }
 
 /**
