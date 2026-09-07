@@ -239,6 +239,13 @@ function RegisterForm() {
               required
               disabled={isLoading}
             />
+            {/* Signing up creates a brand new organization. Joining an
+                existing one happens through an invitation link instead, and
+                people reliably try the wrong one first. */}
+            <p className="text-xs text-muted-foreground">
+              This sets up a <strong>new</strong> organization with you as its administrator. Joining a team that already
+              uses ShiftSync? Ask them to send you an invitation link instead — signing up here will not add you to it.
+            </p>
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading} size="lg">

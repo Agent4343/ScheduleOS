@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -313,7 +314,7 @@ export function CustomShiftTypesCard({
                   </div>
                   <label className="flex items-center gap-2 text-sm self-end pb-2">
                     <input type="checkbox" className="h-4 w-4" checked={form.isBackfill} disabled={!form.coverageRoleId} onChange={(e) => setForm({ ...form, isBackfill: e.target.checked })} />
-                    Backfill (acting up)
+                    Backfill <Link href="/help#backfill" className="underline text-muted-foreground">(acting up)</Link>
                   </label>
                 </div>
               )}

@@ -18,6 +18,7 @@ import { useRole } from "@/lib/auth/use-role"
 import type { UserStatus, Worker } from "@/features/types"
 import { useWorkers, useCreateWorker, useUpdateWorker, useDeleteWorker } from "@/features/workers/hooks"
 import { useCrews } from "@/features/crews/hooks"
+import { InvitePanel } from "@/features/invitations/components/invite-panel"
 import { WorkerForm, workerPayload, ROLE_LABELS, STATUS_LABELS, type WorkerFormValues } from "@/features/workers/components/worker-form"
 
 const STATUS_VARIANT: Record<UserStatus, "default" | "secondary" | "destructive" | "outline"> = {
@@ -44,7 +45,7 @@ export default function WorkersPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"" | UserStatus>("")
   const [crewFilter, setCrewFilter] = useState("")
-  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "edit"; worker: Worker } | null>(null)
+  const [dialog, setDialog] = useState<{ kind: "create" } | { kind: "invite" } | { kind: "edit"; worker: Worker } | null>(null)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -121,10 +122,16 @@ export default function WorkersPage() {
           <h1 className="text-2xl font-bold">Workers</h1>
           <p className="text-muted-foreground">Manage your workforce ({workers.length} total)</p>
         </div>
-        <Button onClick={() => setDialog({ kind: "create" })}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Worker
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setDialog({ kind: "invite" })}>
+            <Mail className="h-4 w-4 mr-2" />
+            Invite
+          </Button>
+          <Button variant="outline" onClick={() => setDialog({ kind: "create" })}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add directly
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
@@ -282,10 +289,19 @@ export default function WorkersPage() {
       </Card>
 
       <Modal
+        isOpen={dialog?.kind === "invite"}
+        onClose={() => setDialog(null)}
+        title="Invite someone"
+        description="They get a link, choose their own password, and appear here once they have joined"
+      >
+        <InvitePanel onDone={() => setDialog(null)} />
+      </Modal>
+
+      <Modal
         isOpen={dialog?.kind === "create"}
         onClose={() => setDialog(null)}
         title="Add Worker"
-        description="Add a new worker to your organization"
+        description="Creates the account yourself, with a password you set and pass on. Inviting is usually easier."
       >
         <WorkerForm crews={crews} submitting={createWorker.isPending} onSubmit={handleCreate} onCancel={() => setDialog(null)} />
       </Modal>

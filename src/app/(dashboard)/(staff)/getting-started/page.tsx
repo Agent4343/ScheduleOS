@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react"
 import Link from "next/link"
-import { CheckCircle2, Circle, Users2, Users, RefreshCw, Calendar, Bell, ArrowRight, Loader2, Plus } from "lucide-react"
+import { CheckCircle2, Circle, Users2, Users, RefreshCw, Calendar, ArrowRight, Loader2, Plus, FileSpreadsheet, Mail, ShieldCheck, BadgeCheck } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button, LinkButton } from "@/components/ui/button"
 import { Modal } from "@/components/ui/modal"
@@ -102,54 +102,71 @@ export default function GettingStartedPage() {
 
   const steps: Step[] = [
     {
-      key: "patterns",
-      done: s.hasPatterns,
-      icon: RefreshCw,
-      title: "Define a rotation pattern",
-      detail: s.hasPatterns
-        ? `${s.patternCount} pattern(s): ${patternList.slice(0, 3).map((p) => `${p.name} (${p.daysOn}/${p.daysOff})`).join(", ")}`
-        : "How many days on, how many off, and whether nights are worked.",
-      action: (
-        <LinkButton href="/settings" variant={s.hasPatterns ? "outline" : "default"} size="sm">
-          {s.hasPatterns ? "Manage patterns" : "Create a pattern"} <ArrowRight className="h-4 w-4 ml-1" />
-        </LinkButton>
-      ),
-    },
-    {
-      key: "crews",
-      done: s.hasCrews,
-      icon: Users2,
-      title: "Create crews",
-      detail: s.hasCrews ? `${s.crewCount} crew(s): ${crewList.map((c) => c.name).join(", ")}` : "A crew is a group of workers who share one rotation.",
+      key: "people",
+      done: s.hasWorkers,
+      icon: Users,
+      title: "Get your people in",
+      detail: s.hasWorkers
+        ? `${s.workerCount} people on the roster`
+        : "If you already keep a roster spreadsheet, importing it is by far the fastest way — it brings the people, their groups and the whole year of shifts in one go.",
       action: (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={s.hasCrews ? "outline" : "default"} onClick={() => setDialog({ kind: "crew" })}>
-            <Plus className="h-4 w-4 mr-1" /> Add crew
+          <LinkButton href="/settings#import" variant={s.hasWorkers ? "outline" : "default"} size="sm">
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Import a spreadsheet
+          </LinkButton>
+          <LinkButton href="/workers" variant="outline" size="sm">
+            <Mail className="h-4 w-4 mr-1" /> Invite people
+          </LinkButton>
+          <Button size="sm" variant="ghost" onClick={() => setDialog({ kind: "worker" })}>
+            <Plus className="h-4 w-4 mr-1" /> Add one by hand
           </Button>
-          {s.hasCrews && (
-            <LinkButton href="/crews" variant="ghost" size="sm">
-              Open Crews <ArrowRight className="h-4 w-4 ml-1" />
-            </LinkButton>
-          )}
         </div>
       ),
     },
     {
-      key: "workers",
-      done: s.hasWorkers,
-      icon: Users,
-      title: "Add workers to crews",
-      detail: s.hasWorkers ? `${s.workerCount} worker(s) added` : "Each worker gets a temporary password to sign in with.",
+      key: "coverage",
+      done: s.hasCoverage,
+      icon: ShieldCheck,
+      title: "Say what each shift needs",
+      detail: s.hasCoverage
+        ? `${s.coverageRoleCount} jobs and ${s.positionGroupCount} groups set up`
+        : "How many outside operators, how many in the control room, days and nights. One button sets up the standard offshore layout.",
+      action: (
+        <LinkButton href="/settings#coverage" variant={s.hasCoverage ? "outline" : "default"} size="sm">
+          {s.hasCoverage ? "Review coverage rules" : "Set up coverage"} <ArrowRight className="h-4 w-4 ml-1" />
+        </LinkButton>
+      ),
+    },
+    {
+      key: "groups",
+      done: s.hasGroupedWorkers,
+      icon: Users2,
+      title: "Put each person in their group",
+      detail: s.hasGroupedWorkers
+        ? `${s.groupedWorkerCount} of ${s.workerCount} people are in a group`
+        : "So the app knows an Ops Tech marked D is outside, and an OCR Op marked D is in the control room. Importing a spreadsheet does this for you.",
+      action: (
+        <LinkButton href={s.hasCoverage ? "/workers" : "/settings#coverage"} variant={s.hasGroupedWorkers ? "outline" : "default"} size="sm">
+          {s.hasCoverage ? "Open Workers" : "Set up coverage first"} <ArrowRight className="h-4 w-4 ml-1" />
+        </LinkButton>
+      ),
+    },
+    {
+      key: "signoffs",
+      done: s.hasSignOffs,
+      icon: BadgeCheck,
+      title: "Record who is signed off on what",
+      detail: s.hasSignOffs
+        ? `${s.signedOffWorkerCount} people have sign-offs recorded`
+        : "Utilities, oil, gas, control room. A shift needs a different person for each job it requires, so this is what tells you whether a crew can actually run.",
       action: (
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={s.hasWorkers ? "outline" : "default"} onClick={() => setDialog({ kind: "worker" })} disabled={!s.hasCrews}>
-            <Plus className="h-4 w-4 mr-1" /> Add worker
-          </Button>
-          {s.hasWorkers && (
-            <LinkButton href="/workers" variant="ghost" size="sm">
-              Open Workers <ArrowRight className="h-4 w-4 ml-1" />
-            </LinkButton>
-          )}
+          <LinkButton href={s.hasCoverage ? "/workers" : "/settings#coverage"} variant={s.hasSignOffs ? "outline" : "default"} size="sm">
+            {s.hasCoverage ? "Tick them off" : "Set up coverage first"} <ArrowRight className="h-4 w-4 ml-1" />
+          </LinkButton>
+          <LinkButton href="/help#sign-off" variant="ghost" size="sm">
+            What is a sign-off?
+          </LinkButton>
         </div>
       ),
     },
@@ -157,10 +174,12 @@ export default function GettingStartedPage() {
       key: "schedules",
       done: s.hasSchedules,
       icon: Calendar,
-      title: "Generate each crew's schedule",
-      detail: crewsWithPattern.length
-        ? "The first generation fixes a crew's rotation; later ones extend it."
-        : "Assign a rotation pattern to a crew first (Crews → Configure).",
+      title: "Fill the calendar",
+      detail: s.hasSchedules
+        ? `${s.scheduleCount.toLocaleString()} shifts on the calendar`
+        : crewsWithPattern.length
+          ? "Generate each crew's rotation forward from today. Importing a spreadsheet fills it in too."
+          : "Either import a spreadsheet, or set up a rotation pattern and crews and let the app generate it.",
       action: (
         <div className="flex flex-wrap gap-2">
           {crewsWithPattern.map((crew) => (
@@ -174,24 +193,17 @@ export default function GettingStartedPage() {
               {crew.rotationAnchorDate ? `Extend ${crew.name}` : `Generate ${crew.name}`}
             </Button>
           ))}
+          {!crewsWithPattern.length && (
+            <Button size="sm" variant="outline" onClick={() => setDialog({ kind: "crew" })}>
+              <Plus className="h-4 w-4 mr-1" /> Add a crew
+            </Button>
+          )}
           {s.hasSchedules && (
             <LinkButton href="/schedule" variant="ghost" size="sm">
               View schedule <ArrowRight className="h-4 w-4 ml-1" />
             </LinkButton>
           )}
         </div>
-      ),
-    },
-    {
-      key: "staffing",
-      done: false,
-      icon: Bell,
-      title: "Set minimum staffing (optional)",
-      detail: "Get warned when a shift drops below the number of people it needs.",
-      action: (
-        <LinkButton href="/settings" variant="outline" size="sm">
-          Staffing rules <ArrowRight className="h-4 w-4 ml-1" />
-        </LinkButton>
       ),
     },
   ]
@@ -204,6 +216,35 @@ export default function GettingStartedPage() {
           {s.isComplete ? "Your organization is set up. You can revisit any step here." : `${s.completedSteps} of ${s.totalSteps} setup steps done.`}
         </p>
       </div>
+
+      {/* The fast path. Someone arriving from a spreadsheet will otherwise
+          hand-enter people they could have uploaded in a minute. */}
+      {!s.hasSchedules && (
+        <Card className="border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileSpreadsheet className="h-5 w-5" aria-hidden />
+              Already keep the roster in a spreadsheet?
+            </CardTitle>
+            <CardDescription>
+              Then start there. Set up the coverage rules first so your codes have something to map onto, then upload the
+              workbook — it brings in the people, their groups, who is signed off on what, and the whole year of shifts.
+              You are shown exactly what it found before anything is saved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <LinkButton href="/settings#coverage" size="sm" variant={s.hasCoverage ? "outline" : "default"}>
+              1. Set up coverage <ArrowRight className="h-4 w-4 ml-1" />
+            </LinkButton>
+            <LinkButton href="/settings#import" size="sm" variant={s.hasCoverage ? "default" : "outline"}>
+              2. Import the workbook <ArrowRight className="h-4 w-4 ml-1" />
+            </LinkButton>
+            <LinkButton href="/help" size="sm" variant="ghost">
+              Read the short guide
+            </LinkButton>
+          </CardContent>
+        </Card>
+      )}
 
       <div
         className="h-2 rounded-full bg-muted overflow-hidden"

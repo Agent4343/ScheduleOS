@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/toast"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { errorMessage } from "@/lib/api-client"
 import { formatDateOnly } from "@/lib/dates"
 import { useImportSchedule, type ImportPlan, type ImportResult } from "@/features/import/hooks"
@@ -20,6 +21,7 @@ import { SettingsCard } from "./settings-card"
  */
 export function ImportCard({ isAdmin }: { isAdmin: boolean }) {
   const toast = useToast()
+  const confirm = useConfirm()
   const importer = useImportSchedule()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -51,6 +53,20 @@ export function ImportCard({ isAdmin }: { isAdmin: boolean }) {
 
   const commit = async () => {
     if (!file || !plan) return
+
+    // The import clears the date range before writing, so anything set by
+    // hand in that window goes. The preview says so, but this is the last
+    // moment to stop and it is worth one explicit yes.
+    const range = plan.dateRange
+    const ok = await confirm({
+      title: "Import this schedule?",
+      description: range
+        ? `${plan.shiftCount.toLocaleString()} shifts will be written for ${plan.people.length} people, covering ${formatDateOnly(range.start, "long")} to ${formatDateOnly(range.end, "long")}. Existing shifts in that range for these people are replaced — including any you set by hand. Days outside the range are untouched.`
+        : `${plan.shiftCount.toLocaleString()} shifts will be written.`,
+      confirmLabel: "Import",
+    })
+    if (!ok) return
+
     try {
       const { imported } = await importer.mutateAsync({
         file,

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import { cn } from "@/lib/utils"
 import type { Crew, RotationPattern } from "@/features/types"
 
 export const CREW_COLORS = [
@@ -41,6 +43,7 @@ interface CrewFormProps {
  */
 export function CrewForm({ crew, patterns, submitting, onSubmit, onCancel }: CrewFormProps) {
   const mode = crew ? "edit" : "create"
+  const confirm = useConfirm()
   const [values, setValues] = useState<CrewFormValues>({
     name: crew?.name ?? "",
     description: crew?.description ?? "",
@@ -51,13 +54,38 @@ export function CrewForm({ crew, patterns, submitting, onSubmit, onCancel }: Cre
   const set = <K extends keyof CrewFormValues>(key: K, value: CrewFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    onSubmit(values)
-  }
-
   const id = (field: string) => `${mode}-crew-${field}`
   const isAnchored = !!crew?.rotationAnchorDate
+
+  // Changing either of these re-anchors the crew: days already on the calendar
+  // are left alone, but the next generation runs the pattern differently, so
+  // future shifts move. Amber caption text was not enough warning for that.
+  const patternChanged = mode === "edit" && values.rotationPatternId !== (crew?.rotationPattern?.id ?? "")
+  const phaseChanged = mode === "edit" && values.currentPhase !== (crew?.currentPhase ?? 0)
+  const rewritesRotation = isAnchored && (patternChanged || phaseChanged)
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+
+    if (rewritesRotation) {
+      const what = patternChanged && phaseChanged
+        ? "the rotation pattern and the current phase"
+        : patternChanged
+          ? "the rotation pattern"
+          : "the current phase"
+      const ok = await confirm({
+        title: `Change ${what} for ${crew?.name}?`,
+        description:
+          `This re-anchors the crew's rotation from today. Days already on the calendar are not touched, but the next time you generate this crew's schedule the pattern will run differently — so shifts people have already been told about can move. ` +
+          `Days you set by hand are kept even then. To undo it, set the ${patternChanged ? "pattern" : "phase"} back and generate again.`,
+        confirmLabel: "Change the rotation",
+        destructive: true,
+      })
+      if (!ok) return
+    }
+
+    onSubmit(values)
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -119,9 +147,9 @@ export function CrewForm({ crew, patterns, submitting, onSubmit, onCancel }: Cre
             })),
           ]}
         />
-        {mode === "edit" && isAnchored && values.rotationPatternId !== crew?.rotationPattern?.id && (
+        {isAnchored && patternChanged && (
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Changing the pattern resets this crew&apos;s rotation. The next schedule generation starts a new cycle.
+            This restarts the crew&apos;s rotation — you will be asked to confirm before it is saved.
           </p>
         )}
       </div>
@@ -136,9 +164,13 @@ export function CrewForm({ crew, patterns, submitting, onSubmit, onCancel }: Cre
             value={values.currentPhase}
             onChange={(e) => set("currentPhase", Math.max(0, parseInt(e.target.value) || 0))}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className={cn("text-xs", isAnchored && phaseChanged ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
             Day 0 is the first working day of the cycle.
-            {isAnchored ? " Changing this moves the crew's rotation from today onward." : ""}
+            {isAnchored && phaseChanged
+              ? " This shifts the crew's rotation from today onward — you will be asked to confirm."
+              : isAnchored
+                ? " Changing this moves the crew's rotation from today onward."
+                : ""}
           </p>
         </div>
       )}

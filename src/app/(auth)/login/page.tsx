@@ -20,6 +20,8 @@ function LoginForm() {
   const [error, setError] = useState("")
 
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
+  // Set after accepting an invitation, so the first sign-in is not a cold start
+  const justJoined = searchParams.get("joined") === "1"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -63,6 +65,13 @@ function LoginForm() {
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {justJoined && !error && (
+            <Alert>
+              <AlertDescription>
+                Your account is ready. Sign in with your email and the password you just chose.
+              </AlertDescription>
             </Alert>
           )}
 

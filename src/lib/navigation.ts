@@ -13,6 +13,7 @@ import {
   Bot,
   Rocket,
   Settings,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react"
 
@@ -51,6 +52,7 @@ export const navigation: NavItem[] = [
   { name: "Audit Log", href: "/audit-log", icon: Shield, roles: ["ADMIN"] },
   { name: "AI Assistant", href: "/assistant", icon: Bot, roles: STAFF },
   { name: "Settings", href: "/settings", icon: Settings, roles: EVERYONE },
+  { name: "Help", href: "/help", icon: HelpCircle, roles: EVERYONE },
 ]
 
 /** Items a user with `role` may see. Unknown/undefined role sees the WORKER set. */

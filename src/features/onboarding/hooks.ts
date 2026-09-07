@@ -2,13 +2,22 @@ import { useQuery } from "@tanstack/react-query"
 import { apiGet } from "@/lib/api-client"
 
 export interface SetupStatus {
-  hasCrews: boolean
   hasWorkers: boolean
-  hasPatterns: boolean
+  hasCoverage: boolean
+  hasGroupedWorkers: boolean
+  hasSignOffs: boolean
   hasSchedules: boolean
+  hasCrews: boolean
+  hasPatterns: boolean
   crewCount: number
   workerCount: number
   patternCount: number
+  scheduleCount: number
+  coverageRoleCount: number
+  positionGroupCount: number
+  qualificationCount: number
+  groupedWorkerCount: number
+  signedOffWorkerCount: number
   completedSteps: number
   totalSteps: number
   isComplete: boolean

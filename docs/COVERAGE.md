@@ -97,3 +97,13 @@ falls out of the model rather than being a special case.
 
 Migrations: `20260908090000_role_based_coverage` and
 `20260908110000_qualification_sign_offs`, both additive only.
+
+## Explaining it to people
+
+`/help` is the glossary — position group, coverage role, duty code, sign-off,
+roster order, rotation anchor, override — written in the language of the
+platform rather than of the schema, with a short "starting from a spreadsheet"
+path at the top. The forms link into it by anchor (`/help#sign-off` and so on),
+so a term is one click from its explanation wherever it appears. Getting
+Started leads with the import for the same reason: somebody arriving from Excel
+will otherwise hand-enter people they could have uploaded.

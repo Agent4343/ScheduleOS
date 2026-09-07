@@ -46,7 +46,10 @@ export async function POST(request: NextRequest) {
 
       if (existingOrg) {
         return NextResponse.json(
-          { error: "Organization with this name already exists" },
+          {
+            error:
+              "An organization with that name already exists. If it is your team, ask an administrator there to send you an invitation link — signing up here would create a separate organization.",
+          },
           { status: 400 }
         )
       }

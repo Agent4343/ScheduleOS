@@ -60,6 +60,8 @@ Things that used to exist in several copies now have exactly one home:
 | Add / edit a worker | `features/workers/components/worker-form.tsx` (`workerPayload()` builds the API body) | Workers, Schedule, Settings → Add User, Getting Started |
 | Coverage board | `features/coverage/components/coverage-board.tsx`, data from `features/coverage/hooks.ts` (see docs/COVERAGE.md) | Coverage |
 | Coverage rules | `features/settings/components/coverage-card.tsx` | Settings |
+| Invite someone | `features/invitations/components/invite-panel.tsx` | Workers |
+| Import a workbook | `features/settings/components/import-card.tsx` (see docs/IMPORT.md) | Settings |
 | Add / edit a crew | `features/crews/components/crew-form.tsx` | Crews, Getting Started |
 | Settings sections | `features/settings/components/*-card.tsx`, framed by `SettingsCard` | Settings |
 

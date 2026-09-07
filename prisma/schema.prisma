@@ -536,9 +536,13 @@ enum NotificationType {
 // =====================
 
 model Invitation {
-  id        String   @id @default(cuid())
-  email     String
-  role      UserRole @default(WORKER)
+  id    String   @id @default(cuid())
+  email String
+  /// Optional: pre-fills the new account's name so the roster reads correctly
+  name  String?
+  role  UserRole @default(WORKER)
+  /// SHA-256 of the token that went out in the link, never the token itself,
+  /// so a leaked database cannot be used to accept invitations.
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())

@@ -24,6 +24,7 @@ import {
   type PositionGroup,
   type Qualification,
 } from "@/features/coverage/hooks"
+import Link from "next/link"
 import { SettingsCard } from "./settings-card"
 
 const EMPTY_ROLE = { name: "", sortOrder: 0, minDay: 1, targetDay: 1, minNight: 0, targetNight: 0, requiredQualification: "" }
@@ -193,7 +194,10 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-medium text-sm">Coverage roles</h4>
-                <p className="text-xs text-muted-foreground">Red below minimum, amber below target.</p>
+                <p className="text-xs text-muted-foreground">
+                  Red below minimum, amber below target.{" "}
+                  <Link href="/help#coverage-role" className="underline">What is a coverage role?</Link>
+                </p>
               </div>
               {isAdmin && !roleForm && (
                 <Button size="sm" variant="ghost" onClick={() => { setRoleForm({ ...EMPTY_ROLE, sortOrder: roleList.length + 1 }); setReqDraft([]) }}>
@@ -238,7 +242,10 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
                   <div className="flex items-center justify-between">
                     <div>
                       <Label>Sign-offs needed on shift</Label>
-                      <p className="text-xs text-muted-foreground">Each one must be a different person.</p>
+                      <p className="text-xs text-muted-foreground">
+                        Each one must be a different person.{" "}
+                        <Link href="/help#sign-off" className="underline">Why that matters</Link>
+                      </p>
                     </div>
                     {qualList.length > 0 && (
                       <Button
@@ -339,7 +346,10 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-medium text-sm">Position groups</h4>
-                <p className="text-xs text-muted-foreground">Each worker belongs to a group; a plain day or night shift counts toward the group&apos;s role.</p>
+                <p className="text-xs text-muted-foreground">
+                  Each worker belongs to a group; a plain day or night shift counts toward the group&apos;s role.{" "}
+                  <Link href="/help#position-group" className="underline">More</Link>
+                </p>
               </div>
               {isAdmin && !groupForm && (
                 <Button size="sm" variant="ghost" onClick={() => setGroupForm({ ...EMPTY_GROUP, sortOrder: groupList.length + 1 })}>
@@ -488,7 +498,8 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
         </section>
 
         <p className="text-xs text-muted-foreground">
-          Duty codes (for example OCR-D or PL-D) that move a worker onto a different role for a day are configured on each custom shift type below.
+          Duty codes (for example OCR-D or PL-D) that move a worker onto a different role for a day are configured on
+          each custom shift type below. <Link href="/help#duty-code" className="underline">What is a duty code?</Link>
         </p>
       </SettingsCard>
     </div>

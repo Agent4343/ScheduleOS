@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type FormEvent } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -81,8 +82,9 @@ interface WorkerFormProps {
  * One form for adding and editing a worker. Used by the Workers page, the
  * schedule's edit-worker dialog and onboarding, so the rules live here once:
  *
- * - A new account needs a password (there is no invite flow yet), and it is
- *   shown once on success by the caller.
+ * - Creating an account here means setting a password yourself and passing it
+ *   on. Inviting (Workers -> Invite) is usually easier: the person sets their
+ *   own and nobody has to relay it.
  * - Only admins can pick a role or change status; supervisors create workers.
  * - You cannot change your own role or status.
  */
@@ -180,7 +182,12 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
       {groupList.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
           <div className="col-span-2 space-y-2">
-            <Label htmlFor={id("positionGroup")}>Position group</Label>
+            <Label htmlFor={id("positionGroup")}>
+              Position group{" "}
+              <Link href="/help#position-group" className="text-xs font-normal underline text-muted-foreground" target="_blank">
+                what is this?
+              </Link>
+            </Label>
             <Select
               id={id("positionGroup")}
               value={values.positionGroupId}
@@ -213,7 +220,8 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            A shift needs a different person signed off for each job it requires, so one operator cannot cover two.
+            A shift needs a different person signed off for each job it requires, so one operator cannot cover two.{" "}
+            <Link href="/help#sign-off" className="underline" target="_blank">More about sign-offs</Link>
           </p>
         </fieldset>
       )}
