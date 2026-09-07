@@ -12,7 +12,10 @@ export async function GET() {
     const roles = await prisma.coverageRole.findMany({
       where: { organizationId: auth.session.user.organizationId },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      include: { _count: { select: { defaultForGroups: true, dutyCodes: true } } },
+      include: {
+        _count: { select: { defaultForGroups: true, dutyCodes: true } },
+        requirements: { include: { qualification: { select: { id: true, code: true, name: true } } } },
+      },
     })
     return apiOk(roles)
   } catch (error) {

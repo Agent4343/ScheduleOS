@@ -315,3 +315,37 @@ export const positionGroupSchema = z.object({
 export const updatePositionGroupSchema = positionGroupSchema.partial()
 
 export const coverageShiftSchema = z.enum(["DAY", "NIGHT"])
+
+/** A sign-off definition: Utilities Operator, Oil Operator, Control Room… */
+export const qualificationSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1)
+    .max(16)
+    .regex(/^[A-Za-z0-9_-]+$/, "Use letters, numbers, dashes or underscores")
+    .transform((v) => v.toUpperCase()),
+  name: z.string().trim().min(1).max(60),
+  color: hexColor.nullable().optional(),
+  sortOrder: z.number().int().min(0).max(999).default(0),
+})
+export const updateQualificationSchema = qualificationSchema.partial()
+
+/**
+ * The complete set of sign-off requirements for one role, sent as a whole so
+ * the editor can add, change and remove in a single save.
+ */
+export const coverageRequirementsSchema = z.object({
+  requirements: z
+    .array(
+      z.object({
+        qualificationId: z.string().min(1),
+        countDay: z.number().int().min(0).max(99).default(1),
+        countNight: z.number().int().min(0).max(99).default(1),
+      })
+    )
+    .max(20)
+    .refine((rs) => new Set(rs.map((r) => r.qualificationId)).size === rs.length, {
+      message: "Each sign-off can only be listed once per role",
+    }),
+})

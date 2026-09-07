@@ -9,7 +9,7 @@ import { useRole } from "@/lib/auth/use-role"
 import { toDateKey } from "@/lib/dates"
 import type { CrewRef, UserRole, UserStatus, Worker } from "@/features/types"
 import type { CreateWorkerInput } from "@/features/workers/api"
-import { usePositionGroups } from "@/features/coverage/hooks"
+import { usePositionGroups, useQualifications } from "@/features/coverage/hooks"
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrator",
@@ -109,12 +109,10 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
   })
   const groups = usePositionGroups()
   const groupList = groups.data ?? []
-  const [qualDraft, setQualDraft] = useState("")
-  const addQualification = () => {
-    const q = qualDraft.trim().toUpperCase()
-    if (q && !values.qualifications.includes(q)) set("qualifications", [...values.qualifications, q])
-    setQualDraft("")
-  }
+  const qualifications = useQualifications()
+  const qualList = qualifications.data ?? []
+  const toggleQualification = (code: string, on: boolean) =>
+    set("qualifications", on ? [...values.qualifications, code] : values.qualifications.filter((q) => q !== code))
   const set = <K extends keyof WorkerFormValues>(key: K, value: WorkerFormValues[K]) =>
     setValues((prev) => ({ ...prev, [key]: value }))
 
@@ -194,36 +192,30 @@ export function WorkerForm({ worker, crews, defaultCrewId, submitting, onSubmit,
             <Label htmlFor={id("rosterOrder")}>Roster order</Label>
             <Input id={id("rosterOrder")} type="number" min={0} value={values.rosterOrder} onChange={(e) => set("rosterOrder", e.target.value)} placeholder="1" />
           </div>
-          <div className="col-span-3 space-y-2">
-            <Label htmlFor={id("qualification")}>Qualifications</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {values.qualifications.map((q) => (
-                <span key={q} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-sm">
-                  {q}
-                  <button type="button" aria-label={`Remove ${q}`} className="text-muted-foreground hover:text-foreground" onClick={() => set("qualifications", values.qualifications.filter((x) => x !== q))}>
-                    ×
-                  </button>
-                </span>
-              ))}
-              <Input
-                id={id("qualification")}
-                className="w-40"
-                value={qualDraft}
-                placeholder="e.g. CCR"
-                maxLength={40}
-                onChange={(e) => setQualDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault()
-                    addQualification()
-                  }
-                }}
-                onBlur={addQualification}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">Press Enter to add. Roles that require a qualification only count qualified workers.</p>
-          </div>
         </div>
+      )}
+
+      {qualList.length > 0 && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Signed off on</legend>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {qualList.map((q) => (
+              <label key={q.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={values.qualifications.includes(q.code)}
+                  onChange={(e) => toggleQualification(q.code, e.target.checked)}
+                />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: q.color ?? "#94a3b8" }} aria-hidden />
+                {q.name}
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A shift needs a different person signed off for each job it requires, so one operator cannot cover two.
+          </p>
+        </fieldset>
       )}
 
       <div className="grid grid-cols-2 gap-4">

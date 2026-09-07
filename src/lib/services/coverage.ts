@@ -71,6 +71,25 @@ export interface RosterEntry {
   unqualified: boolean
 }
 
+/** "This role needs N distinct holders of this sign-off on this shift." */
+export interface CoverageRequirementDef {
+  coverageRoleId: string
+  code: string
+  name: string
+  countDay: number
+  countNight: number
+}
+
+/** How one sign-off requirement came out on a given line. */
+export interface SignOffCoverage {
+  code: string
+  name: string
+  need: number
+  filled: number
+  /** Who was assigned to it — each person appears against at most one sign-off */
+  by: { userId: string; name: string }[]
+}
+
 export interface RoleShiftCoverage {
   roleId: string
   roleName: string
@@ -80,6 +99,85 @@ export interface RoleShiftCoverage {
   target: number
   status: CoverageStatus
   roster: RosterEntry[]
+  /** Empty when the role has no sign-off requirements */
+  signOffs: SignOffCoverage[]
+  /** True when the headcount is fine but the sign-offs cannot all be filled */
+  signOffShortfall: boolean
+}
+
+/**
+ * Maximum bipartite matching (Kuhn's algorithm) between sign-off slots and
+ * the people on shift.
+ *
+ * This is the "one person can only do one job" rule, and it is why counting
+ * is not enough. Count holders per sign-off and a shift passes where a single
+ * operator holds oil *and* gas while nobody else holds either — but they
+ * cannot be in two places, so the shift is genuinely short. Matching each
+ * slot to a distinct person is the only way to answer correctly.
+ *
+ * Slots and people are both single digits here, so the simple augmenting
+ * path algorithm is comfortably fast enough.
+ *
+ * @returns for each slot, the index of the person assigned to it, or null.
+ */
+export function matchSignOffs(slotCodes: string[], people: { qualifications: string[] }[]): (number | null)[] {
+  const slotOf: (number | null)[] = people.map(() => null) // person → slot
+  const personOf: (number | null)[] = slotCodes.map(() => null) // slot → person
+
+  const holds = (p: number, code: string) => people[p].qualifications.some((q) => q.toUpperCase() === code)
+
+  const augment = (slot: number, seen: boolean[]): boolean => {
+    for (let p = 0; p < people.length; p++) {
+      if (seen[p] || !holds(p, slotCodes[slot])) continue
+      seen[p] = true
+      // Take this person if they are free, or if whoever has them can be
+      // re-housed in another slot.
+      const current = slotOf[p]
+      if (current === null || augment(current, seen)) {
+        slotOf[p] = slot
+        personOf[slot] = p
+        return true
+      }
+    }
+    return false
+  }
+
+  for (let s = 0; s < slotCodes.length; s++) {
+    augment(s, people.map(() => false))
+  }
+  return personOf
+}
+
+/** Resolve a line's sign-off requirements against the people counted on it. */
+function evaluateSignOffs(
+  requirements: CoverageRequirementDef[],
+  shift: CoverageShift,
+  counted: RosterEntry[],
+  qualificationsOf: Map<string, string[]>
+): SignOffCoverage[] {
+  // Expand "2 × oil operator" into two slots, so matching stays one-to-one
+  const slots: { code: string; name: string }[] = []
+  for (const req of requirements) {
+    const need = shift === "DAY" ? req.countDay : req.countNight
+    for (let i = 0; i < need; i++) slots.push({ code: req.code.toUpperCase(), name: req.name })
+  }
+  if (slots.length === 0) return []
+
+  const people = counted.map((r) => ({ qualifications: qualificationsOf.get(r.userId) ?? [] }))
+  const assignment = matchSignOffs(slots.map((s) => s.code), people)
+
+  const out = new Map<string, SignOffCoverage>()
+  slots.forEach((slot, i) => {
+    const entry = out.get(slot.code) ?? { code: slot.code, name: slot.name, need: 0, filled: 0, by: [] }
+    entry.need += 1
+    const p = assignment[i]
+    if (p !== null) {
+      entry.filled += 1
+      entry.by.push({ userId: counted[p].userId, name: counted[p].name })
+    }
+    out.set(slot.code, entry)
+  })
+  return Array.from(out.values())
 }
 
 export interface DayCoverage {
@@ -123,11 +221,13 @@ export function evaluateCoverageDay(
   rows: CoverageScheduleRow[],
   roles: CoverageRoleDef[],
   groups: CoverageGroupDef[],
-  dutyCodes: DutyCodeDef[]
+  dutyCodes: DutyCodeDef[],
+  requirements: CoverageRequirementDef[] = []
 ): DayCoverage {
   const groupsById = new Map(groups.map((g) => [g.id, g]))
   const codesByCode = new Map(dutyCodes.map((c) => [c.code.toUpperCase(), c]))
   const rolesById = new Map(roles.map((r) => [r.id, r]))
+  const qualificationsOf = new Map(rows.map((r) => [r.user.id, r.user.qualifications]))
 
   const rosters = new Map<string, RosterEntry[]>() // `${roleId}|${shift}`
   for (const row of rows) {
@@ -153,8 +253,21 @@ export function evaluateCoverageDay(
       const target = shift === "DAY" ? role.targetDay : role.targetNight
       if (min === 0 && target === 0) continue // this role has no requirement on this shift
       const roster = (rosters.get(`${role.id}|${shift}`) ?? []).sort((a, b) => a.name.localeCompare(b.name))
-      const have = roster.filter((r) => !r.unqualified).length
-      lines.push({ roleId: role.id, roleName: role.name, shift, have, min, target, status: statusFor(have, min, target), roster })
+      const counted = roster.filter((r) => !r.unqualified)
+      const have = counted.length
+
+      const signOffs = evaluateSignOffs(
+        requirements.filter((q) => q.coverageRoleId === role.id),
+        shift,
+        counted,
+        qualificationsOf
+      )
+      // An unfillable sign-off is a hard failure, even at full headcount:
+      // the shift cannot legally run without someone signed off on each job.
+      const signOffShortfall = signOffs.some((s) => s.filled < s.need)
+      const status = signOffShortfall ? "red" : statusFor(have, min, target)
+
+      lines.push({ roleId: role.id, roleName: role.name, shift, have, min, target, status, roster, signOffs, signOffShortfall })
     }
   }
 
@@ -169,7 +282,8 @@ export function evaluateCoverage(
   rows: CoverageScheduleRow[],
   roles: CoverageRoleDef[],
   groups: CoverageGroupDef[],
-  dutyCodes: DutyCodeDef[]
+  dutyCodes: DutyCodeDef[],
+  requirements: CoverageRequirementDef[] = []
 ): DayCoverage[] {
   const byDate = new Map<string, CoverageScheduleRow[]>()
   for (const r of rows) {
@@ -181,19 +295,24 @@ export function evaluateCoverage(
   const out: DayCoverage[] = []
   const last = normalizeToUTCMidnight(end)
   for (let d = normalizeToUTCMidnight(start); d <= last; d = addDaysUTC(d, 1)) {
-    out.push(evaluateCoverageDay(d, byDate.get(toDateString(d)) ?? [], roles, groups, dutyCodes))
+    out.push(evaluateCoverageDay(d, byDate.get(toDateString(d)) ?? [], roles, groups, dutyCodes, requirements))
   }
   return out
 }
 
 /** Load roles, groups, duty codes and schedules for an organization and evaluate them. */
 export async function findCoverage(organizationId: string, start: Date, end: Date) {
-  const [roles, groups, codes, schedules] = await Promise.all([
+  const [roles, groups, codes, qualifications, requirementRows, schedules] = await Promise.all([
     prisma.coverageRole.findMany({ where: { organizationId }, orderBy: { sortOrder: "asc" } }),
     prisma.positionGroup.findMany({ where: { organizationId }, orderBy: { sortOrder: "asc" } }),
     prisma.customShiftType.findMany({
       where: { organizationId, isActive: true },
       select: { code: true, coverageShift: true, coverageRoleId: true, isBackfill: true },
+    }),
+    prisma.qualification.findMany({ where: { organizationId }, orderBy: { sortOrder: "asc" } }),
+    prisma.coverageRequirement.findMany({
+      where: { coverageRole: { organizationId } },
+      select: { coverageRoleId: true, countDay: true, countNight: true, qualification: { select: { code: true, name: true } } },
     }),
     prisma.schedule.findMany({
       where: {
@@ -225,10 +344,19 @@ export async function findCoverage(organizationId: string, start: Date, end: Dat
     user: { ...s.user, positionGroupName: s.user.positionGroup?.name ?? null },
   }))
 
+  const requirements: CoverageRequirementDef[] = requirementRows.map((r) => ({
+    coverageRoleId: r.coverageRoleId,
+    code: r.qualification.code,
+    name: r.qualification.name,
+    countDay: r.countDay,
+    countNight: r.countNight,
+  }))
+
   return {
     configured: roles.length > 0,
     roles,
     groups,
-    days: evaluateCoverage(start, end, rows, roles, groups, codes),
+    qualifications,
+    days: evaluateCoverage(start, end, rows, roles, groups, codes, requirements),
   }
 }

@@ -91,11 +91,18 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
                           STATUS_CLASS[line.status],
                           isOpen && "ring-2 ring-inset ring-blue-500"
                         )}
-                        title={`${STATUS_LABEL[line.status]}: ${line.have} of ${line.min} minimum (target ${line.target})`}
+                        title={
+                          line.signOffShortfall
+                            ? `Sign-off missing: ${line.signOffs.filter((s) => s.filled < s.need).map((s) => s.name).join(", ")}`
+                            : `${STATUS_LABEL[line.status]}: ${line.have} of ${line.min} minimum (target ${line.target})`
+                        }
                         aria-expanded={isOpen}
                       >
                         {line.have}
                         <span className="opacity-60">/{line.min}</span>
+                        {line.signOffShortfall && (
+                          <span className="ml-0.5 font-bold" aria-label="sign-off missing">!</span>
+                        )}
                       </button>
                     </td>
                   )
@@ -111,6 +118,7 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
         <span className={cn("rounded px-2 py-0.5", STATUS_CLASS.ok)}>Covered</span>
         <span className={cn("rounded px-2 py-0.5", STATUS_CLASS.amber)}>At minimum (below target)</span>
         <span className={cn("rounded px-2 py-0.5", STATUS_CLASS.red)}>Short</span>
+        <span><strong>!</strong> a required sign-off cannot be filled</span>
       </div>
 
       {open && (
@@ -123,6 +131,23 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
               {open.line.have} on shift · minimum {open.line.min} · target {open.line.target}
             </p>
           </div>
+          {open.line.signOffs.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {open.line.signOffs.map((s) => (
+                <li key={s.code} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                  <span className={cn("font-medium", s.filled < s.need && "text-red-700 dark:text-red-300")}>
+                    {s.name}
+                  </span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {s.filled} of {s.need}
+                  </span>
+                  {s.by.length > 0 && <span className="text-muted-foreground">— {s.by.map((b) => b.name).join(", ")}</span>}
+                  {s.filled < s.need && <span className="text-red-700 dark:text-red-300">nobody left to cover this</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+
           {open.line.roster.length === 0 ? (
             <p className="mt-2 text-muted-foreground">Nobody is scheduled for this line.</p>
           ) : (

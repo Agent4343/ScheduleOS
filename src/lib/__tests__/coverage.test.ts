@@ -115,3 +115,115 @@ describe("evaluateCoverage over a range", () => {
     expect(days[1].lines.find((l) => l.roleId === "ops" && l.shift === "DAY")!.have).toBe(1)
   })
 })
+
+// --- Sign-offs: one person can only do one job ---------------------------
+
+import { matchSignOffs, type CoverageRequirementDef } from "../services/coverage"
+
+const opsReqs: CoverageRequirementDef[] = [
+  { coverageRoleId: "ops", code: "UTIL", name: "Utilities Operator", countDay: 1, countNight: 1 },
+  { coverageRoleId: "ops", code: "OIL", name: "Oil Operator", countDay: 1, countNight: 1 },
+  { coverageRoleId: "ops", code: "GAS", name: "Gas Operator", countDay: 1, countNight: 1 },
+]
+
+const signOff = (day: ReturnType<typeof evaluateCoverageDay>, role: string, shift: "DAY" | "NIGHT", code: string) =>
+  line(day, role, shift).signOffs.find((s) => s.code === code)!
+
+describe("matchSignOffs", () => {
+  it("gives each slot a different person", () => {
+    const people = [{ qualifications: ["UTIL", "OIL"] }, { qualifications: ["OIL"] }]
+    const result = matchSignOffs(["UTIL", "OIL"], people)
+    expect(result).toEqual([0, 1])
+  })
+
+  it("reshuffles an earlier assignment to fit a later slot", () => {
+    // The only GAS holder also holds OIL and gets taken by OIL first;
+    // the algorithm must move them and give OIL to somebody else.
+    const people = [{ qualifications: ["OIL", "GAS"] }, { qualifications: ["OIL"] }]
+    const result = matchSignOffs(["OIL", "GAS"], people)
+    expect(result[1]).toBe(0)
+    expect(result[0]).toBe(1)
+  })
+
+  it("leaves a slot unfilled when nobody is left to fill it", () => {
+    const people = [{ qualifications: ["OIL", "GAS"] }]
+    expect(matchSignOffs(["OIL", "GAS"], people)).toEqual([0, null])
+  })
+})
+
+describe("sign-off requirements on a line", () => {
+  it("passes when three different operators hold the three sign-offs", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [
+        row("DAY", "g-tech", null, ["UTIL"]),
+        row("DAY", "g-tech", null, ["OIL"]),
+        row("DAY", "g-tech", null, ["GAS"]),
+      ],
+      roles, groups, codes, opsReqs
+    )
+    const l = line(day, "ops", "DAY")
+    expect(l.signOffShortfall).toBe(false)
+    expect(l.signOffs.map((s) => s.filled)).toEqual([1, 1, 1])
+    // Each person is used exactly once
+    const used = l.signOffs.flatMap((s) => s.by.map((b) => b.userId))
+    expect(new Set(used).size).toBe(3)
+  })
+
+  it("fails when one person holds two sign-offs and nobody else covers them", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [
+        row("DAY", "g-tech", null, ["OIL", "GAS"]),
+        row("DAY", "g-tech", null, ["UTIL"]),
+        row("DAY", "g-tech", null, []),
+      ],
+      roles, groups, codes, opsReqs
+    )
+    const l = line(day, "ops", "DAY")
+    // Headcount is fine — three bodies, minimum three
+    expect(l.have).toBe(3)
+    // …but oil and gas cannot both be covered by the same person
+    expect(l.signOffShortfall).toBe(true)
+    expect(l.status).toBe("red")
+    expect(signOff(day, "ops", "DAY", "OIL").filled + signOff(day, "ops", "DAY", "GAS").filled).toBe(1)
+  })
+
+  it("a full crew is still short if a sign-off is missing entirely", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [
+        row("DAY", "g-tech", null, ["UTIL"]),
+        row("DAY", "g-tech", null, ["OIL"]),
+        row("DAY", "g-tech", null, ["OIL"]),
+        row("DAY", "g-tech", null, ["OIL"]),
+      ],
+      roles, groups, codes, opsReqs
+    )
+    const l = line(day, "ops", "DAY")
+    expect(l.have).toBe(4) // at target
+    expect(signOff(day, "ops", "DAY", "GAS")).toMatchObject({ need: 1, filled: 0 })
+    expect(l.status).toBe("red")
+  })
+
+  it("does not count someone who moved to the control room on a duty code", () => {
+    // The gas operator is on CCR-D, so they are not an outside op that shift
+    const day = evaluateCoverageDay(
+      D,
+      [
+        row("CUSTOM", "g-tech", "CCR-D", ["GAS"]),
+        row("DAY", "g-tech", null, ["UTIL"]),
+        row("DAY", "g-tech", null, ["OIL"]),
+      ],
+      roles, groups, codes, opsReqs
+    )
+    expect(signOff(day, "ops", "DAY", "GAS").filled).toBe(0)
+    expect(line(day, "ops", "DAY").signOffShortfall).toBe(true)
+  })
+
+  it("reports no sign-offs for roles that have no requirements", () => {
+    const day = evaluateCoverageDay(D, [row("DAY", "g-ocr", null, [])], roles, groups, codes, opsReqs)
+    expect(line(day, "ocr", "DAY").signOffs).toEqual([])
+    expect(line(day, "ocr", "DAY").signOffShortfall).toBe(false)
+  })
+})

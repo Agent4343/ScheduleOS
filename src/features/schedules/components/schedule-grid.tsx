@@ -85,13 +85,15 @@ interface ScheduleGridProps {
   editable: boolean
   onWorkerClick?: (worker: GridWorker) => void
   onDayClick?: (worker: GridWorker, dateKey: string) => void
+  /** Fill the available height instead of capping at 80vh (full screen) */
+  fillHeight?: boolean
 }
 
 /**
  * The year-at-a-glance table: one row per worker, one column per day.
  * Pure presentation — data and dialogs are the page's business.
  */
-export function ScheduleGrid({ year, workers, schedules, styles, editable, onWorkerClick, onDayClick }: ScheduleGridProps) {
+export function ScheduleGrid({ year, workers, schedules, styles, editable, onWorkerClick, onDayClick, fillHeight }: ScheduleGridProps) {
   const months = useMemo(() => buildYear(year), [year])
   const totalDays = months.reduce((n, m) => n + m.days.length, 0)
 
@@ -103,7 +105,7 @@ export function ScheduleGrid({ year, workers, schedules, styles, editable, onWor
   }, [schedules])
 
   return (
-    <div className="overflow-x-auto max-h-[80vh] overflow-y-auto">
+    <div className={cn("overflow-auto", fillHeight ? "h-full" : "max-h-[80vh]")}>
       <table
         className="border-collapse text-sm [&_td]:border-gray-200 [&_th]:border-gray-200 dark:[&_td]:border-gray-700 dark:[&_th]:border-gray-700"
         style={{ minWidth: "max-content" }}

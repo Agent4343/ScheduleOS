@@ -73,6 +73,7 @@ model Organization {
   customShiftTypes CustomShiftType[]
   positionGroups   PositionGroup[]
   coverageRoles    CoverageRole[]
+  qualifications_  Qualification[]
   aiChatSessions   AIChatSession[]
   shiftSwaps       ShiftSwap[]
   announcements    Announcement[]
@@ -369,6 +370,7 @@ model CoverageRole {
 
   defaultForGroups PositionGroup[]   @relation("GroupDefaultRole")
   dutyCodes        CustomShiftType[]
+  requirements     CoverageRequirement[]
 
   @@unique([organizationId, name])
   @@index([organizationId, sortOrder])
@@ -684,4 +686,45 @@ model AuditLog {
   @@index([organizationId])
   @@index([organizationId, createdAt])
   @@index([userId])
+}
+
+/// A sign-off a worker can hold: Utilities Operator, Oil Operator, Control
+/// Room… The list of definitions; who holds what is `User.qualifications`,
+/// an array of these codes.
+model Qualification {
+  id        String   @id @default(cuid())
+  /// Short uppercase key stored on User.qualifications, e.g. "UTIL"
+  code      String
+  name      String
+  color     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  requirements CoverageRequirement[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, sortOrder])
+}
+
+/// "This role needs N *distinct* people holding this sign-off on this shift."
+/// Distinct is the point: one person cannot cover both oil and gas, so the
+/// evaluator solves an assignment rather than counting heads.
+model CoverageRequirement {
+  id         String @id @default(cuid())
+  countDay   Int    @default(1)
+  countNight Int    @default(1)
+
+  coverageRoleId String
+  coverageRole   CoverageRole @relation(fields: [coverageRoleId], references: [id], onDelete: Cascade)
+
+  qualificationId String
+  qualification   Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+
+  @@unique([coverageRoleId, qualificationId])
+  @@index([coverageRoleId])
+  @@index([qualificationId])
 }

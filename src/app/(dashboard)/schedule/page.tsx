@@ -9,7 +9,8 @@ import { Select } from "@/components/ui/select"
 import { Modal } from "@/components/ui/modal"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/toast"
-import { ChevronLeft, ChevronRight, Calendar, Users, Loader2, Info, CalendarPlus } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, Users, Loader2, Info,
+  Maximize2, CalendarPlus } from "lucide-react"
 import { errorMessage } from "@/lib/api-client"
 import { useRole } from "@/lib/auth/use-role"
 import type { Worker } from "@/features/types"
@@ -20,6 +21,7 @@ import { useCustomShiftTypes } from "@/features/custom-shift-types/hooks"
 import { useOrganization } from "@/features/organization/hooks"
 import { mergeShiftStyles } from "@/features/schedules/shift-styles"
 import { ScheduleGrid, type GridWorker } from "@/features/schedules/components/schedule-grid"
+import { FullscreenPanel } from "@/components/ui/fullscreen-panel"
 import { ShiftLegend } from "@/features/schedules/components/shift-legend"
 import { OverrideShiftDialog } from "@/features/schedules/components/override-shift-dialog"
 import { GenerateScheduleDialog } from "@/features/schedules/components/generate-schedule-dialog"
@@ -41,6 +43,7 @@ function SchedulePageContent() {
     return Number.isFinite(fromUrl) && fromUrl > 2000 && fromUrl < 2100 ? fromUrl : new Date().getFullYear()
   })
   const [crewId, setCrewId] = useState("")
+  const [fullScreen, setFullScreen] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
   const [dialog, setDialog] = useState<Dialog>(null)
 
@@ -125,6 +128,10 @@ function SchedulePageContent() {
           <Info className="h-4 w-4 mr-1" />
           {showLegend ? "Hide Legend" : "Show Legend"}
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setFullScreen(true)} disabled={workers.length === 0}>
+          <Maximize2 className="h-4 w-4 mr-1" />
+          Full screen
+        </Button>
       </div>
       {showLegend && <ShiftLegend styles={styles} />}
 
@@ -181,6 +188,52 @@ function SchedulePageContent() {
           )}
         </CardContent>
       </Card>
+
+      {/* The same grid, but the whole screen: names and shifts, nothing else */}
+      <FullscreenPanel
+        open={fullScreen}
+        onClose={() => setFullScreen(false)}
+        toolbar={
+          <>
+            <span className="font-semibold">{year} Schedule</span>
+            <Button variant="outline" size="icon" aria-label="Previous year" onClick={() => setYear(year - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" aria-label="Next year" onClick={() => setYear(year + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Select
+              id="crew-filter-fullscreen"
+              value={crewId}
+              onChange={(e) => setCrewId(e.target.value)}
+              options={[{ value: "", label: "All Crews" }, ...crews.map((c) => ({ value: c.id, label: c.name }))]}
+              className="w-36"
+            />
+            <span className="text-sm text-muted-foreground">{workers.length} workers</span>
+          </>
+        }
+      >
+        <ScheduleGrid
+          year={year}
+          workers={workers}
+          schedules={schedulesQuery.data ?? []}
+          styles={styles}
+          editable={isStaff}
+          fillHeight
+          onWorkerClick={(w) => {
+            const worker = workerById.get(w.id)
+            // Leave full screen so the dialog is not trapped behind the panel
+            if (worker) {
+              setFullScreen(false)
+              setDialog({ kind: "worker", worker })
+            }
+          }}
+          onDayClick={(worker, date) => {
+            setFullScreen(false)
+            setDialog({ kind: "override", worker, date })
+          }}
+        />
+      </FullscreenPanel>
 
       {/* Edit worker (profile) + a way into the generator */}
       <Modal

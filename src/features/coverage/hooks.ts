@@ -4,6 +4,24 @@ import { apiGet, apiSend, qs } from "@/lib/api-client"
 export type CoverageShift = "DAY" | "NIGHT"
 export type CoverageStatus = "ok" | "amber" | "red"
 
+export interface Qualification {
+  id: string
+  code: string
+  name: string
+  color: string | null
+  sortOrder: number
+  _count?: { requirements: number }
+}
+
+/** A role's sign-off requirement, as returned with the role */
+export interface CoverageRequirement {
+  id: string
+  qualificationId: string
+  countDay: number
+  countNight: number
+  qualification: { id: string; code: string; name: string }
+}
+
 export interface CoverageRole {
   id: string
   name: string
@@ -13,6 +31,7 @@ export interface CoverageRole {
   minNight: number
   targetNight: number
   requiredQualification: string | null
+  requirements?: CoverageRequirement[]
   _count?: { defaultForGroups: number; dutyCodes: number }
 }
 
@@ -34,6 +53,14 @@ export interface RosterEntry {
   unqualified: boolean
 }
 
+export interface SignOffCoverage {
+  code: string
+  name: string
+  need: number
+  filled: number
+  by: { userId: string; name: string }[]
+}
+
 export interface RoleShiftCoverage {
   roleId: string
   roleName: string
@@ -43,6 +70,8 @@ export interface RoleShiftCoverage {
   target: number
   status: CoverageStatus
   roster: RosterEntry[]
+  signOffs: SignOffCoverage[]
+  signOffShortfall: boolean
 }
 
 export interface DayCoverage {
@@ -55,17 +84,23 @@ export interface CoverageResult {
   configured: boolean
   roles: CoverageRole[]
   groups: PositionGroup[]
+  qualifications: Qualification[]
   days: DayCoverage[]
 }
 
 export const coverageKeys = {
   roles: ["coverage-roles"] as const,
+  qualifications: ["qualifications"] as const,
   groups: ["position-groups"] as const,
   range: (start: string, end: string) => ["coverage", start, end] as const,
 }
 
 export function useCoverageRoles() {
   return useQuery({ queryKey: coverageKeys.roles, queryFn: () => apiGet<CoverageRole[]>("/api/coverage-roles") })
+}
+
+export function useQualifications() {
+  return useQuery({ queryKey: coverageKeys.qualifications, queryFn: () => apiGet<Qualification[]>("/api/qualifications") })
 }
 
 export function usePositionGroups() {
@@ -84,6 +119,7 @@ function useInvalidateCoverage() {
   return () => {
     qc.invalidateQueries({ queryKey: coverageKeys.roles })
     qc.invalidateQueries({ queryKey: coverageKeys.groups })
+    qc.invalidateQueries({ queryKey: coverageKeys.qualifications })
     qc.invalidateQueries({ queryKey: ["coverage"] })
     qc.invalidateQueries({ queryKey: ["custom-shift-types"] })
     qc.invalidateQueries({ queryKey: ["workers"] })
@@ -125,6 +161,32 @@ export function useApplyCoverageTemplate() {
   const invalidate = useInvalidateCoverage()
   return useMutation({
     mutationFn: () => apiSend<{ roles: number; groups: number; codes: number }>("POST", "/api/coverage/template"),
+    onSuccess: invalidate,
+  })
+}
+
+export type QualificationInput = Omit<Qualification, "id" | "_count">
+
+export function useSaveQualification() {
+  const invalidate = useInvalidateCoverage()
+  return useMutation({
+    mutationFn: ({ id, ...input }: Partial<QualificationInput> & { id?: string }) =>
+      id ? apiSend<Qualification>("PATCH", `/api/qualifications/${id}`, input) : apiSend<Qualification>("POST", "/api/qualifications", input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteQualification() {
+  const invalidate = useInvalidateCoverage()
+  return useMutation({ mutationFn: (id: string) => apiSend<null>("DELETE", `/api/qualifications/${id}`), onSuccess: invalidate })
+}
+
+/** Replace a role's sign-off requirements wholesale. */
+export function useSaveRequirements() {
+  const invalidate = useInvalidateCoverage()
+  return useMutation({
+    mutationFn: ({ roleId, requirements }: { roleId: string; requirements: { qualificationId: string; countDay: number; countNight: number }[] }) =>
+      apiSend<CoverageRequirement[]>("PUT", `/api/coverage-roles/${roleId}/requirements`, { requirements }),
     onSuccess: invalidate,
   })
 }
