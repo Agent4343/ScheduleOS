@@ -77,6 +77,7 @@ project's own production database and how it was reconciled.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the app is put together and why |
 | [docs/FRONTEND.md](docs/FRONTEND.md) | Frontend conventions; where each shared piece lives |
 | [docs/COVERAGE.md](docs/COVERAGE.md) | The role-based coverage model |
+| [docs/IMPORT.md](docs/IMPORT.md) | Importing a roster spreadsheet |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Railway, environment, migration history |
 | [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) | Pre-launch checks |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability |

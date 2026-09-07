@@ -20,6 +20,7 @@ import { AccountCard } from "@/features/settings/components/account-card"
 import { RotationPatternsCard } from "@/features/settings/components/rotation-patterns-card"
 import { CustomShiftTypesCard, DEFAULT_SHIFT_COLORS } from "@/features/settings/components/custom-shift-types-card"
 import { CoverageCard } from "@/features/settings/components/coverage-card"
+import { ImportCard } from "@/features/settings/components/import-card"
 import { useCoverageRoles } from "@/features/coverage/hooks"
 
 /**
@@ -107,6 +108,7 @@ export default function SettingsPage() {
           onMessage={onMessage}
         />
         <CoverageCard isAdmin={isAdmin} />
+        <ImportCard isAdmin={isAdmin} />
         <CustomShiftTypesCard
           customShiftTypes={customTypes.data ?? []}
           coverageRoles={coverageRoles.data ?? []}
