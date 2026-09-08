@@ -3,6 +3,8 @@
 import { formatDateOnly, parseDateOnly } from "@/lib/dates"
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CoverageAlert } from "@/features/coverage/components/coverage-alert"
+import { useRole } from "@/lib/auth/use-role"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -73,6 +75,7 @@ interface MyScheduleData {
 }
 
 export default function DashboardPage() {
+  const { isStaff } = useRole()
   const [data, setData] = useState<DashboardData | null>(null)
   const [attendance, setAttendance] = useState<AttendanceData | null>(null)
   const [mySchedule, setMySchedule] = useState<MyScheduleData | null>(null)
@@ -145,6 +148,9 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-muted-foreground">Overview of your workforce scheduling</p>
       </div>
+
+      {/* What cannot be staffed, before anything else on the page */}
+      {isStaff && <CoverageAlert />}
 
       {/* Getting started banner for new orgs */}
       {stats.totalWorkers === 0 && stats.activeCrews === 0 && (

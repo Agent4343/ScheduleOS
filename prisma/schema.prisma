@@ -722,6 +722,7 @@ model Qualification {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   requirements CoverageRequirement[]
+  standInFor   CoverageRequirementFallback[]
 
   @@unique([organizationId, code])
   @@index([organizationId, sortOrder])
@@ -738,10 +739,34 @@ model CoverageRequirement {
   coverageRoleId String
   coverageRole   CoverageRole @relation(fields: [coverageRoleId], references: [id], onDelete: Cascade)
 
+  /// The sign-off this position really calls for
   qualificationId String
   qualification   Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
 
+  /// Who may stand in when nobody holding the real sign-off is available
+  fallbacks CoverageRequirementFallback[]
+
   @@unique([coverageRoleId, qualificationId])
   @@index([coverageRoleId])
+  @@index([qualificationId])
+}
+
+/// "If there is no onshore control room operator, someone trained on the
+/// offshore control room can stand in." A fallback fills the position only
+/// once every holder of the real sign-off is used up, and the day is marked so
+/// a supervisor can see the shift is being held together by a stand-in.
+model CoverageRequirementFallback {
+  id String @id @default(cuid())
+  /// Lower is tried first, when there is more than one fallback
+  priority Int @default(0)
+
+  requirementId String
+  requirement   CoverageRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  qualificationId String
+  qualification   Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+
+  @@unique([requirementId, qualificationId])
+  @@index([requirementId])
   @@index([qualificationId])
 }

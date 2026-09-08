@@ -36,6 +36,8 @@ interface RequirementDraft {
   qualificationId: string
   countDay: number
   countNight: number
+  /** Who may stand in when nobody holding the real sign-off is left */
+  fallbackQualificationIds: string[]
 }
 
 /**
@@ -252,7 +254,7 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
                         size="sm"
                         type="button"
                         variant="ghost"
-                        onClick={() => setReqDraft([...reqDraft, { qualificationId: "", countDay: 1, countNight: 1 }])}
+                        onClick={() => setReqDraft([...reqDraft, { qualificationId: "", countDay: 1, countNight: 1, fallbackQualificationIds: [] }])}
                       >
                         <Plus className="h-4 w-4 mr-1" /> Add
                       </Button>
@@ -265,8 +267,11 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
 
                   {reqDraft.map((req, i) => {
                     const taken = new Set(reqDraft.filter((_, j) => j !== i).map((r) => r.qualificationId))
+                    const setReq = (patch: Partial<RequirementDraft>) =>
+                      setReqDraft(reqDraft.map((r, j) => (j === i ? { ...r, ...patch } : r)))
                     return (
-                      <div key={i} className="flex items-end gap-2">
+                      <div key={i} className="space-y-1 rounded border p-2">
+                      <div className="flex items-end gap-2">
                         <div className="flex-1 space-y-1">
                           {i === 0 && <Label htmlFor={`cov-req-${i}`}>Sign-off</Label>}
                           <select
@@ -294,6 +299,41 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
+
+                      {/* Stand-ins: used only once every real holder is placed */}
+                      {req.qualificationId && (
+                        <div className="pl-1">
+                          <p className="text-xs text-muted-foreground">
+                            If nobody signed off is available, these can stand in:
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            {qualList.filter((q) => q.id !== req.qualificationId).map((q) => (
+                              <label key={q.id} className="flex items-center gap-1.5 text-xs">
+                                <input
+                                  type="checkbox"
+                                  className="h-3.5 w-3.5"
+                                  checked={req.fallbackQualificationIds.includes(q.id)}
+                                  onChange={(e) =>
+                                    setReq({
+                                      fallbackQualificationIds: e.target.checked
+                                        ? [...req.fallbackQualificationIds, q.id]
+                                        : req.fallbackQualificationIds.filter((id) => id !== q.id),
+                                    })
+                                  }
+                                />
+                                {q.name}
+                              </label>
+                            ))}
+                          </div>
+                          {req.fallbackQualificationIds.length > 0 && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              A stand-in is only used after everyone holding the real sign-off is placed, and the day is
+                              marked so you can see it.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      </div>
                     )
                   })}
                 </div>
@@ -318,7 +358,7 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
                     </p>
                     {(r.requirements ?? []).length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        Needs {(r.requirements ?? []).map((q) => `${q.countDay > 1 ? `${q.countDay}× ` : ""}${q.qualification.name}`).join(", ")}
+                        Needs {(r.requirements ?? []).map((q) => `${q.countDay > 1 ? `${q.countDay}× ` : ""}${q.qualification.name}${(q.fallbacks ?? []).length ? ` (or ${(q.fallbacks ?? []).map((f) => f.qualification.name).join(" / ")})` : ""}`).join(", ")}
                       </p>
                     )}
                   </div>
@@ -326,7 +366,12 @@ export function CoverageCard({ isAdmin }: { isAdmin: boolean }) {
                     <div className="flex shrink-0">
                       <Button variant="ghost" size="sm" aria-label={`Edit ${r.name}`} onClick={() => {
                         setRoleForm({ id: r.id, name: r.name, sortOrder: r.sortOrder, minDay: r.minDay, targetDay: r.targetDay, minNight: r.minNight, targetNight: r.targetNight, requiredQualification: r.requiredQualification ?? "" })
-                        setReqDraft((r.requirements ?? []).map((q) => ({ qualificationId: q.qualificationId, countDay: q.countDay, countNight: q.countNight })))
+                        setReqDraft((r.requirements ?? []).map((q) => ({
+                          qualificationId: q.qualificationId,
+                          countDay: q.countDay,
+                          countNight: q.countNight,
+                          fallbackQualificationIds: (q.fallbacks ?? []).map((f) => f.qualificationId),
+                        })))
                       }}>
                         <Pencil className="h-4 w-4" />
                       </Button>

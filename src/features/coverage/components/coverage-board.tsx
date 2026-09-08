@@ -103,6 +103,9 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
                         {line.signOffShortfall && (
                           <span className="ml-0.5 font-bold" aria-label="sign-off missing">!</span>
                         )}
+                        {!line.signOffShortfall && line.standIns > 0 && (
+                          <span className="ml-0.5 opacity-70" aria-label="covered by a stand-in">~</span>
+                        )}
                       </button>
                     </td>
                   )
@@ -119,6 +122,7 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
         <span className={cn("rounded px-2 py-0.5", STATUS_CLASS.amber)}>At minimum (below target)</span>
         <span className={cn("rounded px-2 py-0.5", STATUS_CLASS.red)}>Short</span>
         <span><strong>!</strong> a required sign-off cannot be filled</span>
+        <span><strong>~</strong> covered, but by a stand-in</span>
       </div>
 
       {open && (
@@ -141,7 +145,18 @@ export function CoverageBoard({ days, roles }: CoverageBoardProps) {
                   <span className="text-muted-foreground tabular-nums">
                     {s.filled} of {s.need}
                   </span>
-                  {s.by.length > 0 && <span className="text-muted-foreground">— {s.by.map((b) => b.name).join(", ")}</span>}
+                  {s.by.length > 0 && (
+                    <span className="text-muted-foreground">
+                      —{" "}
+                      {s.by.map((b, i) => (
+                        <span key={b.userId}>
+                          {i > 0 && ", "}
+                          {b.name}
+                          {b.standingIn && <span className="italic"> (standing in, {b.standingIn})</span>}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {s.filled < s.need && <span className="text-red-700 dark:text-red-300">nobody left to cover this</span>}
                 </li>
               ))}

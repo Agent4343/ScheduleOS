@@ -342,7 +342,12 @@ export const coverageRequirementsSchema = z.object({
         qualificationId: z.string().min(1),
         countDay: z.number().int().min(0).max(99).default(1),
         countNight: z.number().int().min(0).max(99).default(1),
+        /** Who may stand in, in order of preference */
+        fallbackQualificationIds: z.array(z.string().min(1)).max(5).default([]),
       })
+        .refine((r) => !r.fallbackQualificationIds.includes(r.qualificationId), {
+          message: "A sign-off cannot stand in for itself",
+        })
     )
     .max(20)
     .refine((rs) => new Set(rs.map((r) => r.qualificationId)).size === rs.length, {

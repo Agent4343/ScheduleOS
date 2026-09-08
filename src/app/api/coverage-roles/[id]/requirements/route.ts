@@ -20,22 +20,43 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const { requirements } = await parseBody(coverageRequirementsSchema, request)
 
-    if (requirements.length > 0) {
-      const owned = await prisma.qualification.count({
-        where: { organizationId, id: { in: requirements.map((r) => r.qualificationId) } },
-      })
-      if (owned !== requirements.length) throw new ServiceError("Unknown sign-off", 400)
+    // Every sign-off named — the real one and any stand-ins — must be ours
+    const referenced = Array.from(
+      new Set(requirements.flatMap((r) => [r.qualificationId, ...r.fallbackQualificationIds]))
+    )
+    if (referenced.length > 0) {
+      const owned = await prisma.qualification.count({ where: { organizationId, id: { in: referenced } } })
+      if (owned !== referenced.length) throw new ServiceError("Unknown sign-off", 400)
     }
 
     const saved = await prisma.$transaction(async (tx) => {
+      // Fallbacks go with their requirement (FK cascade)
       await tx.coverageRequirement.deleteMany({ where: { coverageRoleId: params.id } })
       if (requirements.length === 0) return []
-      await tx.coverageRequirement.createMany({
-        data: requirements.map((r) => ({ ...r, coverageRoleId: params.id })),
-      })
+
+      for (const r of requirements) {
+        await tx.coverageRequirement.create({
+          data: {
+            coverageRoleId: params.id,
+            qualificationId: r.qualificationId,
+            countDay: r.countDay,
+            countNight: r.countNight,
+            fallbacks: {
+              create: r.fallbackQualificationIds.map((qualificationId, priority) => ({ qualificationId, priority })),
+            },
+          },
+        })
+      }
+
       return tx.coverageRequirement.findMany({
         where: { coverageRoleId: params.id },
-        include: { qualification: { select: { id: true, code: true, name: true } } },
+        include: {
+          qualification: { select: { id: true, code: true, name: true } },
+          fallbacks: {
+            orderBy: { priority: "asc" },
+            select: { qualificationId: true, qualification: { select: { code: true, name: true } } },
+          },
+        },
       })
     })
 

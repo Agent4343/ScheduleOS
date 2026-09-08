@@ -78,6 +78,12 @@ export interface CoverageRequirementDef {
   name: string
   countDay: number
   countNight: number
+  /**
+   * Who may stand in when nobody holding `code` is left, in order of
+   * preference. A stand-in fills the position, but only after every real
+   * holder is used, and the result says it was a stand-in.
+   */
+  fallbackCodes?: string[]
 }
 
 /** How one sign-off requirement came out on a given line. */
@@ -86,8 +92,14 @@ export interface SignOffCoverage {
   name: string
   need: number
   filled: number
-  /** Who was assigned to it — each person appears against at most one sign-off */
-  by: { userId: string; name: string }[]
+  /**
+   * Who was assigned to it — each person appears against at most one sign-off.
+   * `standingIn` is the sign-off they actually hold, when they are covering
+   * this position rather than being signed off on it.
+   */
+  by: { userId: string; name: string; standingIn?: string }[]
+  /** How many of `filled` are stand-ins */
+  standIns: number
 }
 
 export interface RoleShiftCoverage {
@@ -103,6 +115,8 @@ export interface RoleShiftCoverage {
   signOffs: SignOffCoverage[]
   /** True when the headcount is fine but the sign-offs cannot all be filled */
   signOffShortfall: boolean
+  /** How many positions on this line are held by a stand-in */
+  standIns: number
 }
 
 /**
@@ -120,20 +134,28 @@ export interface RoleShiftCoverage {
  *
  * @returns for each slot, the index of the person assigned to it, or null.
  */
-export function matchSignOffs(slotCodes: string[], people: { qualifications: string[] }[]): (number | null)[] {
+export function matchSignOffs(
+  slots: { code: string; fallbackCodes?: string[] }[] | string[],
+  people: { qualifications: string[] }[]
+): (number | null)[] {
+  // Accept a plain list of codes as well, which is all most roles need
+  const spec = slots.map((s) => (typeof s === "string" ? { code: s, fallbackCodes: [] as string[] } : { code: s.code, fallbackCodes: s.fallbackCodes ?? [] }))
+
   const slotOf: (number | null)[] = people.map(() => null) // person → slot
-  const personOf: (number | null)[] = slotCodes.map(() => null) // slot → person
+  const personOf: (number | null)[] = spec.map(() => null) // slot → person
 
-  const holds = (p: number, code: string) => people[p].qualifications.some((q) => q.toUpperCase() === code)
+  const holds = (p: number, code: string) => people[p].qualifications.some((q) => q.toUpperCase() === code.toUpperCase())
+  const acceptable = (slot: number, p: number, allowFallbacks: boolean) =>
+    holds(p, spec[slot].code) || (allowFallbacks && spec[slot].fallbackCodes.some((c) => holds(p, c)))
 
-  const augment = (slot: number, seen: boolean[]): boolean => {
+  const augment = (slot: number, seen: boolean[], allowFallbacks: boolean): boolean => {
     for (let p = 0; p < people.length; p++) {
-      if (seen[p] || !holds(p, slotCodes[slot])) continue
+      if (seen[p] || !acceptable(slot, p, allowFallbacks)) continue
       seen[p] = true
       // Take this person if they are free, or if whoever has them can be
       // re-housed in another slot.
       const current = slotOf[p]
-      if (current === null || augment(current, seen)) {
+      if (current === null || augment(current, seen, allowFallbacks)) {
         slotOf[p] = slot
         personOf[slot] = p
         return true
@@ -142,8 +164,14 @@ export function matchSignOffs(slotCodes: string[], people: { qualifications: str
     return false
   }
 
-  for (let s = 0; s < slotCodes.length; s++) {
-    augment(s, people.map(() => false))
+  // Two passes, and the order is the point. The first uses only people who
+  // genuinely hold the sign-off, so every real holder is placed before any
+  // stand-in is considered. The second fills whatever is still empty, now
+  // allowing stand-ins. Doing it in one pass would let a stand-in take a
+  // position that a qualified operator could have filled.
+  for (let s = 0; s < spec.length; s++) augment(s, people.map(() => false), false)
+  for (let s = 0; s < spec.length; s++) {
+    if (personOf[s] === null) augment(s, people.map(() => false), true)
   }
   return personOf
 }
@@ -156,24 +184,29 @@ function evaluateSignOffs(
   qualificationsOf: Map<string, string[]>
 ): SignOffCoverage[] {
   // Expand "2 × oil operator" into two slots, so matching stays one-to-one
-  const slots: { code: string; name: string }[] = []
+  const slots: { code: string; name: string; fallbackCodes: string[] }[] = []
   for (const req of requirements) {
     const need = shift === "DAY" ? req.countDay : req.countNight
-    for (let i = 0; i < need; i++) slots.push({ code: req.code.toUpperCase(), name: req.name })
+    const fallbackCodes = (req.fallbackCodes ?? []).map((c) => c.toUpperCase())
+    for (let i = 0; i < need; i++) slots.push({ code: req.code.toUpperCase(), name: req.name, fallbackCodes })
   }
   if (slots.length === 0) return []
 
   const people = counted.map((r) => ({ qualifications: qualificationsOf.get(r.userId) ?? [] }))
-  const assignment = matchSignOffs(slots.map((s) => s.code), people)
+  const assignment = matchSignOffs(slots, people)
 
   const out = new Map<string, SignOffCoverage>()
   slots.forEach((slot, i) => {
-    const entry = out.get(slot.code) ?? { code: slot.code, name: slot.name, need: 0, filled: 0, by: [] }
+    const entry = out.get(slot.code) ?? { code: slot.code, name: slot.name, need: 0, filled: 0, by: [], standIns: 0 }
     entry.need += 1
     const p = assignment[i]
     if (p !== null) {
       entry.filled += 1
-      entry.by.push({ userId: counted[p].userId, name: counted[p].name })
+      const held = qualificationsOf.get(counted[p].userId) ?? []
+      const reallyHolds = held.some((q) => q.toUpperCase() === slot.code)
+      const standingIn = reallyHolds ? undefined : slot.fallbackCodes.find((c) => held.some((q) => q.toUpperCase() === c))
+      if (standingIn) entry.standIns += 1
+      entry.by.push({ userId: counted[p].userId, name: counted[p].name, standingIn })
     }
     out.set(slot.code, entry)
   })
@@ -266,8 +299,9 @@ export function evaluateCoverageDay(
       // the shift cannot legally run without someone signed off on each job.
       const signOffShortfall = signOffs.some((s) => s.filled < s.need)
       const status = signOffShortfall ? "red" : statusFor(have, min, target)
+      const standIns = signOffs.reduce((n, s) => n + s.standIns, 0)
 
-      lines.push({ roleId: role.id, roleName: role.name, shift, have, min, target, status, roster, signOffs, signOffShortfall })
+      lines.push({ roleId: role.id, roleName: role.name, shift, have, min, target, status, roster, signOffs, signOffShortfall, standIns })
     }
   }
 
@@ -312,7 +346,11 @@ export async function findCoverage(organizationId: string, start: Date, end: Dat
     prisma.qualification.findMany({ where: { organizationId }, orderBy: { sortOrder: "asc" } }),
     prisma.coverageRequirement.findMany({
       where: { coverageRole: { organizationId } },
-      select: { coverageRoleId: true, countDay: true, countNight: true, qualification: { select: { code: true, name: true } } },
+      select: {
+        coverageRoleId: true, countDay: true, countNight: true,
+        qualification: { select: { code: true, name: true } },
+        fallbacks: { orderBy: { priority: "asc" }, select: { qualification: { select: { code: true } } } },
+      },
     }),
     prisma.schedule.findMany({
       where: {
@@ -350,6 +388,7 @@ export async function findCoverage(organizationId: string, start: Date, end: Dat
     name: r.qualification.name,
     countDay: r.countDay,
     countNight: r.countNight,
+    fallbackCodes: r.fallbacks.map((f) => f.qualification.code),
   }))
 
   return {

@@ -67,6 +67,40 @@ outside operator on `CCR-D`, say — is on the Control Room line that shift and
 is no longer available to outside ops, so their sign-offs go with them. That
 falls out of the model rather than being a special case.
 
+## Stand-ins
+
+Some positions have an acceptable second choice. The control room always needs
+two people; normally they are onshore control room operators, but when those
+are off, someone trained on the offshore control room can stand in. That is not
+an equal — it is a fallback.
+
+So a requirement carries an ordered list of stand-in sign-offs
+(`CoverageRequirementFallback`), and `matchSignOffs` runs **two passes**:
+
+1. Match using only people who genuinely hold the sign-off. Every real holder
+   is placed before any stand-in is considered.
+2. Fill whatever is still empty, now allowing stand-ins.
+
+The order is the whole point. A single pass would let a stand-in take a
+position a qualified operator could have filled, and the shift would look
+weaker than it is — there is a test for exactly that.
+
+A position filled by a stand-in counts: the line is not red. But it is
+recorded, so the board marks the cell with `~`, the detail says who is standing
+in and what they actually hold, and the dashboard reports how many days in the
+window are relying on one. A shift being held together by stand-ins is
+something a supervisor should be able to see without working it out.
+
+Stand-ins are per requirement, not global: being able to cover the control room
+does not make somebody a gas operator.
+
+## Alerts
+
+`GET /api/coverage/gaps?days=21` reduces the same evaluation to "what needs
+fixing" — the days that cannot be staffed and what is missing on each. It
+drives a panel at the top of the dashboard, because a colour on a board only
+helps the person who opens the board.
+
 ## Where it shows up
 
 * **Settings → Coverage** (`/settings#coverage`): roles, groups and the
@@ -93,7 +127,8 @@ falls out of the model rather than being a special case.
 | `GET /api/coverage?startDate&endDate` | up to 92 days; returns `{ configured, roles, groups, days }` |
 | `POST /api/coverage/template` | admin; idempotent |
 | `GET/POST /api/qualifications`, `PATCH/DELETE /api/qualifications/:id` | admin writes; renaming a code rewrites it on every holder, deleting strips it |
-| `PUT /api/coverage-roles/:id/requirements` | replaces a role's sign-off requirements as a set |
+| `PUT /api/coverage-roles/:id/requirements` | replaces a role's sign-off requirements, and their stand-ins, as a set |
+| `GET /api/coverage/gaps?days=` | staff; the days ahead that cannot be staffed |
 
 Migrations: `20260908090000_role_based_coverage` and
 `20260908110000_qualification_sign_offs`, both additive only.

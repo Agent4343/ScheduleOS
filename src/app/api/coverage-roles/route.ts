@@ -14,7 +14,15 @@ export async function GET() {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: {
         _count: { select: { defaultForGroups: true, dutyCodes: true } },
-        requirements: { include: { qualification: { select: { id: true, code: true, name: true } } } },
+        requirements: {
+          include: {
+            qualification: { select: { id: true, code: true, name: true } },
+            fallbacks: {
+              orderBy: { priority: "asc" },
+              select: { qualificationId: true, qualification: { select: { code: true, name: true } } },
+            },
+          },
+        },
       },
     })
     return apiOk(roles)

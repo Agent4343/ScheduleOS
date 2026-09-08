@@ -227,3 +227,91 @@ describe("sign-off requirements on a line", () => {
     expect(line(day, "ocr", "DAY").signOffShortfall).toBe(false)
   })
 })
+
+// --- Stand-ins: a fallback fills a position only when nobody real is left ---
+
+const controlRoom: CoverageRequirementDef[] = [
+  // Two onshore control room operators; offshore-trained may stand in
+  { coverageRoleId: "ocr", code: "OCR", name: "Onshore Control Room", countDay: 2, countNight: 2, fallbackCodes: ["OFFCR"] },
+]
+
+describe("stand-ins", () => {
+  it("uses the real sign-off when there are enough of them", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [row("DAY", "g-ocr", null, ["OCR"]), row("DAY", "g-ocr", null, ["OCR"])],
+      roles, groups, codes, controlRoom
+    )
+    const l = line(day, "ocr", "DAY")
+    expect(l.signOffs[0]).toMatchObject({ need: 2, filled: 2, standIns: 0 })
+    expect(l.standIns).toBe(0)
+    expect(l.signOffShortfall).toBe(false)
+  })
+
+  it("fills the gap with a stand-in and says so", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [row("DAY", "g-ocr", null, ["OCR"]), row("DAY", "g-ocr", null, ["OFFCR"])],
+      roles, groups, codes, controlRoom
+    )
+    const l = line(day, "ocr", "DAY")
+    expect(l.signOffs[0]).toMatchObject({ need: 2, filled: 2, standIns: 1 })
+    expect(l.signOffShortfall).toBe(false)
+    // The day still runs, but it is visible that it needed a stand-in
+    expect(l.standIns).toBe(1)
+    expect(l.signOffs[0].by.filter((b) => b.standingIn).map((b) => b.standingIn)).toEqual(["OFFCR"])
+  })
+
+  it("never lets a stand-in take a position a real holder could fill", () => {
+    // Two on shift: one holds both, one holds only the real sign-off. If the
+    // stand-in-capable person were placed first, the second position would be
+    // filled by a stand-in and the shift would look weaker than it is.
+    const day = evaluateCoverageDay(
+      D,
+      [row("DAY", "g-ocr", null, ["OCR", "OFFCR"]), row("DAY", "g-ocr", null, ["OCR"])],
+      roles, groups, codes, controlRoom
+    )
+    expect(line(day, "ocr", "DAY").signOffs[0]).toMatchObject({ filled: 2, standIns: 0 })
+  })
+
+  it("is still short when neither the sign-off nor a stand-in is there", () => {
+    const day = evaluateCoverageDay(
+      D,
+      [row("DAY", "g-ocr", null, ["OCR"]), row("DAY", "g-ocr", null, [])],
+      roles, groups, codes, controlRoom
+    )
+    const l = line(day, "ocr", "DAY")
+    expect(l.signOffs[0]).toMatchObject({ need: 2, filled: 1, standIns: 0 })
+    expect(l.signOffShortfall).toBe(true)
+    expect(l.status).toBe("red")
+  })
+
+  it("does not treat a stand-in sign-off as interchangeable elsewhere", () => {
+    // Someone who is only offshore-control-room trained cannot fill a gas
+    // position just because they can stand in for the control room.
+    const day = evaluateCoverageDay(
+      D,
+      [row("DAY", "g-tech", null, ["OFFCR"]), row("DAY", "g-tech", null, ["OFFCR"]), row("DAY", "g-tech", null, ["OFFCR"])],
+      roles, groups, codes, opsReqs
+    )
+    expect(line(day, "ops", "DAY").signOffs.every((s) => s.filled === 0)).toBe(true)
+  })
+})
+
+describe("matchSignOffs with fallbacks", () => {
+  it("prefers real holders across the whole line, not slot by slot", () => {
+    // Slot order deliberately puts the stand-in-capable person first
+    const people = [{ qualifications: ["OFFCR"] }, { qualifications: ["OCR"] }, { qualifications: ["OCR"] }]
+    const slots = [
+      { code: "OCR", fallbackCodes: ["OFFCR"] },
+      { code: "OCR", fallbackCodes: ["OFFCR"] },
+    ]
+    const result = matchSignOffs(slots, people)
+    // Both positions taken by the two real holders; the stand-in is unused
+    expect(result.every((r) => r === 1 || r === 2)).toBe(true)
+  })
+
+  it("still accepts a plain list of codes", () => {
+    expect(matchSignOffs(["OIL", "GAS"], [{ qualifications: ["OIL"] }, { qualifications: ["GAS"] }])).toEqual([0, 1])
+  })
+})

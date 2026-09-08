@@ -20,6 +20,8 @@ export interface CoverageRequirement {
   countDay: number
   countNight: number
   qualification: { id: string; code: string; name: string }
+  /** Who may stand in, in order of preference */
+  fallbacks?: { qualificationId: string; qualification: { code: string; name: string } }[]
 }
 
 export interface CoverageRole {
@@ -58,7 +60,9 @@ export interface SignOffCoverage {
   name: string
   need: number
   filled: number
-  by: { userId: string; name: string }[]
+  /** `standingIn` is the sign-off they hold, when covering rather than qualified */
+  by: { userId: string; name: string; standingIn?: string }[]
+  standIns: number
 }
 
 export interface RoleShiftCoverage {
@@ -72,6 +76,7 @@ export interface RoleShiftCoverage {
   roster: RosterEntry[]
   signOffs: SignOffCoverage[]
   signOffShortfall: boolean
+  standIns: number
 }
 
 export interface DayCoverage {
@@ -185,7 +190,7 @@ export function useDeleteQualification() {
 export function useSaveRequirements() {
   const invalidate = useInvalidateCoverage()
   return useMutation({
-    mutationFn: ({ roleId, requirements }: { roleId: string; requirements: { qualificationId: string; countDay: number; countNight: number }[] }) =>
+    mutationFn: ({ roleId, requirements }: { roleId: string; requirements: { qualificationId: string; countDay: number; countNight: number; fallbackQualificationIds: string[] }[] }) =>
       apiSend<CoverageRequirement[]>("PUT", `/api/coverage-roles/${roleId}/requirements`, { requirements }),
     onSuccess: invalidate,
   })
