@@ -1,5 +1,6 @@
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
+import { isPublicPath } from "@/lib/public-paths"
 
 export default withAuth(
   function middleware(req) {
@@ -60,28 +61,8 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl
 
-        // Public paths that don't require authentication
-        const publicPaths = [
-          "/login",
-          "/register",
-          "/pricing",
-          // Legal + contact pages are linked from the landing page, footer
-          // and cookie banner, so they must be reachable when logged out.
-          "/contact",
-          "/terms",
-          "/privacy",
-          "/cookies",
-          "/api/auth",
-          "/api/health",
-          "/api/register",
-          "/api/stripe",
-        ]
-
-        // Check if the path is public
-        const isPublicPath =
-          pathname === "/" || publicPaths.some((path) => pathname.startsWith(path))
-
-        if (isPublicPath) {
+        // The list lives in src/lib/public-paths.ts so it can be tested
+        if (isPublicPath(pathname)) {
           return true
         }
 
