@@ -111,8 +111,9 @@ export function ImportCard({ isAdmin }: { isAdmin: boolean }) {
             <div className="rounded-md border bg-muted/30 p-3">
               <p className="text-sm font-medium">No spreadsheet yet?</p>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Download a blank one already set up with your position groups and duty codes, and a sheet explaining how
-                to fill it in. It cannot be filled in wrongly — the columns are checked as you type.
+                Download a blank one, set up with your position groups and duty codes. Describe your rotations on its
+                first tab, then give each person a rotation, a start date and whether they start on days or nights — it
+                works out the rest of the year for you.
               </p>
               <a
                 href="/api/import/template"

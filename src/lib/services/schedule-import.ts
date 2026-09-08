@@ -65,6 +65,37 @@ function asDate(cell: Cell): Date | null {
   return null
 }
 
+/**
+ * Reduce a raw ExcelJS cell value to something the parser can read.
+ *
+ * Formula cells are the reason this exists. ExcelJS returns
+ * `{ formula, result }` — but when the formula evaluates to an empty string
+ * it returns `{ formula }` with no `result` key at all. Checking for the key
+ * and otherwise falling through means the *object* becomes the cell value,
+ * and a template full of formula-driven days off imports every one of them as
+ * a shift code reading "[OBJECT OBJECT]".
+ */
+export function normaliseCellValue(raw: unknown): Cell {
+  if (raw === null || raw === undefined) return null
+  if (raw instanceof Date) return raw
+  if (typeof raw === "string" || typeof raw === "number") return raw
+  if (typeof raw === "boolean") return String(raw)
+
+  if (typeof raw === "object") {
+    const o = raw as Record<string, unknown>
+    // A formula: take its last computed value, whatever shape that is
+    if ("formula" in o || "sharedFormula" in o) return normaliseCellValue(o.result)
+    // #N/A and friends are not data
+    if ("error" in o) return null
+    // Formatted text arrives in runs
+    if (Array.isArray(o.richText)) return o.richText.map((r) => String((r as { text?: string }).text ?? "")).join("")
+    // A hyperlink cell keeps its label under `text`
+    if (typeof o.text === "string") return o.text
+    return null
+  }
+  return null
+}
+
 function text(cell: Cell): string {
   if (cell === null || cell === undefined) return ""
   if (cell instanceof Date) return ""
@@ -305,10 +336,7 @@ export async function parseWorkbook(buffer: ArrayBuffer, sheetName?: string): Pr
     ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
       const cells: Cell[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        const v = cell.value
-        // Formula cells carry their last computed result
-        cells[colNumber - 1] =
-          v && typeof v === "object" && "result" in v ? (v.result as Cell) : (v as Cell)
+        cells[colNumber - 1] = normaliseCellValue(cell.value)
       })
       grid[rowNumber - 1] = cells
     })

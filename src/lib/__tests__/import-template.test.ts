@@ -58,7 +58,7 @@ describe("the roster template", () => {
         ws.getCell(row, 1).value = name
         ws.getCell(row, 2).value = group
         ws.getCell(row, 3).value = quals
-        codes.forEach((c, i) => { if (c) ws.getCell(row, 4 + i).value = c })
+        codes.forEach((c, i) => { if (c) ws.getCell(row, 7 + i).value = c })
       }
       write(4, "Steve Ennis", "Ops Techs", "UTIL", ["D", "D", "N", "", "SL"])
       write(5, "Rod Nippard", "", "GAS, UTIL", ["N", "N", "D"])          // blank group = same as above
@@ -87,8 +87,8 @@ describe("the roster template", () => {
       ws.getCell(4, 2).value = "Ops Techs"
       ws.getCell(5, 1).value = "Steve Ennis"
       ws.getCell(5, 2).value = "Ops Techs"
-      ws.getCell(5, 4).value = "D"
-      ws.getCell(5, 5).value = "D"
+      ws.getCell(5, 7).value = "D"
+      ws.getCell(5, 8).value = "D"
     })
 
     expect(parsed.people.map((p) => p.name)).toEqual(["New Starter", "Steve Ennis"])
@@ -101,7 +101,7 @@ describe("the roster template", () => {
     const parsed = await buildAndParse((ws) => {
       ws.getCell(4, 1).value = "Steve Ennis"
       ws.getCell(4, 2).value = "Ops Techs"
-      ws.getCell(4, 4).value = "D"
+      ws.getCell(4, 7).value = "D"
       ws.getCell(70, 1).value = "Remember to check nights"
     })
     expect(parsed.people.map((p) => p.name)).toEqual(["Steve Ennis"])

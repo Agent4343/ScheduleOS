@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest"
 
 vi.mock("../prisma", () => ({ prisma: {} }))
 
-import { parseScheduleGrid, normaliseCode, type Cell } from "../services/schedule-import"
+import { parseScheduleGrid, normaliseCode, normaliseCellValue, type Cell } from "../services/schedule-import"
 
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`)
 
@@ -101,5 +101,38 @@ describe("parseScheduleGrid", () => {
     const p = parseScheduleGrid(grid())
     expect(p.codes[0]).toEqual({ code: "D", count: 13 })
     expect(p.codes.map((c) => c.code)).toContain("SL")
+  })
+})
+
+describe("normaliseCellValue", () => {
+  it("takes a formula's computed value", () => {
+    expect(normaliseCellValue({ formula: 'IF(1,"D","")', result: "D" })).toBe("D")
+    expect(normaliseCellValue({ sharedFormula: "G4", result: "N" })).toBe("N")
+  })
+
+  it("treats a formula with no result as empty, not as an object", () => {
+    // ExcelJS omits `result` entirely when a formula evaluates to "". Reading
+    // the object instead would import every formula-driven day off as a shift
+    // code spelled "[OBJECT OBJECT]".
+    expect(normaliseCellValue({ formula: 'IF(0,"D","")' })).toBe(null)
+    expect(normaliseCellValue({ formula: 'IF(0,"D","")', result: "" })).toBe("")
+  })
+
+  it("ignores formula errors", () => {
+    expect(normaliseCellValue({ formula: "1/0", result: { error: "#DIV/0!" } })).toBe(null)
+    expect(normaliseCellValue({ error: "#N/A" })).toBe(null)
+  })
+
+  it("flattens formatted text and hyperlink labels", () => {
+    expect(normaliseCellValue({ richText: [{ text: "OCR" }, { text: "-D" }] })).toBe("OCR-D")
+    expect(normaliseCellValue({ text: "Steve", hyperlink: "mailto:x@y.z" })).toBe("Steve")
+  })
+
+  it("passes plain values straight through", () => {
+    const d = new Date("2026-03-02T00:00:00.000Z")
+    expect(normaliseCellValue(d)).toBe(d)
+    expect(normaliseCellValue("D")).toBe("D")
+    expect(normaliseCellValue(151)).toBe(151)
+    expect(normaliseCellValue(null)).toBe(null)
   })
 })
