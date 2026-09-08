@@ -1,6 +1,7 @@
 import Link from "next/link"
 import type { Metadata } from "next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ReplayTourButton } from "@/features/tour/replay-button"
 
 export const metadata: Metadata = { title: "Help · ShiftSync" }
 
@@ -161,9 +162,12 @@ const TERMS: Term[] = [
 export default function HelpPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Help</h1>
-        <p className="text-muted-foreground">What the words on the screen mean.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Help</h1>
+          <p className="text-muted-foreground">What the words on the screen mean.</p>
+        </div>
+        <ReplayTourButton />
       </div>
 
       <Card>

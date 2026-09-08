@@ -61,6 +61,7 @@ Things that used to exist in several copies now have exactly one home:
 | Coverage board | `features/coverage/components/coverage-board.tsx`, data from `features/coverage/hooks.ts` (see docs/COVERAGE.md) | Coverage |
 | Coverage rules | `features/settings/components/coverage-card.tsx` | Settings |
 | Invite someone | `features/invitations/components/invite-panel.tsx` | Workers |
+| Welcome walkthrough | `features/tour/` — `tour-host.tsx` decides when it plays, `welcome-tour.tsx` is the player, `illustrations.tsx` the diagrams | Dashboard layout (first sign-in), Help (replay) |
 | Import a workbook | `features/settings/components/import-card.tsx` (see docs/IMPORT.md) | Settings |
 | Add / edit a crew | `features/crews/components/crew-form.tsx` | Crews, Getting Started |
 | Settings sections | `features/settings/components/*-card.tsx`, framed by `SettingsCard` | Settings |

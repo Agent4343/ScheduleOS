@@ -112,6 +112,9 @@ model User {
   rosterOrder     Int?
   /// Free-form qualification tags, e.g. ["CCR"] for control-room trained
   qualifications  String[]       @default([])
+  /// Whether the welcome walkthrough has been played for this person. Stored
+  /// per user rather than in the browser so it does not replay on a phone.
+  hasSeenWelcome  Boolean        @default(false)
 
   // Relations
   accounts           Account[]
