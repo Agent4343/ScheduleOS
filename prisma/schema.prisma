@@ -683,9 +683,15 @@ model AuditLog {
   ipAddress  String?
   createdAt  DateTime @default(now())
 
-  // User who performed the action
-  userId String
-  user   User   @relation("AuditLogUser", fields: [userId], references: [id], onDelete: Cascade)
+  /// Who did it, captured when it happened. An audit trail that could be
+  /// erased by deleting the account is not an audit trail, so these survive
+  /// the user: the row stays and still names them.
+  actorName  String?
+  actorEmail String?
+
+  // User who performed the action; null once that account is gone
+  userId String?
+  user   User?  @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
 
   // Organization
   organizationId String

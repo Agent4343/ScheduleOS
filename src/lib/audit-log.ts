@@ -36,11 +36,20 @@ interface AuditLogData {
  */
 export async function logAudit(data: AuditLogData): Promise<void> {
   try {
+    // Snapshot who this was. The row keeps naming them after the account is
+    // deleted, which is the whole point of an audit trail.
+    const actor = await prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { name: true, email: true },
+    })
+
     // Persist to database
     await prisma.auditLog.create({
       data: {
         action: data.action,
         userId: data.userId,
+        actorName: actor?.name ?? null,
+        actorEmail: actor?.email ?? null,
         organizationId: data.organizationId,
         targetId: data.targetId || null,
         targetType: data.targetType || null,

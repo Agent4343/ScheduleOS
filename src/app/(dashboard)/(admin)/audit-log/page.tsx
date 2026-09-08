@@ -25,7 +25,11 @@ interface AuditEntry {
   targetId: string | null
   metadata: Record<string, unknown> | null
   createdAt: string
-  user: { id: string; name: string | null; email: string; role: string }
+  /** Null once that account has been deleted — the entry itself remains */
+  user: { id: string; name: string | null; email: string; role: string } | null
+  /** Who it was, captured when it happened */
+  actorName: string | null
+  actorEmail: string | null
 }
 
 interface Pagination {
@@ -138,8 +142,16 @@ export default function AuditLogPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge className={`text-xs ${config.color}`}>{config.label}</Badge>
-                        <span className="text-sm font-medium">{log.user.name || log.user.email}</span>
-                        <Badge variant="outline" className="text-xs">{log.user.role}</Badge>
+                        <span className="text-sm font-medium">
+                          {log.user?.name || log.user?.email || log.actorName || log.actorEmail || "Unknown"}
+                        </span>
+                        {log.user ? (
+                          <Badge variant="outline" className="text-xs">{log.user.role}</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs" title="This account has since been deleted; the entry is kept">
+                            deleted account
+                          </Badge>
+                        )}
                       </div>
                       {log.targetType && (
                         <p className="text-xs text-muted-foreground mt-0.5">
