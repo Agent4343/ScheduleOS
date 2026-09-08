@@ -183,9 +183,9 @@ export default function HelpPage() {
               import has something to map your codes onto.
             </li>
             <li>
-              <Link href="/settings#import" className="underline">Settings → Import from a spreadsheet</Link>. Upload the
-              workbook. It shows you what it found before writing anything — check the people and groups look right,
-              then import.
+              <Link href="/settings#import" className="underline">Settings → Import from a spreadsheet</Link>. Upload your
+              workbook — or download the blank template there, which comes set up with your groups and codes and checks
+              them as you type. Either way it shows you what it found before writing anything.
             </li>
             <li>
               <Link href="/workers" className="underline">Workers</Link>: tick each person&apos;s{" "}

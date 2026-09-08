@@ -138,13 +138,35 @@ export function parseScheduleGrid(grid: Cell[][], sheetName = "Sheet1"): ParsedS
   }
   const firstDateCol = dateColumns[0].col
 
-  // 3. The name column: the leftmost column with text below the header
-  let nameCol = 0
+  // 3. Labelled columns, if the sheet has them.
+  //
+  // Two shapes are supported. Existing operations workbooks label nothing and
+  // group people under heading rows, which has to be inferred. The template
+  // this app hands out instead labels its columns — Name, Position group,
+  // Sign-offs — which removes the guessing entirely, and in particular the
+  // ambiguity where a person with no shifts yet is indistinguishable from a
+  // group heading.
+  const label = (col: number) => text(grid[headerRow]?.[col]).toLowerCase().replace(/[^a-z ]/g, "").trim()
+  let nameCol = -1
+  let groupCol = -1
+  let qualCol = -1
   for (let col = 0; col < firstDateCol; col++) {
-    const populated = grid.slice(headerRow + 1).filter((r) => text(r?.[col]) !== "").length
-    if (populated >= 3) {
-      nameCol = col
-      break
+    const l = label(col)
+    if (nameCol === -1 && /^(name|full name|worker|person|employee)$/.test(l)) nameCol = col
+    else if (groupCol === -1 && /^(position group|group|section|department)$/.test(l)) groupCol = col
+    else if (qualCol === -1 && /^(sign ?offs?|qualifications?|training|tickets?)$/.test(l)) qualCol = col
+  }
+  const labelled = nameCol !== -1
+
+  // Otherwise: the leftmost column with text below the header
+  if (!labelled) {
+    nameCol = 0
+    for (let col = 0; col < firstDateCol; col++) {
+      const populated = grid.slice(headerRow + 1).filter((r) => text(r?.[col]) !== "").length
+      if (populated >= 3) {
+        nameCol = col
+        break
+      }
     }
   }
 
@@ -158,30 +180,43 @@ export function parseScheduleGrid(grid: Cell[][], sheetName = "Sheet1"): ParsedS
 
   for (let i = headerRow + 1; i < grid.length; i++) {
     const row = grid[i] ?? []
-    const label = text(row[nameCol])
-    if (!label) continue
-    if (END_MARKER.test(label)) break
+    const cellLabel = text(row[nameCol])
+    if (!cellLabel) continue
+    if (END_MARKER.test(cellLabel)) break
 
     const filled = dateColumns.filter(({ col }) => text(row[col]) !== "")
 
-    // A row with a label but no shifts is *probably* a group heading — except
-    // that a person rostered nowhere looks identical. What separates them is
-    // the other columns: a person carries data there (a crew code, an ID), a
-    // heading is bare. Without this, a vacant "TBA" row becomes a heading and
-    // silently adopts everybody listed below it.
-    const carriesPersonData = row.some(
-      (cell, col) => col < firstDateCol && col !== nameCol && text(cell) !== ""
-    )
+    // With a Position group column there are no heading rows to detect: every
+    // named row is a person, whether or not they have any shifts yet.
+    if (!labelled) {
+      // A row with a label but no shifts is *probably* a group heading — except
+      // that a person rostered nowhere looks identical. What separates them is
+      // the other columns: a person carries data there (a crew code, an ID), a
+      // heading is bare. Without this, a vacant "TBA" row becomes a heading and
+      // silently adopts everybody listed below it.
+      const carriesPersonData = row.some(
+        (cell, col) => col < firstDateCol && col !== nameCol && text(cell) !== ""
+      )
 
-    if (filled.length === 0 && !carriesPersonData) {
-      group = label
-      if (!groups.includes(label)) groups.push(label)
-      continue
+      if (filled.length === 0 && !carriesPersonData) {
+        group = cellLabel
+        if (!groups.includes(cellLabel)) groups.push(cellLabel)
+        continue
+      }
     }
 
-    const starred = label.endsWith("*")
-    const name = (starred ? label.slice(0, -1) : label).trim()
+    const starred = cellLabel.endsWith("*")
+    const name = (starred ? cellLabel.slice(0, -1) : cellLabel).trim()
     if (!name) continue
+
+    if (labelled) {
+      // Blank means "same as the person above", which is how people fill these in
+      const stated = groupCol === -1 ? "" : text(row[groupCol])
+      if (stated) {
+        group = stated
+        if (!groups.includes(stated)) groups.push(stated)
+      }
+    }
 
     if (seenNames.has(name.toLowerCase())) {
       warnings.push(`"${name}" appears more than once; only the first block of shifts was used.`)
@@ -189,10 +224,15 @@ export function parseScheduleGrid(grid: Cell[][], sheetName = "Sheet1"): ParsedS
     }
     seenNames.add(name.toLowerCase())
 
+    // Sign-offs come from a Sign-offs column when there is one, and from the
+    // trailing-asterisk convention otherwise. Both, if a sheet uses both.
+    const stated = qualCol === -1 ? [] : text(row[qualCol]).split(/[,;/|]+|\s{2,}/).map((q) => q.trim().toUpperCase()).filter(Boolean)
+    const qualifications = Array.from(new Set([...(starred ? [STAR_QUALIFICATION] : []), ...stated]))
+
     people.push({
       name,
       group,
-      qualifications: starred ? [STAR_QUALIFICATION] : [],
+      qualifications,
       rosterOrder: people.length + 1,
     })
 
@@ -234,12 +274,17 @@ export function parseScheduleGrid(grid: Cell[][], sheetName = "Sheet1"): ParsedS
  * view holding names in its cells). Short repeated codes score well.
  */
 function scoreSheet(parsed: ParsedSheet): number {
-  if (parsed.shifts.length === 0) return 0
+  // A sheet with a calendar is a roster even before anyone is on it — which
+  // is exactly the state a blank template arrives in. Without this, an empty
+  // template loses to whatever sheet happens to come first.
+  if (parsed.dates.length === 0) return 0
+  const hasCalendar = parsed.dates.length * 0.001
+  if (parsed.shifts.length === 0) return hasCalendar
   const shortCodes = parsed.shifts.filter((s) => s.code.length <= 8).length / parsed.shifts.length
   const distinctRatio = parsed.codes.length / parsed.shifts.length
   // Mostly-short values that repeat a lot: a code sheet. Long, near-unique
   // values: a sheet of names.
-  return shortCodes * (1 - Math.min(distinctRatio, 1)) * parsed.shifts.length
+  return hasCalendar + shortCodes * (1 - Math.min(distinctRatio, 1)) * parsed.shifts.length
 }
 
 export interface WorkbookParse extends ParsedSheet {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { AlertTriangle, FileSpreadsheet, Upload } from "lucide-react"
+import { AlertTriangle, Download, FileSpreadsheet, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -108,6 +108,22 @@ export function ImportCard({ isAdmin }: { isAdmin: boolean }) {
                 }}
               />
             </div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-sm font-medium">No spreadsheet yet?</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Download a blank one already set up with your position groups and duty codes, and a sheet explaining how
+                to fill it in. It cannot be filled in wrongly — the columns are checked as you type.
+              </p>
+              <a
+                href="/api/import/template"
+                className="mt-2 inline-flex items-center gap-1 text-sm underline underline-offset-4"
+                download
+              >
+                <Download className="h-4 w-4" aria-hidden />
+                Download a blank roster template
+              </a>
+            </div>
+
             <p className="text-xs text-muted-foreground">
               Nothing is saved until you have seen what was found and confirmed it.
             </p>
